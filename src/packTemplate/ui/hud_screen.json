@@ -1,0 +1,52 @@
+{
+	"namespace": "hud",
+	
+	"hud_content": {
+		"modifications": [
+			{
+				"array_name": "controls",
+				"operation": "insert_front",
+				"value": [
+					{
+						"touch_buttons@holoprint:touch_buttons.touch_buttons": {
+							"bindings": [
+								{
+									"binding_name": "#inventory_touch_button", // #using_touch doesn't work
+									"binding_name_override": "#visible"
+								}
+							]
+						}
+					},
+					{
+						"keybinds@holoprint:keybinds.keybinds": {
+							"bindings": [
+								{
+									"binding_name": "(not #inventory_touch_button)",
+									"binding_name_override": "#visible"
+								}
+							]
+						}
+					}
+				]
+			}
+		]
+	},
+	"hud_screen": {
+		"modifications": [
+			{
+				"array_name": "button_mappings",
+				"operation": "remove",
+				"where": {
+					"from_button_id": "button.inventory_left" // these will be added back when the tab key isn't pressed
+				}
+			},
+			{
+				"array_name": "button_mappings",
+				"operation": "remove",
+				"where": {
+					"from_button_id": "button.inventory_right"
+				}
+			}
+		]
+	}
+}

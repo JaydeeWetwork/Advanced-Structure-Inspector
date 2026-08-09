@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Structure DB Viewer</title>
+		<meta charset="UTF-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+		<meta name="description" content="Browse and preview Minecraft Bedrock .mcstructure files locally or on the web. Adapted from HoloPrint.">
+		<meta name="keywords" content="mcstructure, minecraft bedrock, structure viewer, structure database">
+
+		<meta property="og:type" content="website">
+		<meta property="og:title" content="Structure DB Viewer">
+		<meta property="og:description" content="Web-based Minecraft Bedrock structure database viewer. Runs locally or from static hosting.">
+
+		<link rel="manifest" href="manifest.webmanifest"/>
+		<link rel="icon" sizes="48x48" href="favicon.ico"/>
+		<link rel="icon" sizes="192x192" href="assets/logo_192.png"/>
+
+		<link rel="stylesheet" href="https://fonts.bunny.net/css?family=catamaran:400,500,700&display=swap"/>
+		<link rel="stylesheet" href="https://fonts.bunny.net/css?family=space-grotesk:400,600&display=swap"/>
+
+		<link rel="stylesheet" href="styles/index.css"/>
+		<link rel="stylesheet" href="viewer/viewer.css"/>
+		<script type="importmap">
+			{
+				"imports": {
+					"nbtify-readonly-typeless": "https://esm.sh/nbtify-readonly-typeless@1.1.2?keep-names",
+					"mcbe-leveldb-reader": "https://esm.sh/mcbe-leveldb-reader@2.0.1?exports=extractStructureFilesFromMcworld",
+					"tga-js": "https://esm.sh/tga-js@1.1.1",
+					"potpack": "https://esm.sh/potpack@2.1.0",
+					"deepmerge": "https://esm.sh/deepmerge@4.3.1",
+					"@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2?exports=createClient",
+					"three": "https://esm.sh/three@0.177.0",
+					"three/examples/jsm/": "https://esm.sh/three@0.177.0/examples/jsm/",
+					"stats.js": "https://esm.sh/stats.js@0.17.0",
+					"lil-gui": "https://esm.sh/lil-gui@0.20",
+					"@zip.js/zip.js": "https://esm.sh/@zip.js/zip.js@^2.7.57?exports=ZipWriter,TextReader,BlobWriter,BlobReader,ZipReader",
+					"strip-json-comments": "https://esm.sh/strip-json-comments@5.0.1"
+				}
+			}
+		</script>
+		<script src="index.js" type="module"></script>
+	</head>
+	<body class="sdb-app">
+		<header class="sdb-header">
+			<div>
+				<h1>Structure DB Viewer</h1>
+				<p class="tagline">Local / web catalog for Bedrock <code>.mcstructure</code> files</p>
+			</div>
+			<div class="sdb-header-actions">
+				<label class="sdb-btn">
+					Import…
+					<input id="importInput" type="file" multiple hidden
+						accept=".mcstructure,.mcworld,.mctemplate,.mcpack,.zip,application/zip"/>
+				</label>
+				<button type="button" class="sdb-btn secondary" id="clearCatalogBtn" title="Clear in-memory catalog">Clear</button>
+				<a class="sdb-btn secondary" href="holoprintPack.html" title="Original HoloPrint pack generator">Pack generator</a>
+			</div>
+		</header>
+
+		<div class="sdb-layout">
+			<aside class="sdb-sidebar">
+				<div class="sdb-dropzone" id="dropzone">
+					<p>Drop <code>.mcstructure</code>, <code>.mcworld</code>, <code>.mctemplate</code>, <code>.mcpack</code>, or <code>.zip</code> here</p>
+					<button type="button" class="sdb-btn secondary" id="dropzoneBrowseBtn">Browse files</button>
+				</div>
+				<input class="sdb-search" id="searchInput" type="search" placeholder="Search name, size, blocks…" autocomplete="off"/>
+				<div class="sdb-list-meta">
+					<span id="catalogCount">0 structures</span>
+					<span id="catalogHint"></span>
+				</div>
+				<ul class="sdb-catalog-list" id="catalogList" aria-label="Structure catalog"></ul>
+				<div class="sdb-status hidden" id="statusBox" role="status"></div>
+			</aside>
+
+			<main class="sdb-main">
+				<section class="sdb-empty" id="emptyState">
+					<h2>No structure selected</h2>
+					<p>
+						Import structure files to build a browsable catalog. Parsing and world/pack extraction
+						reuse <strong>HoloPrint</strong> core modules; this fork adds a catalog UI for local
+						or static-web viewing.
+					</p>
+					<ul>
+						<li>Parse <code>.mcstructure</code> NBT (size, palette, origin, block counts)</li>
+						<li>Extract templates from worlds and HoloPrint packs</li>
+						<li>Optional 3D preview via existing pack/preview pipeline</li>
+					</ul>
+					<p><em>Persistence of structure binaries (IndexedDB / OPFS) is planned next — this scaffold keeps files in session memory and stores a metadata index in <code>localStorage</code>.</em></p>
+				</section>
+
+				<section class="sdb-detail hidden" id="detailPanel">
+					<div class="sdb-detail-header">
+						<div>
+							<h2 id="detailName">—</h2>
+							<p class="meta" id="detailSource"></p>
+						</div>
+						<div class="sdb-header-actions">
+							<button type="button" class="sdb-btn" id="previewBtn">Load 3D preview</button>
+							<button type="button" class="sdb-btn secondary" id="downloadBtn">Download .mcstructure</button>
+							<button type="button" class="sdb-btn secondary" id="removeBtn">Remove</button>
+						</div>
+					</div>
+					<div class="sdb-stats" id="detailStats"></div>
+					<h3>Block palette</h3>
+					<div class="sdb-palette" id="detailPalette"></div>
+					<section class="sdb-preview-section">
+						<h3>Preview</h3>
+						<div class="sdb-preview-host" id="previewHost">
+							<p class="meta" style="padding:12px;color:#ccc;margin:0">Click “Load 3D preview” to render with HoloPrint’s PreviewRenderer (runs the structure through the existing geometry pipeline).</p>
+						</div>
+					</section>
+				</section>
+			</main>
+		</div>
+
+		<footer class="sdb-footer">
+			Adapted Material based on
+			<a href="https://github.com/SuperLlama88888/holoprint" rel="noopener" target="_blank">HoloPrint</a>
+			by SuperLlama88888 —
+			<a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" rel="noopener" target="_blank">CC BY-NC-SA 4.0</a>.
+			See <code>NOTICE.md</code> and <code>LICENSE</code>. NonCommercial use only.
+		</footer>
+	</body>
+</html>

@@ -1,0 +1,53 @@
+{
+	"$schema": "http://json-schema.org/draft-07/schema#",
+	"title": "Block Shapes",
+	"description": "Mappings from block names to block shapes.",
+	"type": "object",
+	"properties": {
+		"$schema": {
+			"type": "string"
+		},
+		"patterns": {
+			"description": "Regular expression patterns that will be tested if no individual block key is found.",
+			"type": "object",
+			"patternProperties": {
+				"^.*$": {
+					"type": "string",
+					"oneOf": [
+						{
+							"description": "The block shape for blocks that match this regular expression.",
+							"pattern": "^\\w+$"
+						},
+						{
+							"description": "The block shape for blocks that match this regular expression, and the path to a texture which can be accessed with #tex.",
+							"pattern": "^\\w+<[\\w/]*>$"
+						}
+					]
+				}
+			},
+			"additionalProperties": false
+		},
+		"individual_blocks": {
+			"description": "Block shape mappings for individual blocks.",
+			"type": "object",
+			"patternProperties": {
+				"^\\w+$": {
+					"type": "string",
+					"oneOf": [
+						{
+							"description": "The block shape for this block.",
+							"pattern": "^\\w+$"
+						},
+						{
+							"description": "The block shape for this block, and the path to a texture which can be accessed with #tex.",
+							"pattern": "^\\w+<[\\w/]*>$"
+						}
+					]
+				}
+			},
+			"additionalProperties": false
+		}
+	},
+	"required": ["patterns", "individual_blocks"],
+	"additionalProperties": false
+}

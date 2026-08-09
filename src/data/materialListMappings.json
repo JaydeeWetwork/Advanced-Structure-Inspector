@@ -1,0 +1,124 @@
+// These are patches and remappings for MaterialList.js
+{
+	"ignored_blocks": ["flowing_water", "flowing_lava", "bubble_column"], // these don't appear to be used anymore
+	"block_to_item_mappings": {
+		"unpowered_repeater": "repeater",
+		"powered_repeater": "repeater",
+		"unpowered_comparator": "comparator",
+		"powered_comparator": "comparator",
+		"redstone_wire": "redstone",
+		"unlit_redstone_torch": "redstone_torch",
+		"water": "water_bucket",
+		"lava": "lava_bucket",
+		"powder_snow": "powder_snow_bucket",
+		"lit_furnace": "furnace",
+		"lit_blast_furnace": "blast_furnace",
+		"lit_smoker": "smoker",
+		"lit_redstone_ore": "redstone_ore",
+		"lit_deepslate_redstone_ore": "deepslate_redstone_ore",
+		"lit_redstone_lamp": "redstone_lamp",
+		"reeds": "sugar_cane",
+		"melon_stem": "melon_seeds",
+		"pumpkin_stem": "pumpkin_seeds", // this one actually exists in the translation files as "Pumpkin Stem"; however, a material list is a list of items, not blocks
+		"pitcher_crop": "pitcher_pod",
+		"torchflower_crop": "torchflower_seeds",
+		"wheat": "wheat_seeds",
+		"potatoes": "potato",
+		"carrots": "carrot",
+		"wall_sign": "oak_sign", // I should probably have written a regex to handle these...
+		"standing_sign": "oak_sign",
+		"darkoak_wall_sign": "dark_oak_sign",
+		"darkoak_standing_sign": "dark_oak_sign",
+		"bamboo_sapling": "bamboo",
+		"trip_wire": "string",
+		"cocoa": "cocoa_beans",
+		"wall_banner": "standing_banner",
+		"cave_vines": "glow_berries",
+		"cave_vines_body_with_berries": "glow_berries",
+		"cave_vines_head_with_berries": "glow_berries",
+		"/^(\\w+)_wall_sign$/": "$1_sign",
+		"/^(\\w+)_standing_sign$/": "$1_sign",
+		"/^(\\w+)_coral_wall_fan$/": "$1_coral_fan"
+	},
+	"item_count_multipliers": {
+		"/double_.*slab$/": {
+			"multiplier": 2,
+			"remove": "double_"
+		},
+		"/_door$/": 0.5,
+		"peony,rose_bush,sunflower,lilac,large_fern,tall_grass,pitcher_plant": 0.5,
+		"bed": 0.5
+	},
+	"special_block_entity_properties": {
+		"bed": {
+			"prop": "color",
+			"serialization_ids": ["item.bed.white", "item.bed.orange", "item.bed.magenta", "item.bed.lightBlue", "item.bed.yellow", "item.bed.lime", "item.bed.pink", "item.bed.gray", "item.bed.silver", "item.bed.cyan", "item.bed.purple", "item.bed.blue", "item.bed.brown", "item.bed.green", "item.bed.red", "item.bed.black"]
+		}
+	},
+	"serialization_id_patches": {
+		"tile.oak_planks": "tile.planks.oak",
+		"tile.spruce_planks": "tile.planks.spruce",
+		"tile.birch_planks": "tile.planks.birch",
+		"tile.jungle_planks": "tile.planks.jungle",
+		"tile.acacia_planks": "tile.planks.acacia",
+		"tile.dark_oak_planks": "tile.planks.big_oak",
+		"tile.oak_fence": "tile.fence",
+		"tile.spruce_fence": "tile.spruceFence",
+		"tile.birch_fence": "tile.birchFence",
+		"tile.jungle_fence": "tile.jungleFence",
+		"tile.acacia_fence": "tile.acaciaFence",
+		"tile.dark_oak_fence": "tile.darkOakFence",
+		"item.water_bucket": "item.bucketWater",
+		"item.lava_bucket": "item.bucketLava",
+		"item.powder_snow_bucket": "item.bucketPowderSnow",
+		"tile.wall_banner": "tile.standing_banner",
+		"tile.daylight_detector_inverted": "tile.daylight_detector",
+		"tile.tube_coral_wall_fan": "tile.coral_fan.blue_fan.name",
+		"tile.brain_coral_wall_fan": "tile.coral_fan.pink_fan.name",
+		"tile.bubble_coral_wall_fan": "tile.coral_fan.purple_fan.name",
+		"tile.fire_coral_wall_fan": "tile.coral_fan.red_fan.name",
+		"tile.horn_coral_wall_fan": "tile.coral_fan.yellow_fan.name",
+		"tile.dead_tube_coral_wall_fan": "tile.coral_fan_dead.blue_fan.name",
+		"tile.dead_brain_coral_wall_fan": "tile.coral_fan_dead.pink_fan.name",
+		"tile.dead_bubble_coral_wall_fan": "tile.coral_fan_dead.purple_fan.name",
+		"tile.dead_fire_coral_wall_fan": "tile.coral_fan_dead.red_fan.name",
+		"tile.dead_horn_coral_wall_fan": "tile.coral_fan_dead.yellow_fan.name",
+		"tile.seagrass": "tile.seagrass.seagrass", // least surprising bugrock moment
+		"item.creeper_head": "item.skull.creeper",
+		"item.dragon_head": "item.skull.dragon",
+		"item.piglin_head": "item.skull.piglin",
+		"item.player_head": "item.skull.char",
+		"item.skeleton_skull": "item.skull.skeleton",
+		"item.wither_skeleton_skull": "item.skull.wither",
+		"item.zombie_head": "item.skull.zombie",
+		"item.cocoa_beans": "item.dye.brown",
+		"item.white_dye": "item.dye.white_new",
+		"item.bone_meal": "item.dye.white",
+		"item.dark_oak_boat": "item.boat.big_oak",
+		"item.dark_oak_chest_boat": "item.chest_boat.big_oak",
+		"/^item.(?!.*chest_)(\\w+)_(boat|raft)$/": "item.boat.$1",
+		"/^item.(\\w+)_chest_(boat|raft)$/": "item.chest_boat.$1"
+	},
+	"blocks_missing_serialization_ids": {
+		"end_gateway": "tile.end_gateway" // despite still existing, end gateways were removed from mojang-blocks.json in 1.21.50...
+	},
+	"translation_patches": {
+		"tile.end_portal.name": "End Portal",
+		"tile.end_gateway.name": "End Gateway"
+	},
+	
+	"$schema": "schemas/materialListMappings.schema.json"
+}
+/*
+➖🟩🟩🟩
+➖🟩🟩⬛
+➖🟩🟩🟩
+➖➖🟦➖⬜⬜
+➖➖🟦🟩⬜⬛
+➖➖🟦➖⬜⬜🟧
+⬜⬜⬜🟦⬜⬜🟥
+⬜⬜⬜⬜⬜
+⬜⬜⬜⬜⬜
+➖➖🟨
+➖➖🟨🟨
+*/

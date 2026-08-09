@@ -1,0 +1,173 @@
+{
+	"namespace": "holoprint:material_list",
+	
+	"full_pack_material_list@material_list_base": {
+		"$size": ["40%", "this gets put in by the JS"],
+		"$max_size": ["40%", "100% - 74px"],
+		"offset": "$holoprint:material_list_offset"
+	},
+	"material_list_base": {
+		"$size|default": ["default", "default"],
+		"$max_size|default": ["default", "default"],
+		"$entries|default": "Error: $entries not set",
+		"$heading|default": "holoprint.material_list.heading",
+		"$item_name_column_size|default": "Error: $item_name_column_size not set",
+		"type": "panel",
+		"anchor_from": "top_middle",
+		"anchor_to": "top_middle",
+		"layer": 50,
+		"controls": [
+			{
+				"material_list@content": {}
+			}
+		]
+	},
+	"content": {
+		"type": "image",
+		"size": "$size",
+		"max_size": "$max_size",
+		"texture": "textures/ui/White",
+		"color": [0, 0, 0],
+		"alpha": 0.5,
+		"layer": 10,
+		"anchor_from": "top_middle",
+		"anchor_to": "top_middle",
+		"controls": [
+			{
+				"heading@heading": {}
+			},
+			{
+				"scrolling_input_panel": {
+					"type": "input_panel",
+					"prevent_touch_input": true,
+					"controls": [
+						{
+							"scrolling_panel@common.scrolling_panel": {
+								"anchor_from": "bottom_middle",
+								"anchor_to": "bottom_middle",
+								"size": ["100%", "100% - 12px"],
+								"$show_background": false,
+								"$scrolling_content": "holoprint:material_list.entries",
+								"$always_handle_scrolling": true
+							}
+						}
+					]
+				}
+			}
+		]
+	},
+	"heading": {
+		"type": "image",
+		"anchor_from": "top_middle",
+		"anchor_to": "top_middle",
+		"size": ["100%", 12],
+		"texture": "textures/ui/White",
+		"color": [0, 0, 0],
+		"alpha": 0.2,
+		"controls": [
+			{
+				"book_icon": {
+					"type": "image",
+					"offset": [1, 0],
+					"size": [14.62, 10],
+					"anchor_from": "left_middle",
+					"anchor_to": "left_middle",
+					// "texture": "textures/ui/creative_icon"
+					"texture": "textures/ui/recipe_book_icon"
+				}
+			},
+			{
+				"pack_name": {
+					"type": "label",
+					"size": ["100% - 18px", 10],
+					"text": "$heading",
+					"anchor_from": "right_middle",
+					"anchor_to": "right_middle"
+				}
+			}
+		]
+	},
+	"entries": {
+		"type": "stack_panel",
+		"orientation": "vertical",
+		"anchor_to": "top_left",
+		"anchor_from": "top_left",
+		"controls": "$entries"
+	},
+	"entry@row": {
+		"controls": [
+			{
+				"content": {
+					"type": "stack_panel",
+					"orientation": "horizontal",
+					"size": ["100%", "100%"],
+					"offset": [0, 1],
+					"layer": 101,
+					"controls": [
+						{
+							"padding_1": {
+								"type": "panel",
+								"size": [1, 0]
+							}
+						},
+						{
+							"item_icon": {
+								"type": "custom",
+								"renderer": "inventory_item_renderer",
+								"property_bag": {
+									"#item_id_aux": "$item_id_aux"
+								},
+								"size": [10, 10],
+								"anchor_from": "top_left",
+								"anchor_to": "top_left"
+							}
+						},
+						{
+							"padding_2": {
+								"type": "panel",
+								"size": [2, 0]
+							}
+						},
+						{
+							"item_name": {
+								"type": "label",
+								"text": "$item_translation_key",
+								"size": "$item_name_column_size",
+								"font_scale_factor": 0.8
+							}
+						},
+						{
+							"item_count": {
+								"type": "label",
+								"text": "$item_count",
+								"size": ["fill", 10],
+								// "text_alignment": "right",
+								"font_scale_factor": 0.8
+							}
+						}
+					]
+				}
+			}
+		]
+	},
+	"empty_notice@row": {
+		"controls": [
+			{
+				"notice": {
+					"type": "label",
+					"text": "holoprint.material_list.empty",
+					"font_scale_factor": 0.8
+				}
+			}
+		]
+	},
+	"row": {
+		"type": "image",
+		"size": ["100%", 12],
+		"texture": "textures/ui/White",
+		"color": [0, 0, 0],
+		"$background_opacity|default": 0,
+		"alpha": "$background_opacity",
+		"layer": 100
+	}
+}

@@ -1,0 +1,71 @@
+name: Automated Testing
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+permissions: read-all
+jobs:
+  validate-json-data:
+    name: Validate JSON Data
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4.1.1
+      - name: Setup Node
+        uses: actions/setup-node@v5
+      - name: Validate JSON Data
+        run: |
+          npm ci -w validate_json_data
+          npm run test -w validate_json_data
+  check-block-translation-coverage:
+    name: Check Block Translation Coverage
+    needs: validate-json-data
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4.1.1
+      - name: Setup Node
+        uses: actions/setup-node@v5
+      - name: Check block translation coverage
+        run: |
+          npm ci -w check_block_translation_coverage
+          npm run test -w check_block_translation_coverage
+  test-sample-structures:
+    name: Test Sample Structures
+    needs: [validate-json-data, check-block-translation-coverage]
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        browser: [Chrome, Firefox]
+      fail-fast: false
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4.1.1
+      - name: Setup Node
+        uses: actions/setup-node@v5
+      - name: Test Sample Structures on ${{ matrix.browser }}
+        run: |
+          npm ci -w pipeline -w test_sample_structures
+          if [[ "${{ matrix.browser }}" == "Firefox" ]]; then
+            npx puppeteer browsers install firefox
+          fi
+          npm run test -w test_sample_structures -- ${{ matrix.browser }}
+      - name: Upload built code
+        if: always() && matrix.browser == 'Firefox'
+        uses: actions/upload-artifact@v4.4.3
+        with:
+          name: build
+          path: dist
+      - name: Upload completed packs as artifacts
+        if: always()
+        uses: actions/upload-artifact@v4.4.0
+        with:
+          name: completed_packs_${{ matrix.browser }}
+          path: tests/completedPacks
+      - name: Upload screenshots as artifacts
+        if: always() && matrix.browser == 'Chrome'
+        uses: actions/upload-artifact@v4.4.3
+        with:
+          name: screenshots_${{ matrix.browser }}
+          path: tests/screenshots

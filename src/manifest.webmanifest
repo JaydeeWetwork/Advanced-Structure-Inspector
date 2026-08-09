@@ -1,0 +1,33 @@
+{
+	"name": "Structure DB Viewer",
+	"short_name": "StructureDB",
+	"description": "Browse and preview Minecraft Bedrock .mcstructure files locally or on the web. Adapted from HoloPrint.",
+	"categories": ["utilities"],
+	"icons": [
+		{
+			"src": "assets/logo_192.png",
+			"sizes": "192x192"
+		},
+		{
+			"src": "assets/logo_288.png",
+			"sizes": "288x288"
+		},
+		{
+			"src": "assets/logo_512.png",
+			"sizes": "512x512"
+		}
+	],
+	"start_url": "./",
+	"display": "minimal-ui",
+	"background_color": "#D7B3D7",
+	"theme_color": "#9B4F9B",
+	"file_handlers": [
+		{
+			"accept": {
+				"application/mcstructure": [".mcstructure"],
+				"application/mcpack": [".mcpack"]
+			},
+			"action": "./"
+		}
+	]
+}

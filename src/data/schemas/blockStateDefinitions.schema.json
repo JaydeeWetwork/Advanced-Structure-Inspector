@@ -1,0 +1,179 @@
+{
+	"$schema": "http://json-schema.org/draft-07/schema#",
+	"title": "Block State Definitions",
+	"description": "Definitions for block states that control texture variants or block rotations.",
+	"type": "object",
+	"properties": {
+		"$schema": {
+			"type": "string"
+		},
+		"texture_variants": {
+			"description": "Texture-variating block state definitions.",
+			"type": "object",
+			"properties": {
+				"*": {
+					"description": "Texture-variating block state definitions for all blocks.",
+					"$ref": "#/definitions/variant"
+				},
+				"block_shapes": {
+					"description": "Texture-variating block state definitions for specific block shapes.",
+					"type": "object",
+					"patternProperties": {
+						"^\\w+$": {
+							"description": "The block shapes (comma-delimited) to apply these texture-variating block state definitions to.",
+							"$ref": "#/definitions/variant"
+						}
+					},
+					"additionalProperties": false
+				},
+				"block_names": {
+					"description": "Texture-variating block state definitions for specific blocks.",
+					"type": "object",
+					"patternProperties": {
+						"^[\\w,]+$": {
+							"description": "The block names (comma-delimited) to apply these texture-variating block state definitions to.",
+							"$ref": "#/definitions/variant"
+						},
+						"^/.+/$": {
+							"description": "A regular expression matching block names to apply these texture-variating block state definitions to.",
+							"$ref": "#/definitions/variant"
+						}
+					},
+					"additionalProperties": false
+				}
+			},
+			"additionalProperties": false
+		},
+		"rotations": {
+			"description": "Block-rotating block state definitions.",
+			"type": "object",
+			"properties": {
+				"*": {
+					"description": "Block state rotation definitions for all blocks.",
+					"$ref": "#/definitions/rotation"
+				},
+				"block_shapes": {
+					"description": "Block state rotation definitions for specific block shapes.",
+					"type": "object",
+					"patternProperties": {
+						"^[\\w,]+$": {
+							"description": "The block shapes (comma-delimited) to apply these block state rotation definitions to.",
+							"$ref": "#/definitions/rotation"
+						}
+					},
+					"additionalProperties": false
+				},
+				"block_names": {
+					"description": "Block state rotation definitions for specific blocks.",
+					"type": "object",
+					"patternProperties": {
+						"^[\\w,]+$": {
+							"description": "The block names (comma-delimited) to apply these block state rotation definitions to.",
+							"$ref": "#/definitions/rotation"
+						},
+						"^/.+/$": {
+							"description": "A regular expression matching block names to apply these block state rotation definitions to.",
+							"$ref": "#/definitions/rotation"
+						}
+					},
+					"additionalProperties": false
+				}
+			},
+			"additionalProperties": false
+		}
+	},
+	"required": ["texture_variants", "rotations"],
+	"additionalProperties": false,
+	
+	"definitions": {
+		"variant": {
+			"type": "object",
+			"properties": {
+				"#exclusive_add": {
+					"description": "Whether to only look at these variants, and add them together. Defaults to false.",
+					"type": "boolean"
+				}
+			},
+			"patternProperties": {
+				"^[\\w:]+$": {
+					"description": "Controls which texture variant is chosen based on the value of this block state.",
+					"$ref": "#/definitions/variantValue"
+				},
+				"^entity\\.\\w+$": {
+					"description": "Controls which texture variant is chosen based on the value of this block entity property. Only first-level fields are supported.",
+					"$ref": "#/definitions/variantValue"
+				}
+			},
+			"additionalProperties": false
+		},
+		"variantValue": {
+			"oneOf": [
+				{
+					"type": "array",
+					"items": {
+						"description": "The index of the texture variant in terrain_texture.json to use.",
+						"type": "integer",
+						"minimum": 0
+					},
+					"minItems": 1
+				},
+				{
+					"type": "object",
+					"patternProperties": {
+						"^\\w+$": {
+							"description": "The index of the texture variant in terrain_texture.json to use when the block state is this value.",
+							"type": "integer",
+							"minimum": 0
+						}
+					},
+					"additionalProperties": false
+				}
+			]
+		},
+		"rotation": {
+			"type": "object",
+			"patternProperties": {
+				"^[\\w:]+$": {
+					"description": "Controls the entire block's rotation based on the value of this block state.",
+					"$ref": "#/definitions/rotationValue"
+				},
+				"^entity\\.\\w+$": {
+					"description": "Controls the entire block's rotation based on the value of this block entity property. Only first-level fields are supported.",
+					"$ref": "#/definitions/rotationValue"
+				}
+			},
+			"additionalProperties": false
+		},
+		"rotationValue": {
+			"oneOf": [
+				{
+					"type": "object",
+					"patternProperties": {
+						"^(\\w+|-?\\d+(\\.\\d+)?)$": {
+							"$ref": "#/definitions/rotationTriplet"
+						}
+					},
+					"additionalProperties": false
+				},
+				{
+					"type": "array",
+					"items": {
+						"$ref": "#/definitions/rotationTriplet"
+					},
+					"minItems": 1
+				}
+			]
+		},
+		"rotationTriplet": {
+			"type": "array",
+			"description": "The XYZ rotation of the entire block (in degrees; applied in the order X-Y-Z) around its center.",
+			"items": {
+				"type": "number",
+				"minimum": -180,
+				"maximum": 360
+			},
+			"minItems": 3,
+			"maxItems": 3
+		}
+	}
+}

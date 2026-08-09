@@ -1,0 +1,535 @@
+let { $, v, q, t, structureSize, singleLayerMode, structureCount, HOLOGRAM_INITIAL_ACTIVATION, initialOffset, defaultTextureIndex, textureBlobsCount, totalBlocksToValidate, totalBlocksToValidateByLayer, backupSlotCount, toggleRendering, changeOpacity, toggleTint, toggleValidating, changeLayer, decreaseLayer, changeLayerMode, disablePlayerControls, backupHologram, changeStructure, moveHologram, rotateHologram, initVariables, renderingControls, broadcastActions, structureSizesMolang, coordinateLockEnabled, coordinateLockCoordsMolang, isArmorStand, hasHologram } = {}; // prevent linting errors
+
+const ACTIONS = createNumericEnum(["NEXT_STRUCTURE", "PREVIOUS_STRUCTURE", "INCREASE_LAYER", "DECREASE_LAYER", "TOGGLE_RENDERING", "INCREASE_OPACITY", "DECREASE_OPACITY", "TOGGLE_TINT", "TOGGLE_VALIDATING", "CHANGE_LAYER_MODE", "ROTATE_HOLOGRAM_CLOCKWISE", "ROTATE_HOLOGRAM_ANTICLOCKWISE", "BACKUP_HOLOGRAM", "MOVE_HOLOGRAM", "MOVE_POS_X", "MOVE_NEG_X", "MOVE_POS_Y", "MOVE_NEG_Y", "MOVE_POS_Z", "MOVE_NEG_Z"]);
+
+function initialize() {
+	v.ui_action_counter = t.ui_action_counter ?? 0;
+	if(!$[hasHologram]) {
+		return;
+	}
+	
+	v.hologram_activated = HOLOGRAM_INITIAL_ACTIVATION; // true/false are substituted in here for the different subpacks
+	v.hologram.offset_x = $[initialOffset[0]];
+	v.hologram.offset_y = $[initialOffset[1]];
+	v.hologram.offset_z = $[initialOffset[2]];
+	v.hologram.rotation = 0;
+	v.hologram.structure_w = $[structureSize[0]];
+	v.hologram.structure_h = $[structureSize[1]];
+	v.hologram.structure_d = $[structureSize[2]];
+	v.hologram.rendering = HOLOGRAM_INITIAL_ACTIVATION;
+	v.hologram.texture_index = $[defaultTextureIndex];
+	v.hologram.show_tint = false;
+	v.hologram.layer = -1;
+	v.hologram.layer_mode = $[singleLayerMode];
+	v.hologram.validating = false;
+	v.hologram.show_wrong_block_overlay = false;
+	v.wrong_blocks = -1;
+	v.hologram.wrong_block_x = 0;
+	v.hologram.wrong_block_y = 0;
+	v.hologram.wrong_block_z = 0;
+	
+	v.hologram.structure_index = 0;
+	v.hologram.structure_count = $[structureCount];
+	
+	if($[isArmorStand]) {
+		// v.hologram.last_held_item = q.get_equipped_item_name ?? "";
+		v.hologram.last_held_item = ""; // this will be kept in the backup
+		v.last_pose = 0;
+		v.last_hurt_direction = q.hurt_direction;
+	}
+	
+	v.player_action_counter = t.player_action_counter ?? 0;
+	v.last_ui_action_time = q.time_stamp;
+	v.was_ui_action_last_frame = false;
+	v.ui_action_hold_start_time = -1;
+	v.hologram_dir = 0;
+	
+	v.spawn_time = q.time_stamp;
+	v.player_has_interacted = false;
+	v.saving_backup = false;
+	v.hologram_backup_index = -1;
+	v.hologram_backup_requested_time = -601; // 600 ticks = 30s (how long the backup request lasts for)
+	v.skip_spawn_animation = false;
+}
+function preAnimation() {
+	if($[isArmorStand] && q.is_in_ui) {
+		// if the armour stand is holding an item and in the ui, it must be from our custom ui code. I doubt any other addons would interfere here...
+		// no there is not any better way to do this better
+		if(q.is_item_name_any("slot.weapon.offhand", "minecraft:stone", "minecraft:grass_block")) {
+			t.ui_action = $[ACTIONS.TOGGLE_RENDERING];
+		} else if(q.is_item_name_any("slot.weapon.offhand", "minecraft:dirt")) {
+			t.ui_action = $[ACTIONS.INCREASE_OPACITY];
+		} else if(q.is_item_name_any("slot.weapon.offhand", "minecraft:cobblestone")) {
+			t.ui_action = $[ACTIONS.DECREASE_OPACITY];
+		} else if(q.is_item_name_any("slot.weapon.offhand", "minecraft:oak_planks", "minecraft:oak_sapling")) {
+			t.ui_action = $[ACTIONS.TOGGLE_TINT];
+		} else if(q.is_item_name_any("slot.weapon.offhand", "minecraft:bedrock")) {
+			t.ui_action = $[ACTIONS.INCREASE_LAYER];
+		} else if(q.is_item_name_any("slot.weapon.offhand", "minecraft:flowing_water")) {
+			t.ui_action = $[ACTIONS.DECREASE_LAYER];
+		} else if(q.is_item_name_any("slot.weapon.offhand", "minecraft:water", "minecraft:flowing_lava")) {
+			t.ui_action = $[ACTIONS.CHANGE_LAYER_MODE];
+		} else if(q.is_item_name_any("slot.weapon.offhand", "minecraft:lava", "minecraft:sand")) {
+			t.ui_action = $[ACTIONS.TOGGLE_VALIDATING];
+		} else if(q.is_item_name_any("slot.weapon.offhand", "minecraft:gravel")) {
+			t.ui_action = $[ACTIONS.MOVE_POS_X];
+		} else if(q.is_item_name_any("slot.weapon.offhand", "minecraft:gold_ore")) {
+			t.ui_action = $[ACTIONS.MOVE_NEG_X];
+		} else if(q.is_item_name_any("slot.weapon.offhand", "minecraft:iron_ore")) {
+			t.ui_action = $[ACTIONS.MOVE_POS_Y];
+		} else if(q.is_item_name_any("slot.weapon.offhand", "minecraft:coal_ore")) {
+			t.ui_action = $[ACTIONS.MOVE_NEG_Y];
+		} else if(q.is_item_name_any("slot.weapon.offhand", "minecraft:oak_log")) {
+			t.ui_action = $[ACTIONS.MOVE_POS_Z];
+		} else if(q.is_item_name_any("slot.weapon.offhand", "minecraft:oak_leaves")) {
+			t.ui_action = $[ACTIONS.MOVE_NEG_Z];
+		} else if(q.is_item_name_any("slot.weapon.offhand", "minecraft:sponge")) {
+			t.ui_action = $[ACTIONS.ROTATE_HOLOGRAM_CLOCKWISE];
+		} else if(q.is_item_name_any("slot.weapon.offhand", "minecraft:glass")) {
+			t.ui_action = $[ACTIONS.ROTATE_HOLOGRAM_ANTICLOCKWISE];
+		} else if(q.is_item_name_any("slot.weapon.offhand", "minecraft:lapis_ore")) {
+			t.ui_action = $[ACTIONS.NEXT_STRUCTURE];
+		} else if(q.is_item_name_any("slot.weapon.offhand", "minecraft:lapis_block")) {
+			t.ui_action = $[ACTIONS.PREVIOUS_STRUCTURE];
+		} else if(q.is_item_name_any("slot.weapon.offhand", "minecraft:dispenser", "minecraft:sandstone")) {
+			t.ui_action = $[ACTIONS.BACKUP_HOLOGRAM];
+		} else {
+			return;
+		}
+		if((t.ui_action_counter ?? -1) != -1) {
+			v.ui_action_counter = t.ui_action_counter;
+		}
+		v.ui_action_counter++;
+		t.ui_action_counter = v.ui_action_counter;
+		return;
+	}
+	if(!$[hasHologram]) {
+		return;
+	}
+	
+	if($[isArmorStand]) {
+		if(q.time_stamp - v.spawn_time < 5) {
+			v.last_pose = v.armor_stand.pose_index; // armour stands take a tick or two at the start to set their pose correctly
+		}
+	}
+	
+	let should_set_wrong_blocks = false;
+	if(q.time_stamp - v.spawn_time < 200 && !v.player_has_interacted) { // if it's less than 10 seconds after being spawned and the player hasn't interacted yet...
+		let just_recovered_backup = false;
+		for(let i = 0; i < $[backupSlotCount]; i++) {
+			if(!just_recovered_backup && !(t.hologram_backup_empty_$[i] ?? true) && t.hologram_backup_$[i].x == q.position(0) && t.hologram_backup_$[i].y == q.position(1) && t.hologram_backup_$[i].z == q.position(2)) {
+				v.hologram = t.hologram_backup_$[i];
+				t.hologram_backup_empty_$[i] = true;
+				just_recovered_backup = true;
+			}
+		}
+		if(just_recovered_backup) {
+			v.player_has_interacted = true;
+			if($[isArmorStand]) {
+				v.hologram_activated = true;
+			}
+			v.skip_spawn_animation = true;
+			if(v.hologram.validating) {
+				should_set_wrong_blocks = true;
+			}
+		}
+	}
+	
+	let action = -1;
+	
+	if($[isArmorStand]) {
+		// activate if punched, else return
+		if(!v.hologram_activated) {
+			if(v.last_hurt_direction != q.hurt_direction) {
+				v.last_hurt_direction = q.hurt_direction;
+				v.hologram_activated = true;
+				v.hologram.rendering = true;
+			} else {
+				return;
+			}
+		}
+		
+		// process actions on the armour stand itself: giving it an item, punching, or changing pose
+		let process_action = false;
+		if(v.hologram.last_held_item != q.get_equipped_item_name) {
+			v.hologram.last_held_item = q.get_equipped_item_name;
+			process_action = true;
+		}
+		if(v.last_hurt_direction != q.hurt_direction) { // hitting the armour stand changes this: https://wiki.bedrock.dev/entities/non-mob-runtime-identifiers.html#notable-queries-3
+			v.last_hurt_direction = q.hurt_direction;
+			process_action = true;
+			if(!q.is_item_equipped) { // change structure on hit when holding nothing
+				action = $[ACTIONS.NEXT_STRUCTURE];
+			}
+		}
+		
+		if(v.last_pose != v.armor_stand.pose_index) {
+			v.last_pose = v.armor_stand.pose_index;
+			if(v.hologram.rendering) {
+				action = $[ACTIONS.INCREASE_LAYER];
+			}
+		}
+		
+		if(process_action) {
+			if($[toggleRendering]) {
+				action = $[ACTIONS.TOGGLE_RENDERING];
+			} else if($[changeOpacity]) {
+				action = $[ACTIONS.INCREASE_OPACITY];
+			} else if($[toggleTint]) {
+				action = $[ACTIONS.TOGGLE_TINT];
+			} else if($[toggleValidating]) {
+				action = $[ACTIONS.TOGGLE_VALIDATING];
+			} else if($[changeLayer]) {
+				action = $[ACTIONS.INCREASE_LAYER];
+			} else if($[decreaseLayer]) {
+				action = $[ACTIONS.DECREASE_LAYER];
+			} else if($[changeLayerMode]) {
+				action = $[ACTIONS.CHANGE_LAYER_MODE];
+			} else if($[rotateHologram]) {
+				action = $[ACTIONS.ROTATE_HOLOGRAM_CLOCKWISE];
+			} else if($[backupHologram]) {
+				action = $[ACTIONS.BACKUP_HOLOGRAM];
+			}
+		}
+	}
+	
+	let check_layer_validity = false;
+	let changed_structure = false;
+	
+	t.player_action_counter ??= 0;
+	if(v.player_action_counter != t.player_action_counter && t.player_action_counter > 0 && t.player_action != -1) {
+		v.player_action_counter = t.player_action_counter;
+		if(!$[disablePlayerControls]) {
+			action = t.player_action;
+		}
+	}
+	t.ui_action_counter ??= 0;
+	if(t.ui_action_counter != v.ui_action_counter && t.ui_action_counter > 0) {
+		v.ui_action_counter = t.ui_action_counter;
+		if(!$[disablePlayerControls]) {
+			let process_action = false;
+			t.delta_time = q.time_stamp - v.last_ui_action_time; // unfortunately q.time_stamp doesn't work in armour stands rendered in the ui, so we need to do the timing logic here
+			if(!v.was_ui_action_last_frame && t.delta_time >= 1) { // you can press it repeatedly up to 20 times a second
+				process_action = true;
+				v.ui_action_hold_start_time = q.time_stamp;
+			}
+			if(v.was_ui_action_last_frame && q.time_stamp - v.ui_action_hold_start_time >= 8 && t.delta_time >= 3) { // if you've been holding a key down for 0.4s, it will repeat the action every 0.15s. kinda like how keyboards work when you hold down a key. note that q.time_stamp always returns an integer (i.e. doesn't interpolate between ticks) so the repeat interval has to be a multiple of 0.05s.
+				process_action = true;
+			}
+			if(process_action) {
+				action = t.ui_action;
+				v.last_ui_action_time = q.time_stamp;
+			}
+		}
+		v.was_ui_action_last_frame = true;
+	} else {
+		v.was_ui_action_last_frame = false;
+	}
+	if(action != -1) {
+		v.player_has_interacted = true;
+		if(action == $[ACTIONS.TOGGLE_RENDERING]) {
+			v.hologram.rendering = !v.hologram.rendering;
+		} else if(action == $[ACTIONS.TOGGLE_VALIDATING]) {
+			v.hologram.validating = !v.hologram.validating;
+			if(v.hologram.validating) {
+				should_set_wrong_blocks = true;
+			} else {
+				v.hologram.show_wrong_block_overlay = false;
+			}
+		} else if(action == $[ACTIONS.BACKUP_HOLOGRAM]) {
+			v.hologram_backup_requested_time = q.time_stamp;
+		} else if(v.hologram.rendering) { // opacity, layer, movement, and structure controls require the hologram to be visible, otherwise it could be confusing if you accidentally change something when it's invisible
+			if(action == $[ACTIONS.INCREASE_OPACITY]) {
+				v.hologram.texture_index++;
+				if(v.hologram.texture_index >= $[textureBlobsCount]) {
+					v.hologram.texture_index = 0;
+				}
+			} else if(action == $[ACTIONS.DECREASE_OPACITY]) {
+				v.hologram.texture_index--;
+				if(v.hologram.texture_index < 0) {
+					v.hologram.texture_index = $[textureBlobsCount - 1];
+				}
+			} else if(action == $[ACTIONS.TOGGLE_TINT]) {
+				v.hologram.show_tint = !v.hologram.show_tint;
+			} else if(action == $[ACTIONS.INCREASE_LAYER]) {
+				v.hologram.layer++;
+				check_layer_validity = true;
+			} else if(action == $[ACTIONS.DECREASE_LAYER]) {
+				v.hologram.layer--;
+				check_layer_validity = true;
+			} else if(action == $[ACTIONS.CHANGE_LAYER_MODE]) {
+				v.hologram.layer_mode = 1 - v.hologram.layer_mode; // ez
+				check_layer_validity = true;
+			} else if(action == $[ACTIONS.MOVE_HOLOGRAM]) {
+				let camera_rot_x = q.camera_rotation(0);
+				let camera_rot_y = q.camera_rotation(1);
+				if(camera_rot_x <= -38) { // slightly more bias towards up/down
+					v.hologram.offset_y++;
+				} else if(camera_rot_x >= 38) {
+					v.hologram.offset_y--;
+				} else if(camera_rot_y > -45 && camera_rot_y <= 45) {
+					v.hologram.offset_z++;
+				} else if(camera_rot_y > 45 && camera_rot_y <= 135) {
+					v.hologram.offset_x--;
+				} else if(camera_rot_y > -135 && camera_rot_y <= -45) {
+					v.hologram.offset_x++;
+				} else {
+					v.hologram.offset_z--;
+				}
+			} else if(action == $[ACTIONS.MOVE_POS_X]) {
+				v.hologram.offset_x++;
+			} else if(action == $[ACTIONS.MOVE_NEG_X]) {
+				v.hologram.offset_x--;
+			} else if(action == $[ACTIONS.MOVE_POS_Y]) {
+				v.hologram.offset_y++;
+			} else if(action == $[ACTIONS.MOVE_NEG_Y]) {
+				v.hologram.offset_y--;
+			} else if(action == $[ACTIONS.MOVE_POS_Z]) {
+				v.hologram.offset_z++;
+			} else if(action == $[ACTIONS.MOVE_NEG_Z]) {
+				v.hologram.offset_z--;
+			} else if(action == $[ACTIONS.ROTATE_HOLOGRAM_CLOCKWISE]) {
+				v.hologram.rotation = (v.hologram.rotation + 1) % 4;
+			} else if(action == $[ACTIONS.ROTATE_HOLOGRAM_ANTICLOCKWISE]) {
+				v.hologram.rotation = (v.hologram.rotation + 3) % 4; // Molang Math.mod is more of a remainder function (like JS), so it can return values from -3 to 3. Because of this I do + 3 not - 1.
+			} else if(action == $[ACTIONS.NEXT_STRUCTURE] && v.hologram.structure_count > 1) {
+				v.hologram.structure_index++;
+				changed_structure = true;
+			} else if(action == $[ACTIONS.PREVIOUS_STRUCTURE] && v.hologram.structure_count > 1) {
+				v.hologram.structure_index--;
+				changed_structure = true;
+			}
+		}
+	}
+	
+	if($[coordinateLockEnabled]) {
+		v.hologram.offset_x = ($[coordinateLockCoordsMolang[0]]) - q.position(0) + 0.5;
+		v.hologram.offset_y = ($[coordinateLockCoordsMolang[1]]) - Math.floor(q.position(1));
+		v.hologram.offset_z = ($[coordinateLockCoordsMolang[2]]) - q.position(2) + 0.5;
+		v.hologram.rotation = 2 - Math.floor(q.body_y_rotation / 90);
+	} else {
+		v.hologram_dir = (Math.floor(q.body_y_rotation / 90) + 2 + v.hologram.rotation) % 4; // q.body_y_rotation goes from -180 to 180, hence the + 2
+	}
+	if(check_layer_validity) {
+		if(v.hologram.layer < -1) {
+			v.hologram.layer = v.hologram.structure_h - (v.hologram.layer_mode == $[singleLayerMode]? 1 : 2);
+		}
+		if(v.hologram.layer >= (v.hologram.layer_mode == $[singleLayerMode]? v.hologram.structure_h : v.hologram.structure_h - 1)) {
+			v.hologram.layer = -1;
+		}
+		if(v.hologram.validating) {
+			should_set_wrong_blocks = true;
+		}
+	}
+	if(should_set_wrong_blocks) {
+		v.wrong_blocks = (v.hologram.layer == -1? ($[totalBlocksToValidate]) : ($[totalBlocksToValidateByLayer]));
+		t.wrong_blocks = v.wrong_blocks;
+	}
+	if(changed_structure) {
+		if(v.hologram.structure_index < 0) {
+			v.hologram.structure_index = v.hologram.structure_count - 1;
+		}
+		if(v.hologram.structure_index >= v.hologram.structure_count) {
+			v.hologram.structure_index = 0;
+		}
+		v.hologram.structure_w = $[structureSizesMolang[0]];
+		v.hologram.structure_h = $[structureSizesMolang[1]];
+		v.hologram.structure_d = $[structureSizesMolang[2]];
+		v.hologram.layer = -1;
+		v.hologram.validating = false;
+		v.hologram.show_wrong_block_overlay = false;
+	}
+	
+	if(v.hologram.validating) {
+		// block validation particles rely on temp variables. this code checks if the temp variables are defined; if they are, it updates the internal state; if not, it sets the temp variables to its internal state. very messy ik
+		if((t.wrong_blocks ?? -1) == -1) {
+			t.wrong_blocks = v.wrong_blocks;
+		} else {
+			v.wrong_blocks = t.wrong_blocks;
+		}
+		if((t.show_wrong_block_overlay ?? -1) == -1) {
+			t.show_wrong_block_overlay = v.hologram.show_wrong_block_overlay;
+		} else {
+			v.hologram.show_wrong_block_overlay = t.show_wrong_block_overlay;
+		}
+		if((t.wrong_block_x ?? -1) == -1) {
+			t.wrong_block_x = v.hologram.wrong_block_x;
+		} else {
+			v.hologram.wrong_block_x = t.wrong_block_x;
+		}
+		if((t.wrong_block_y ?? -1) == -1) {
+			t.wrong_block_y = v.hologram.wrong_block_y;
+		} else {
+			v.hologram.wrong_block_y = t.wrong_block_y;
+		}
+		if((t.wrong_block_z ?? -1) == -1) {
+			t.wrong_block_z = v.hologram.wrong_block_z;
+		} else {
+			v.hologram.wrong_block_z = t.wrong_block_z;
+		}
+	}
+	
+	v.saving_backup = q.distance_from_camera > 55 || q.time_stamp - v.hologram_backup_requested_time <= 600; // 15 blocks leeway for automatic backups, or 30s after players request a backup
+	if(v.saving_backup) {
+		// one by one, check each backup slot. if it's empty, we take that spot; if not, try to find which backup slot was set the earliest.
+		let earliest_backup_time_stamp = q.time_stamp + 9999; // all backups should be less than this
+		let earliest_backup_index = -1;
+		for(let i = 0; i < $[backupSlotCount]; i++) {
+			if(v.hologram_backup_index == -1) {
+				if(t.hologram_backup_empty_$[i] ?? true) {
+					v.hologram_backup_index = $[i];
+				} else if(t.hologram_backup_$[i].backup_time_stamp < earliest_backup_time_stamp) {
+					earliest_backup_time_stamp = t.hologram_backup_$[i].backup_time_stamp;
+					earliest_backup_index = $[i];
+				}
+			}
+		}
+		if(v.hologram_backup_index == -1) { // none are empty, so overwrite the earliest backup
+			if(earliest_backup_index == -1) { // will only happen when the backup slot count is 0
+				return;
+			}
+			v.hologram_backup_index = earliest_backup_index;
+		}
+		
+		v.hologram.x = q.position(0);
+		v.hologram.y = q.position(1);
+		v.hologram.z = q.position(2);
+		v.hologram.backup_time_stamp = q.time_stamp;
+		for(let i = 0; i < $[backupSlotCount]; i++) {
+			if(v.hologram_backup_index == $[i]) {
+				t.hologram_backup_$[i] = v.hologram;
+				t.hologram_backup_empty_$[i] = false;
+			}
+		}
+	} else if(v.hologram_backup_index != -1) {
+		for(let i = 0; i < $[backupSlotCount]; i++) {
+			if(v.hologram_backup_index == $[i]) {
+				t.hologram_backup_empty_$[i] = true;
+			}
+		}
+		v.hologram_backup_index = -1;
+	}
+}
+
+function playerInitVariables() {
+	v.player_action_counter ??= 0;
+	v.last_player_action_time ??= 0;
+	v.player_action ??= -1;
+	v.new_action = -1; // If we want to set a new player action, we put it here first so we can update the counter and record the time.
+	
+	v.last_attack_time ??= 0;
+	v.attack = v.attack_time > 0 && (v.last_attack_time == 0 || v.attack_time < v.last_attack_time);
+	v.last_attack_time = v.attack_time;
+}
+function playerRenderingControls() {
+	if(v.attack) {
+		if($[toggleRendering]) {
+			v.new_action = $[ACTIONS.TOGGLE_RENDERING];
+		} else if($[changeOpacity]) {
+			if(q.is_sneaking) {
+				v.new_action = $[ACTIONS.DECREASE_OPACITY];
+			} else {
+				v.new_action = $[ACTIONS.INCREASE_OPACITY];
+			}
+		} else if($[toggleTint]) {
+			v.new_action = $[ACTIONS.TOGGLE_TINT];
+		} else if($[toggleValidating]) {
+			v.new_action = $[ACTIONS.TOGGLE_VALIDATING];
+		} else if($[changeLayer]) {
+			if(q.is_sneaking) {
+				v.new_action = $[ACTIONS.DECREASE_LAYER];
+			} else {
+				v.new_action = $[ACTIONS.INCREASE_LAYER];
+			}
+		} else if($[decreaseLayer]) { // saw some confusion about this, it was meant to be for decreasing layer at the armour stand not remotely by the player, but more options can never hurt. ig it makes it more accessible for players who can't sneak...?
+			if(q.is_sneaking) {
+				v.new_action = $[ACTIONS.INCREASE_LAYER];
+			} else {
+				v.new_action = $[ACTIONS.DECREASE_LAYER];
+			}
+		} else if($[changeLayerMode]) {
+			v.new_action = $[ACTIONS.CHANGE_LAYER_MODE];
+		} else if($[moveHologram]) {
+			v.new_action = $[ACTIONS.MOVE_HOLOGRAM];
+		} else if($[rotateHologram]) {
+			if(q.is_sneaking) {
+				v.new_action = $[ACTIONS.ROTATE_HOLOGRAM_ANTICLOCKWISE];
+			} else {
+				v.new_action = $[ACTIONS.ROTATE_HOLOGRAM_CLOCKWISE];
+			}
+		} else if($[changeStructure]) {
+			if(q.is_sneaking) {
+				v.new_action = $[ACTIONS.PREVIOUS_STRUCTURE];
+			} else {
+				v.new_action = $[ACTIONS.NEXT_STRUCTURE];
+			}
+		} else if($[backupHologram]) {
+			v.new_action = $[ACTIONS.BACKUP_HOLOGRAM];
+		}
+	}
+}
+function playerBroadcastActions() {
+	if(v.new_action != -1) {
+		v.player_action = v.new_action;
+		v.new_action = -1;
+		v.player_action_counter++;
+		v.last_player_action_time = q.time_stamp;
+	}
+	if(q.time_stamp - v.last_player_action_time > 40) { // broadcast nothing after 2 seconds. this is so, if the player does an action a minute ago and it doesn't do anything, the armour stands don't suddenly update when it's broadcasted through temp
+		v.player_action = -1;
+	}
+	t.player_action = v.player_action;
+	t.player_action_counter = v.player_action_counter;
+	
+	for(let i = 0; i < $[backupSlotCount]; i++) {
+		v.hologram_backup_empty_$[i] ??= true;
+		if((t.hologram_backup_empty_$[i] ?? -1) == -1) {
+			t.hologram_backup_empty_$[i] = v.hologram_backup_empty_$[i];
+			if(!v.hologram_backup_empty_$[i]) {
+				t.hologram_backup_$[i] = v.hologram_backup_$[i];
+			}
+		} else {
+			v.hologram_backup_empty_$[i] = t.hologram_backup_empty_$[i];
+			if(!t.hologram_backup_empty_$[i]) {
+				v.hologram_backup_$[i] = t.hologram_backup_$[i];
+			}
+		}
+	}
+}
+function playerFirstPerson() {
+	if(!q.is_in_ui && !v.map_face_icon) {
+		$[initVariables]
+		$[renderingControls]
+		$[broadcastActions]
+	}
+}
+function playerThirdPerson() {
+	if(!q.is_in_ui) {
+		$[initVariables]
+		$[renderingControls]
+		$[broadcastActions]
+	}
+}
+
+// everything has to be exported as default so that they can be imported together as a default import. this lets esbuild add the file hash to the file name when building, and it gets automatically renamed in index.js
+export default {
+	ACTIONS,
+	initialize,
+	preAnimation,
+	playerInitVariables,
+	playerRenderingControls,
+	playerBroadcastActions,
+	playerFirstPerson,
+	playerThirdPerson
+};
+
+/**
+ * Create a pseudo-enumeration using numbers.
+ * @template {string[]} T
+ * @param {[...T]} keys - An array of string literals to use as keys.
+ * @returns {Readonly<{ [K in keyof T as (K extends `${number}`? T[K] : never)]: K extends `${infer N extends number}`? N : never }>}
+ */
+function createNumericEnum(keys) {
+	// @ts-expect-error
+	return Object.freeze(Object.fromEntries(keys.map((key, i) => [key, i])));
+}
