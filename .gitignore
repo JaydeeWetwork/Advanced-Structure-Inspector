@@ -1,8 +1,7 @@
-**/node_modules
+﻿**/node_modules
 dist
 tests/completedPacks
 tests/screenshots
 # Local debug probes
 tests/viewerUnit/debug-*.mjs
 tests/viewerUnit/scan-*.mjs
-
