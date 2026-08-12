@@ -1,5 +1,4 @@
 import { areArraysEqual, average, ceil, fnv1a, getOffscreenCanvasContext, getStructureIndexFromCoordinates, HashMap, sqrt, stringToImageData, toBlob, tuple, vec2 } from "./utils.js";
-import WebGL2QuadRenderer from "./WebGL2QuadRenderer.js"; // dependency injection coming soon^tm
 
 /** Padding in pixels to be added around the edges of isometric diagrams. */
 const ISOMETRIC_DIAGRAM_PADDING = 8;
@@ -7,7 +6,7 @@ const ISOMETRIC_DIAGRAM_PADDING = 8;
 export default class StructureDiagramMaker {
 	/** @readonly */
 	size;
-	/** @readonly @type {WebGL2QuadRenderer | null} */
+	/** @type {import("./WebGL2QuadRenderer.js").default | null} */
 	#renderer = null;
 	/** @readonly */
 	#isoXStep;
@@ -17,6 +16,9 @@ export default class StructureDiagramMaker {
 	#isoYYStep;
 	/** @readonly */
 	#isoBlockIconOffset;
+	
+	/** @type {Promise<void>} */
+	#ready;
 	
 	/**
 	 * @param {HoloPrintConfig} config 
@@ -30,15 +32,24 @@ export default class StructureDiagramMaker {
 		this.#isoYYStep = this.size / sqrt(3);
 		this.#isoBlockIconOffset = this.size * 1.5;
 		
-		if(WebGL2QuadRenderer.isSupported()) {
-			try {
-				// multiply by 3 because a 2d icon has the surrounding 3x3 blocks in case the block takes up multiple block spaces (i.e. beds, horizontal pistons)
-				this.#renderer = new WebGL2QuadRenderer(this.size * 3, texture);
-			} catch(e) {
-				console.error(`Failed to initialise WebGL2QuadRenderer despite being 'supported' - ${e}`);
+		// Lazy-load WebGL2 renderer so module graph never needs import-attribute shaders at app boot
+		this.#ready = this.#initRenderer(texture);
+	}
+	
+	/**
+	 * @param {HTMLImageElement} texture
+	 */
+	async #initRenderer(texture) {
+		try {
+			const { default: WebGL2QuadRenderer } = await import("./WebGL2QuadRenderer.js");
+			if(!WebGL2QuadRenderer.isSupported()) {
+				console.error("Cannot make structure diagrams - WebGL2 is not supported!");
+				return;
 			}
-		} else {
-			console.error("Cannot make structure diagrams - WebGL2 is not supported!");
+			// multiply by 3 because a 2d icon has the surrounding 3x3 blocks in case the block takes up multiple block spaces (i.e. beds, horizontal pistons)
+			this.#renderer = new WebGL2QuadRenderer(this.size * 3, texture);
+		} catch(e) {
+			console.error(`Failed to initialise WebGL2QuadRenderer - ${e}`);
 		}
 	}
 	
@@ -66,6 +77,7 @@ export default class StructureDiagramMaker {
 	 * @returns {Promise<{ diagrams: Blob[], indices: number[][] }>}
 	 */
 	async makeDiagramsForStructures(polyMeshTemplatePalette, structureIndicesByLayerByStructure, structureSizes) {
+		await this.#ready;
 		if(!this.#renderer) {
 			let errorImage = await toBlob(stringToImageData("Couldn't create diagrams"));
 			let indices = structureSizes.map(structureSize => (new Array(structureSize[1] + 1)).fill(0));

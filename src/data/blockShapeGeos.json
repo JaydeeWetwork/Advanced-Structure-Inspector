@@ -114,6 +114,55 @@
 			}
 		}
 	],
+	// Double-chest half: wider toward pair, open on the paired side (local +X).
+	// ASI remaps paired chests so the open face points at the neighbour.
+	"chest_half": [
+		{
+			"pos": [0, 0, 1],
+			"size": [15, 10, 14],
+			"textures": {
+				"*": "#tex",
+				"up": "none",
+				"east": "none"
+			},
+			"texture_size": [64, 64],
+			"uv": {
+				"side": [0, 33],
+				"north": [14, 33],
+				"west": [28, 33],
+				"down": [28, 19]
+			}
+		},
+		{
+			"pos": [0, 10, 1],
+			"size": [15, 4, 14],
+			"textures": {
+				"*": "#tex",
+				"east": "none"
+			},
+			"texture_size": [64, 64],
+			"uv": {
+				"side": [0, 14],
+				"north": [14, 14],
+				"west": [28, 14],
+				"down": [28, 0],
+				"up": [14, 0]
+			}
+		},
+		{
+			"if": "sdb_chest_latch == 1",
+			"pos": [6, 7, 0],
+			"size": [2, 4, 1],
+			"textures": {
+				"*": "#tex",
+				"south": "none"
+			},
+			"texture_size": [64, 64],
+			"uv": {
+				"*": [0, 1]
+			}
+		}
+	],
 	"honey_block": [ // this is unofficial (i.e. not in https://wiki.bedrock.dev/blocks/block-shapes.html)
 		{
 			"pos": [0, 0, 0],
@@ -682,15 +731,13 @@
 			"pivot": [11, 0, 8]
 		}
 	],
-	"redstone_dust": [ // again, the shape isn't in block states. because we'll have to change the texture as well I'll put an entire cube here and make TextureAtlas.js deal with it...
+	"redstone_dust": [ // power tint only — neighbour arms not stored in Bedrock structures
 		{
-			// "pos": [0.125, 0.125, 0.125],
-			// "size": [15.75, 15.75, 15.75]
 			"pos": [0, 0.125, 0],
 			"size": [16, 0, 16],
 			"tint": "${Array.redstone_dust_tints[redstone_signal]}",
 			"arrays": {
-				"redstone_dust_tints": ["#4D0000", "#700000", "#7A0000", "#850000", "#8F0000", "#990000", "#A30000", "#AD0000", "#B80000", "#C20000", "#CC0000", "#D60000", "#E00000", "#EB0700", "#F51C00", "#FF3300"] // Generated with code adapted from net.minecraft.world.level.block.RedStoneWireBlock
+				"redstone_dust_tints": ["#4D0000", "#700000", "#7A0000", "#850000", "#8F0000", "#990000", "#A30000", "#AD0000", "#B80000", "#C20000", "#CC0000", "#D60000", "#E00000", "#EB0700", "#F51C00", "#FF3300"]
 			}
 		}
 	],

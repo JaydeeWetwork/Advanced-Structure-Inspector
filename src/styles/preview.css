@@ -15,6 +15,25 @@
 		aspect-ratio: 1;
 		box-sizing: border-box;
 	}
+}
+
+/* Structure Inspector: fill panel, natural aspect (no forced square stretch) */
+.sdb-app .sdb-preview-host .previewCont {
+	width: 100%;
+	height: 100%;
+	margin: 0;
+	text-align: left;
+}
+.sdb-app .sdb-preview-host .previewCont > canvas,
+.sdb-app .sdb-preview-host .previewCont > .previewMessage {
+	width: auto;
+	height: auto;
+	aspect-ratio: auto;
+	max-width: 100%;
+	max-height: 100%;
+}
+
+.previewCont {
 	.statsPanel {
 		width: 0;
 		height: 0;
@@ -25,9 +44,21 @@
 	@media (min-width: 451px) and (min-height: 451px) {
 		lil-gui {
 			position: absolute;
-			right: 0;
+			right: 10px;
+			bottom: 10px;
+			top: auto;
+			left: auto;
 		}
 	}
+}
+
+/* Structure Inspector: force lil-gui bottom-right even when cont is full-bleed */
+.sdb-app .sdb-preview-host .previewCont lil-gui {
+	position: absolute !important;
+	right: 10px !important;
+	bottom: 10px !important;
+	top: auto !important;
+	left: auto !important;
 }
 .previewMessage {
 	margin: auto;

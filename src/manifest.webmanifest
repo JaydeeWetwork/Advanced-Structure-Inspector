@@ -1,7 +1,7 @@
 {
-	"name": "Structure DB Viewer",
-	"short_name": "StructureDB",
-	"description": "Browse and preview Minecraft Bedrock .mcstructure files locally or on the web. Adapted from HoloPrint.",
+	"name": "Advanced Structure Inspector",
+	"short_name": "AdvStruct",
+	"description": "Advanced Structure Inspector — browse, preview, and inspect Minecraft Bedrock .mcstructure files. Adapted from HoloPrint.",
 	"categories": ["utilities"],
 	"icons": [
 		{

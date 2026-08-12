@@ -1,12 +1,13 @@
 {
-	"name": "structure-db-viewer",
+	"name": "structure-inspector",
 	"version": "0.1.0",
 	"private": true,
-	"description": "Web-based Minecraft Bedrock structure database viewer (local or static host). Adapted from HoloPrint.",
+	"description": "Advanced Structure Inspector — web-based Minecraft Bedrock .mcstructure browser and 3D inspector (local or static host). Setup: see README.md and docs/SETUP.md. Adapted from HoloPrint.",
 	"type": "module",
 	"scripts": {
 		"lint": "tsc 2>&1 | grep -Ev 'TS2307|TS2694'",
 		"test": "npm run test --workspaces --if-present",
+		"test:viewer": "npm run test -w viewer_unit",
 		"build": "npm run build -w pipeline",
 		"serve": "npx --yes serve src -p 5173",
 		"serve:dist": "npx --yes serve dist -p 5173"
@@ -18,6 +19,9 @@
 	"license": "CC-BY-NC-SA-4.0",
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/YOUR_USER/structure-db-viewer.git"
+		"url": "https://github.com/YOUR_USER/structure-inspector.git"
+	},
+	"devDependencies": {
+		"nbtify-readonly-typeless": "^1.1.2"
 	}
 }

@@ -1,9 +1,8 @@
 // Disclaimer: This is mostly AI-generated, I did not have the willpower to go through tutorial hell again
 // I have some experience with WebGL beforehand but writing it is never fun
 
-import vertexShaderSource from "./WebGL2QuadRendererShader.vertex.glsl" with { type: "text" };
-import fragmentShaderSource from "./WebGL2QuadRendererShader.fragment.glsl" with { type: "text" };
 import { getOffscreenCanvasContext } from "./utils.js";
+import { vertexShaderSource, fragmentShaderSource } from "./WebGL2QuadRendererShaders.js";
 
 /** A lightweight WebGL 2 utility to render arbitrary quads directly to an `ImageBitmap`. */
 export default class WebGL2QuadRenderer {
@@ -56,7 +55,6 @@ export default class WebGL2QuadRenderer {
 		gl.attachShader(this.#program, vertexShader);
 		gl.attachShader(this.#program, fragmentShader);
 		gl.linkProgram(this.#program);
-		// deleting them here doesn't actually delete them, it just indicates that they can be deleted if the program is deleted
 		gl.deleteShader(vertexShader);
 		gl.deleteShader(fragmentShader);
 		if(!gl.getProgramParameter(this.#program, gl.LINK_STATUS)) {
@@ -86,12 +84,11 @@ export default class WebGL2QuadRenderer {
 	}
 	
 	/**
-	 * Renders a list of independent quads and returns the compiled `ImageBitmap`.
-	 * @param {{ positions: F32Vec8, uvs: F32Vec8 }[]} quads Array of position/UV pairings.
+	 * @param {{ positions: F32Vec8, uvs: F32Vec8 }[]} quads
 	 * @returns {ImageBitmap}
 	 */
 	render(quads) {
-		let gl = this.#gl; // I wish JS would just let me write #gl. What else could the # mean?!?! SMHHHH
+		let gl = this.#gl;
 		
 		gl.viewport(0, 0, this.size, this.size);
 		gl.clearColor(0, 0, 0, 0);
@@ -102,7 +99,6 @@ export default class WebGL2QuadRenderer {
 		let positions = new Float32Array(quadCount * 8);
 		let uvs = new Float32Array(quadCount * 8);
 		let indices = new Uint16Array(quadCount * 6);
-		// batch everything into a single draw call!
 		quads.forEach(({ positions: quadPositions, uvs: quadUvs }, i) => {
 			positions.set(quadPositions, i * 8);
 			uvs.set(quadUvs, i * 8);
@@ -133,7 +129,7 @@ export default class WebGL2QuadRenderer {
 		
 		return gl.canvas.transferToImageBitmap();
 	}
-	/** Frees all GPU resources associated with the renderer. */
+	
 	dispose() {
 		this.#gl.deleteBuffer(this.#positionBuffer);
 		this.#gl.deleteBuffer(this.#uvBuffer);
@@ -143,7 +139,6 @@ export default class WebGL2QuadRenderer {
 	}
 	
 	/**
-	 * Creates and compiles a WebGL shader because nothing is easy in WebGL :(
 	 * @param {WebGLRenderingContext["VERTEX_SHADER"] | WebGLRenderingContext["FRAGMENT_SHADER"]} type
 	 * @param {string} source
 	 * @returns {WebGLShader}

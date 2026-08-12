@@ -97,7 +97,8 @@ export default class BlockGeoMaker {
 	 */
 	async #makePolyMeshTemplate(block) {
 		let blockName = block["name"];
-		let blockShape = this.#getBlockShape(blockName);
+		// ASI synthetic shapes (e.g. double-chest halves) override name lookup
+		let blockShape = block["sdb_block_shape"] || this.#getBlockShape(blockName);
 		let { faces, centerOfMass } = await this.#makePolyMeshTemplateFaces(block, blockShape);
 		if(!faces) {
 			console.debug(`No faces are being rendered for block ${blockName}`);
@@ -107,6 +108,11 @@ export default class BlockGeoMaker {
 			blockShape = blockShape.slice(0, blockShape.indexOf("<"));
 		}
 		let rotation = this.#getBlockRotation(block, blockShape);
+		// Extra yaw for double-chest half so open face points at pair
+		const pairYaw = Number(block?.states?.sdb_pair_yaw ?? 0);
+		if(pairYaw) {
+			rotation = rotation ? [rotation[0], rotation[1] + pairYaw, rotation[2]] : [0, pairYaw, 0];
+		}
 		if(rotation) {
 			faces.forEach(face => {
 				face["normal"] = this.#applyEulerRotation(face["normal"], rotation, [0, 0, 0]);

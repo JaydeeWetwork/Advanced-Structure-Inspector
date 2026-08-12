@@ -1,50 +1,48 @@
-# Fork map — Structure DB Viewer
+# Fork map — Advanced Structure Inspector
 
-Scaffold for a **web-based structure database viewer** that runs **locally** (static file server) or **on the web** (GitHub Pages / any static host).
+Web-based **Minecraft Bedrock structure inspector** that runs **locally** (static file server) or **on the web** (GitHub Pages / any static host).
+
+Adapted from [HoloPrint](https://github.com/SuperLlama88888/holoprint) under CC BY-NC-SA 4.0. See [NOTICE.md](./NOTICE.md).
 
 ## Layout
 
 | Path | Role |
 |------|------|
-| `src/index.html` + `src/index.js` | **Primary app** — catalog UI |
-| `src/viewer/` | Catalog store, ingest helpers, viewer CSS |
-| `src/HoloPrint.js` + related modules | Upstream core (parse, extract, pack, preview) |
-| `src/holoprintPack.html` + `src/holoprintPack.js` | Original HoloPrint pack generator UI (kept) |
-| `pipeline/` | esbuild / minify static build → `dist/` |
+| `src/index.html` + `src/index.js` | **Primary app** — catalog, docks, session |
+| `src/viewer/` | Catalog, IndexedDB, inspect, icons, materials, preview glue |
+| `src/viewer/systems/` | Layer / entity / camera / inspect / resource pool / session |
+| `src/PreviewRenderer.js` | Single 3D preview (composes systems); HoloPrint + ASI |
+| `src/HoloPrint.js` + related modules | Upstream core (NBT, pack, shared geometry helpers) |
+| `src/holoprintPack.html` + `.js` | Original HoloPrint pack generator UI (kept) |
+| `pipeline/` | esbuild / minify → `dist/` |
+| `docs/SETUP.md` | Install & run guide |
 | `NOTICE.md` / `LICENSE` | CC BY-NC-SA 4.0 attribution |
 
-## Reused APIs
+## Reused upstream capabilities
 
-- `HoloPrint.readStructureNBT` — validate & parse `.mcstructure`
-- `extractStructureFilesFromMcworld` (mcbe-leveldb-reader) — world / template / zip
-- `HoloPrint.extractStructureFilesFromPack` — structures inside `.mcpack`
-- `HoloPrint.makePack` + `PreviewRenderer` — optional 3D preview (via pack pipeline for now)
-- `MaterialList` types / data tables — available for later materials views
+- Structure NBT parse / validation patterns
+- Block geometry + texture atlas pipeline (`BlockGeoMaker`, `TextureAtlas`, `PolyMeshMaker`)
+- Material list data tables / mappings
+- Optional pack path via `holoprintPack.html`
 
-## Not yet implemented (next milestones)
+## ASI-specific (this fork)
 
-1. **Binary persistence** — IndexedDB / OPFS for structure files (metadata index only in `localStorage` today)
-2. **Lightweight preview path** — geometry without full pack zip generation
-3. **Hosted catalog** optional remote index (still NonCommercial)
-4. **Entity browser** — `structure.entities` is not a first-class catalog surface yet
-5. Strip or deeply hide pack generation if product stays viewer-only
+- Catalog + **IndexedDB** persistence (metadata + file blobs + categories)
+- Lightweight **preview without pack zip** (`structurePreview.js` + unified `PreviewRenderer`)
+- Layer mode, fly cam, inspect inventories, item frames, materials acquired flags
+- Preview session park/restore LRU
+- Extracted preview **systems** under `src/viewer/systems/`
 
 ## Run locally
 
-```bash
-# From repo root (Node 18+)
-npm ci -w pipeline   # only needed for production build
-npx serve src -p 5173
-# open http://localhost:5173
-```
-
-Or any static server pointed at `src/` (import map loads deps from esm.sh).
-
-Production build:
+Full steps: **[docs/SETUP.md](./docs/SETUP.md)**.
 
 ```bash
-npm run build
-npx serve dist -p 5173
+# Node 18+
+npm ci
+npm run serve          # http://localhost:5173  (src/)
+# production:
+npm run build && npm run serve:dist
 ```
 
 ## Upstream

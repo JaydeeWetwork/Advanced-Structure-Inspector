@@ -15,7 +15,8 @@ import PolyMeshMaker from "./PolyMeshMaker.js";
 import fetchers from "./fetchers.js";
 import EntityGeoMaker from "./EntityGeoMaker.js";
 import EntityManager from "./EntityManager.js";
-import StructureDiagramMaker from "./StructureDiagramMaker.js";
+// StructureDiagramMaker is loaded lazily in makeStructureDiagrams() so preview-only
+// paths do not pull WebGL diagram shaders until pack generation needs them.
 
 export const VERSION = "dev";
 export const IGNORED_BLOCKS = ["air", "piston_arm_collision", "sticky_piston_arm_collision", "light_block", "light_block_0", "light_block_1", "light_block_2", "light_block_3", "light_block_4", "light_block_5", "light_block_6", "light_block_7", "light_block_8", "light_block_9", "light_block_10", "light_block_11", "light_block_12", "light_block_13", "light_block_14", "light_block_15"]; // blocks to be ignored when scanning the structure file
@@ -638,6 +639,82 @@ export async function updatePack(resourcePack, config, resourcePackStack, previe
 	return await makePack(structureFiles, config, resourcePackStack, previewCont);
 }
 /**
+ * Builds block geometry + texture atlas and renders a 3D preview with {@link PreviewRenderer}.
+ * Does **not** create a `.mcpack` or structure diagrams.
+ * @param {File | File[]} structureFiles
+ * @param {Element} previewCont
+ * @param {Partial<HoloPrintConfig>} [partialConfig]
+ * @param {ResourcePackStack} [resourcePackStack]
+ * @returns {Promise<PreviewRenderer[]>}
+ */
+export async function renderStructurePreview(structureFiles, previewCont, partialConfig = {}, resourcePackStack = new ResourcePackStack()) {
+	console.info(`Rendering structure preview (HoloPrint ${VERSION}, no pack)`);
+	let startTime = performance.now();
+	let config = addDefaultConfig({
+		RETEXTURE_CONTROL_ITEMS: false,
+		UI_CONTROLS_ENABLED: false,
+		PLAYER_CONTROLS_ENABLED: false,
+		...partialConfig
+	});
+	if(!Array.isArray(structureFiles)) {
+		structureFiles = [structureFiles];
+	}
+	let nbts = await Promise.all(structureFiles.map(structureFile => readStructureNBT(structureFile)));
+	let structureSizes = nbts.map(nbt => nbt["size"]);
+	let packName = config.PACK_NAME ?? getDefaultPackName(structureFiles);
+	
+	/** @type {[PathToData<"textureAtlasMappings", Data.TextureAtlasMappings>, PathToData<"blockShapes", Data.BlockShapes>, PathToData<"blockShapeGeos", Data.BlockShapeGeos>, PathToData<"blockStateDefinitions", Data.BlockStateDefinitions>, PathToData<"blockEigenvariants", Data.BlockEigenvariants>]} */
+	// @ts-expect-error
+	let dataFileNames = ["textureAtlasMappings", "blockShapes", "blockShapeGeos", "blockStateDefinitions", "blockEigenvariants"];
+	let dataPromise = loadDataFiles(dataFileNames);
+	let resourcesPromise = loadResources({
+		blocksDotJson: "blocks.json",
+		vanillaTerrainTexture: "textures/terrain_texture.json",
+		flipbookTextures: "textures/flipbook_textures.json"
+	}, resourcePackStack);
+	
+	let structures = nbts.map(nbt => nbt["structure"]);
+	let palettesAndIndices = await Promise.all(structures.map(structure => tweakBlockPalette(structure, config.IGNORED_BLOCKS)));
+	let { palette: blockPalette, indices: allStructureIndicesByLayer } = mergeMultiplePalettesAndIndices(palettesAndIndices);
+	if(desparseArray(blockPalette).length == 0) {
+		throw new UserError(`Structure is empty! No blocks are inside the structure.`);
+	}
+	
+	let data = await dataPromise.all;
+	let entityGeoMaker = new EntityGeoMaker(resourcePackStack);
+	let blockGeoMaker = new BlockGeoMaker(config, entityGeoMaker, data.blockShapes, data.blockShapeGeos, data.blockStateDefinitions, data.blockEigenvariants);
+	let { templates: unresolvedPolyMeshTemplatePalette, centersOfMass } = await blockGeoMaker.makePolyMeshTemplates(blockPalette);
+	console.info("Finished making block geometry templates for preview!");
+	
+	let { blocksDotJson, vanillaTerrainTexture, flipbookTextures } = await resourcesPromise.allValues;
+	let textureAtlas = new TextureAtlas(config, resourcePackStack, blocksDotJson, vanillaTerrainTexture, flipbookTextures, data.textureAtlasMappings);
+	await textureAtlas.makeAtlas(Array.from(blockGeoMaker.textureRefs));
+	let fullOpacityTextureBlob = textureAtlas.imageBlobs.at(-1)[1];
+	
+	let unscaledPolyMeshTemplatePalette = unresolvedPolyMeshTemplatePalette.map(polyMeshTemplate => BlockGeoMaker.resolveTemplateFaceUvs(polyMeshTemplate, textureAtlas));
+	let polyMeshTemplatePalette = blockGeoMaker.scalePolyMeshTemplates(unscaledPolyMeshTemplatePalette, centersOfMass);
+	
+	/** @type {PreviewRenderer[]} */
+	let previews = [];
+	let hostParent = previewCont.parentNode;
+	for(let structureI = 0; structureI < structureSizes.length; structureI++) {
+		if(structureI > 0 && hostParent) {
+			hostParent.appendChild(document.createElement("hr"));
+		}
+		let cont = structureI == 0? previewCont : (hostParent? hostParent.appendChild(previewCont.cloneNode()) : previewCont);
+		let name = structureSizes.length == 1? packName : getDefaultPackName([structureFiles[structureI]]);
+		let preview = await PreviewRenderer.new(cont, name, fullOpacityTextureBlob, structureSizes[structureI], blockPalette, polyMeshTemplatePalette, allStructureIndicesByLayer[structureI], {
+			showSkybox: config.SHOW_PREVIEW_SKYBOX,
+			showFps: config.SHOW_PREVIEW_WIDGETS,
+			showOptions: config.SHOW_PREVIEW_WIDGETS
+		});
+		previews.push(preview);
+	}
+	
+	console.info(`Finished structure preview in ${+(performance.now() - startTime).toFixed(0) / 1000}s`);
+	return previews;
+}
+/**
  * Returns the default pack name that would be used if no pack name is specified.
  * @param {File[]} structureFiles
  * @returns {string}
@@ -1026,6 +1103,7 @@ function mergeMultiplePalettesAndIndices(palettesAndIndices) {
  * @returns {Promise<StructureDiagramsAndIndices>}
  */
 async function makeStructureDiagrams(config, textureBlob, polyMeshTemplatePalette, allStructureIndicesByLayer, structureSizes) {
+	let { default: StructureDiagramMaker } = await import("./StructureDiagramMaker.js");
 	let structureDiagramMaker = new StructureDiagramMaker(config, await toImage(textureBlob));
 	let diagramsAndIndices = await structureDiagramMaker.makeDiagramsForStructures(polyMeshTemplatePalette, allStructureIndicesByLayer, structureSizes);
 	structureDiagramMaker.dispose();

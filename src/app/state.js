@@ -1,0 +1,120 @@
+/**
+ * Shared app state — single owner for selection + preview session.
+ */
+
+import { StructureCatalog } from "../viewer/api/catalog.js";
+import PreviewSessionManager from "./PreviewSessionManager.js";
+
+export const catalog = new StructureCatalog();
+
+/** @type {string|null} */
+let _selectedId = null;
+
+export function getSelectedId() {
+	return _selectedId;
+}
+
+/**
+ * @param {string|null} id
+ */
+export function setSelectedId(id) {
+	_selectedId = id;
+	session.selectedId = id;
+}
+
+/** @type {ReturnType<typeof createEls>|null} */
+export let els = null;
+
+/**
+ * @param {ReturnType<typeof createEls>} value
+ */
+export function setEls(value) {
+	els = value;
+}
+
+export const session = new PreviewSessionManager({
+	maxParked: 2,
+	getPreviewHost: () => els?.previewHost ?? document.getElementById("previewHost"),
+	log: m => console.info(m)
+});
+
+/** Session UI collapse flags */
+export const uiFlags = {
+	uncategorizedCollapsed: false,
+	detailsSectionCollapsed: false,
+	materialsSectionCollapsed: false
+};
+
+/** Single-flight import */
+export const importState = {
+	inFlight: false,
+	/** @type {AbortController|null} */
+	abort: null
+};
+
+/**
+ * @returns {import("../PreviewRenderer.js").default|null}
+ */
+export function primaryPreview() {
+	return session.primary();
+}
+
+/**
+ * @param {string} id
+ */
+function $(id) {
+	const el = document.getElementById(id);
+	if (!el) console.warn(`[sdb] missing #${id}`);
+	return el;
+}
+
+export function createEls() {
+	return {
+		importInput: /** @type {HTMLInputElement|null} */ ($("importInput")),
+		importBtn: $("importBtn"),
+		clearCatalogBtn: $("clearCatalogBtn"),
+		creditsBtn: $("creditsBtn"),
+		creditsFooterBtn: $("creditsFooterBtn"),
+		creditsDialog: /** @type {HTMLDialogElement|null} */ ($("creditsDialog")),
+		searchInput: /** @type {HTMLInputElement|null} */ ($("searchInput")),
+		catalogList: $("catalogList"),
+		catalogCount: $("catalogCount"),
+		statusBox: $("statusBox"),
+		emptyState: $("emptyState"),
+		detailPanel: $("detailPanel"),
+		// name/source live in #selectionBar (headerName / headerSource), not detail dock
+		detailStats: $("detailStats"),
+		detailMaterialList: $("detailMaterialList"),
+		materialListHint: $("materialListHint"),
+		defaultCamSelect: /** @type {HTMLSelectElement|null} */ ($("defaultCamSelect")),
+		metaCreator: /** @type {HTMLInputElement|null} */ ($("metaCreator")),
+		metaCredits: /** @type {HTMLInputElement|null} */ ($("metaCredits")),
+		metaSourceLink: /** @type {HTMLInputElement|null} */ ($("metaSourceLink")),
+		metaSourceLinkError: $("metaSourceLinkError"),
+		addDetailBtn: $("addDetailBtn"),
+		userDetailsList: $("userDetailsList"),
+		materialsCollapseBtn: $("materialsCollapseBtn"),
+		materialsCollapseBody: $("materialsCollapseBody"),
+		detailsCollapseBtn: $("detailsCollapseBtn"),
+		detailsCollapseBody: $("detailsCollapseBody"),
+		camIsoBtn: $("camIsoBtn"),
+		previewHost: $("previewHost"),
+		previewBtn: /** @type {HTMLButtonElement|null} */ ($("previewBtn")),
+		downloadBtn: $("downloadBtn"),
+		removeBtn: $("removeBtn"),
+		bootBadge: $("bootBadge"),
+		layerBadge: $("layerBadge"),
+		inspectPanel: $("inspectPanel"),
+		selectionBar: $("selectionBar"),
+		headerName: $("headerName"),
+		headerSource: $("headerSource"),
+		hopperStatsLabel: $("hopperStatsLabel"),
+		hopperStatsDetail: $("hopperStatsDetail"),
+		appTagline: $("appTagline"),
+		addCategoryBtn: $("addCategoryBtn"),
+		pinCatalogBtn: /** @type {HTMLButtonElement|null} */ ($("pinCatalogBtn")),
+		pinDetailBtn: /** @type {HTMLButtonElement|null} */ ($("pinDetailBtn")),
+		catalogFloat: $("catalogFloat"),
+		detailFloat: $("detailFloat")
+	};
+}

@@ -239,7 +239,11 @@ export default class TextureAtlas {
 				texturePath = texturePath[0];
 			} else {
 				if(variant == -1) {
-					console.warn(`Unknown variant to choose for terrain texture key ${terrainTextureKey}; defaulting to the first`);
+					// Common for multi-texture keys (e.g. lightning_rod off/on) when no
+					// powered_bit/lit state is present — unpowered/first is correct.
+					console.debug(
+						`No texture variant for terrain key ${terrainTextureKey}; using first`
+					);
 					variant = 0;
 				}
 				if(!(variant in texturePath)) {
@@ -278,14 +282,18 @@ export default class TextureAtlas {
 				let image = await toImage(imageRes);
 				imageData = await toImageData(image);
 			} else {
+				// Modern bedrock-samples often ship TGA only (cactus, some metals, …).
+				// Always try TGA after PNG miss — skipping this caused missing block maps.
 				imageRes = await this.resourcePackStack.fetchResource(`${texturePath}.tga`);
 				if(imageRes.ok) {
 					console.debug(`Fetched TGA texture ${texturePath}.tga`);
 					imageIsTga = true;
-					tgaLoader.load(new Uint8Array(await imageRes.arrayBuffer()));
-					imageData = tgaLoader.getImageData();
+					// tga-js is not re-entrant for concurrent loads — clone path per call
+					const loader = new TGALoader();
+					loader.load(new Uint8Array(await imageRes.arrayBuffer()));
+					imageData = loader.getImageData();
 				} else {
-					console.warn(`No texture found at ${texturePath}`);
+					console.warn(`No texture found at ${texturePath} (.png/.tga)`);
 					imageData = stringToImageData(texturePath);
 					imageNotFound = true;
 				}

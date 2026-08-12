@@ -1,17 +1,15 @@
 /**
  * Ingest Minecraft structure sources into catalog entries.
- * Reuses HoloPrint / mcbe-leveldb-reader extractors.
  */
 
-import { extractStructureFilesFromMcworld } from "mcbe-leveldb-reader";
-import * as HoloPrint from "../HoloPrint.js";
+import { parseStructureFile } from "./parseStructure.js";
 
 /**
  * @param {File} file
  * @returns {"mcstructure"|"mcworld"|"mcpack"|"zip"|"mctemplate"|"unknown"}
  */
 export function detectSourceKind(file) {
-	const name = file.name.toLowerCase();
+	const name = (file.name || "").toLowerCase();
 	if (name.endsWith(".mcstructure")) return "mcstructure";
 	if (name.endsWith(".mcworld")) return "mcworld";
 	if (name.endsWith(".mctemplate")) return "mctemplate";
@@ -21,19 +19,24 @@ export function detectSourceKind(file) {
 }
 
 /**
- * Expand a dropped/selected file into zero or more structure Files.
  * @param {File} file
  * @returns {Promise<{ structures: File[], sourceKind: ReturnType<typeof detectSourceKind>, warnings: string[] }>}
  */
 export async function expandSourceFile(file) {
-	const sourceKind = detectSourceKind(file);
+	let sourceKind = detectSourceKind(file);
 	const warnings = [];
+
+	if (sourceKind === "unknown") {
+		sourceKind = "mcstructure";
+		warnings.push(`Unknown extension for ${file.name}; trying as .mcstructure`);
+	}
 
 	if (sourceKind === "mcstructure") {
 		return { structures: [file], sourceKind, warnings };
 	}
 
 	if (sourceKind === "mcworld" || sourceKind === "mctemplate" || sourceKind === "zip") {
+		const { extractStructureFilesFromMcworld } = await import("mcbe-leveldb-reader");
 		const map = await extractStructureFilesFromMcworld(file);
 		const structures = [...map.values()];
 		if (!structures.length) {
@@ -43,87 +46,70 @@ export async function expandSourceFile(file) {
 	}
 
 	if (sourceKind === "mcpack") {
-		const structures = await HoloPrint.extractStructureFilesFromPack(file);
-		if (!structures.length) {
-			warnings.push(`No .mcstructure files found in ${file.name}`);
+		const { ZipReader, BlobReader, BlobWriter } = await import("@zip.js/zip.js");
+		const reader = new ZipReader(new BlobReader(file));
+		try {
+			const entries = await reader.getEntries();
+			const structureEntries = entries.filter(e => e.filename.toLowerCase().endsWith(".mcstructure"));
+			const structures = await Promise.all(structureEntries.map(async (entry, i) => {
+				const blob = await entry.getData(new BlobWriter());
+				const name = entry.comment || entry.filename.split("/").pop() || `structure_${i}.mcstructure`;
+				return new File([blob], name.endsWith(".mcstructure") ? name : `${name}.mcstructure`, {
+					type: "application/mcstructure"
+				});
+			}));
+			if (!structures.length) {
+				warnings.push(`No .mcstructure files found in ${file.name}`);
+			}
+			return { structures, sourceKind, warnings };
+		} finally {
+			await reader.close().catch(() => {});
 		}
-		return { structures, sourceKind, warnings };
 	}
 
 	throw new Error(`Unsupported file type: ${file.name}`);
 }
 
 /**
- * Read NBT and build catalog fields (no pack generation).
- * @param {File} structureFile
- * @param {{ sourceName?: string, sourceKind?: ReturnType<typeof detectSourceKind> }} [meta]
+ * @param {FileList|File[]|Iterable<File>} files
+ * @param {{ onProgress?: (msg: string) => void }} [opts]
  */
-export async function structureFileToCatalogFields(structureFile, meta = {}) {
-	const nbt = await HoloPrint.readStructureNBT(structureFile);
-	const size = /** @type {[number, number, number]} */ (nbt.size.map(Number));
-	const worldOrigin = Array.isArray(nbt.structure_world_origin)
-		? /** @type {[number, number, number]} */ (nbt.structure_world_origin.map(Number))
-		: null;
-
-	const palette = nbt.structure?.palette?.default?.block_palette ?? [];
-	const blockNames = [...new Set(
-		palette
-			.map(block => {
-				const name = block?.name;
-				return typeof name === "string" ? name.replace(/^minecraft:/, "") : null;
-			})
-			.filter(Boolean)
-	)].sort();
-
-	const indices = nbt.structure?.block_indices?.[0] ?? [];
-	let blockCount = 0;
-	for (const idx of indices) {
-		if (typeof idx === "number" && idx >= 0) blockCount++;
-	}
-	// Fallback when indices missing / empty: volume minus air is unknown → use volume
-	if (!blockCount && size.every(n => Number.isFinite(n))) {
-		blockCount = size[0] * size[1] * size[2];
-	}
-
-	const baseName = structureFile.name.replace(/\.mcstructure$/i, "");
-
-	return {
-		name: baseName,
-		sourceName: meta.sourceName ?? structureFile.name,
-		sourceKind: meta.sourceKind ?? "mcstructure",
-		size,
-		worldOrigin,
-		paletteSize: palette.length,
-		blockCount,
-		blockNames,
-		file: structureFile
-	};
-}
-
-/**
- * Ingest one or more user files into catalog field objects.
- * @param {FileList|File[]} files
- * @returns {Promise<{ entries: Awaited<ReturnType<typeof structureFileToCatalogFields>>[], warnings: string[], errors: string[] }>}
- */
-export async function ingestFiles(files) {
+export async function ingestFiles(files, opts = {}) {
 	const list = [...files];
 	const entries = [];
 	const warnings = [];
 	const errors = [];
 
 	for (const file of list) {
+		opts.onProgress?.(`Reading ${file.name}…`);
 		try {
 			const { structures, sourceKind, warnings: w } = await expandSourceFile(file);
 			warnings.push(...w);
 			for (const structure of structures) {
+				opts.onProgress?.(`Parsing ${structure.name}…`);
 				try {
-					const fields = await structureFileToCatalogFields(structure, {
+					const fields = await parseStructureFile(structure, {
 						sourceName: file.name,
 						sourceKind
 					});
 					entries.push(fields);
 				} catch (e) {
-					errors.push(`${structure.name}: ${e?.message ?? e}`);
+					const msg = e?.message ?? String(e);
+					errors.push(`${structure.name}: ${msg}`);
+					entries.push({
+						name: structure.name.replace(/\.mcstructure$/i, "") || structure.name,
+						sourceName: file.name,
+						sourceKind,
+						size: /** @type {[number, number, number]} */ ([0, 0, 0]),
+						worldOrigin: null,
+						paletteSize: 0,
+						blockCount: 0,
+						blockNames: [],
+						entityCount: 0,
+						materials: [],
+						file: structure,
+						parseError: msg
+					});
 				}
 			}
 		} catch (e) {

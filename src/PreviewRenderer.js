@@ -1,105 +1,154 @@
-import { abs, assertAs, AsyncFactory, cosDeg, distanceSquared, downloadFile, JSONSet, max, min, pi, round, sinDeg, tanDeg, toImageData, tuple, vec2 } from "./utils.js";
-import PolyMeshMaker from "./PolyMeshMaker.js";
+/**
+ * PreviewRenderer — thin orchestrator for structure 3D preview.
+ * Systems share a single PreviewContext (no host-getter soup).
+ * Entity list ownership: EntityAttachSystem only.
+ */
 
-import Stats from "stats.js"; // library not a file
+import { AsyncFactory, max, min, toImageData } from "./utils.js";
+import PolyMeshMaker from "./PolyMeshMaker.js";
+import {
+	PreviewContext,
+	PreviewResourcePool,
+	LayerMeshSystem,
+	EntityAttachSystem,
+	CameraController,
+	InspectRaycaster,
+	BlockGeoSystem,
+	LightingSystem,
+	ViewportSystem,
+	scanStructureBlocks,
+	POINT_LIGHT_DEFS,
+	POINT_LIGHT_DEFAULT_INTENSITY,
+	createOrbitCameraAndControls,
+	bindOrbitInteraction,
+	isWeakGpu,
+	DEFAULT_FOV,
+	downloadScreenshot as exportScreenshot,
+	exportGlb as exportGlbFile,
+	wirePreviewOptionsGui,
+	SpecialBlockOverlay
+} from "./viewer/systems/index.js?v=judo15";
+import { disposeObject3D } from "./viewer/systems/disposeObject3D.js?v=judo15";
+
+import Stats from "stats.js";
 
 /** @type {typeof import("three")} */
 let THREE;
 /** @type {typeof import("three/examples/jsm/controls/OrbitControls.js").OrbitControls} */
 let OrbitControls;
-/** @type {typeof import("three/examples/jsm/exporters/GLTFExporter.js").GLTFExporter} */
-let GLTFExporter;
-/** @type {typeof import("three/examples/jsm/utils/BufferGeometryUtils.js")} */
-let BufferGeometryUtils;
 
 const IN_PRODUCTION = false;
 
 export default class PreviewRenderer extends AsyncFactory {
-	static #CAMERA_FOV = 70; // degrees
-	static #POINT_LIGHT_MAX_DISTANCE = 30; // pixels
-	static #POINT_LIGHTS = {
-		"lantern": 0xFFAA55,
-		"redstone_torch": 0x990000,
-		"powered_repeater": 0x330000,
-		"powered_comparator": 0x330000,
-		"end_rod": [0xD0C9BE, 67.5],
-		"fire": 0xFF9955,
-		"lava": 0xFF9955,
-		"campfire[extinguished=0]": [0xFF9955, 37.5],
-		"soul_campfire[extinguished=0]": [0x00FFFF, 25],
-		"cave_vines_body_with_berries": [0xFFAA66, 37.5],
-		"cave_vines_head_with_berries": [0xFFAA66, 37.5],
-		
-		"torch": 0xEFE39D, // source: https://learn.microsoft.com/en-us/minecraft/creator/documents/deferredlighting/lightingcustomization?view=minecraft-bedrock-stable
-		"soul_lantern": 0x00FFFF,
-		"soul_torch": 0x00FFFF
-	};
-	static #POINT_LIGHT_DEFAULT_INTENSITY = 75;
-	static #DIRECTIONAL_LIGHT_STRENGTH = 1.57;
-	static #FLOOR_SHADOW_DARKNESS = 0.3;
-	/** @type {Partial<typeof PreviewRenderer.prototype.options>} */
 	static #WEAK_DEVICE_OPTIONS = {
 		maxPointLights: 0,
-		// shadows will also be disabled, but when the user enables them, they should be the lowest quality
-		directionalLightShadowMapResolution: 1
+		directionalLightShadowMapResolution: 1,
+		shadowsEnabled: false,
+		antialias: false,
+		maxPixelRatio: 1,
+		enableDamping: false
 	};
-	
+
+	/** Fast defaults for the structure DB viewer. */
+	static PERFORMANCE_OPTIONS = {
+		maxPointLights: 0,
+		shadowsEnabled: false,
+		antialias: false,
+		maxPixelRatio: 1.5,
+		directionalLightShadowMapResolution: 1,
+		enableDamping: false,
+		instanceMergeThreshold: 1,
+		materialSide: "double",
+		canvasScale: 0.65,
+		showSkybox: false,
+		showEntities: true,
+		backgroundColor: 0x121214
+	};
+
 	cont;
 	packName;
 	structureSize;
 	blockPalette;
 	polyMeshTemplatePalette;
 	blockIndices;
+
+	/** @type {PreviewContext} */
+	#ctx;
+	#pool = new PreviewResourcePool();
+	/** @type {LayerMeshSystem} */
+	#layers;
+	/** @type {EntityAttachSystem} */
+	#entities;
+	/** @type {CameraController} */
+	#cameraCtrl;
+	/** @type {InspectRaycaster} */
+	#inspect;
+	/** @type {BlockGeoSystem} */
+	#geo;
+	/** @type {LightingSystem} */
+	#lighting;
+	/** @type {ViewportSystem} */
+	#viewport;
+	/** @type {SpecialBlockOverlay} */
+	#overlays;
+
 	options = {
 		showSkybox: true,
-		maxPointLights: 100, // limited by WebGL uniform limit since Three.js uses uniforms to pass lights to shaders
-		directionalLightHeight: 1, // multiples of the max dimension
+		maxPointLights: 100,
+		directionalLightHeight: 1,
 		directionalLightAngle: 120,
 		directionalLightShadowMapResolution: 2,
 		highResolution: false,
 		debugHelpersVisible: false,
 		showFps: true,
-		showOptions: true
+		showOptions: true,
+		shadowsEnabled: true,
+		antialias: true,
+		maxPixelRatio: 2,
+		enableDamping: true,
+		instanceMergeThreshold: 3,
+		materialSide: "double",
+		canvasScale: 0.8,
+		showEntities: true,
+		backgroundColor: 0x121214,
+		abortSignal: null
 	};
+
 	#canvasSize = min(window.innerWidth, window.innerHeight) * 0.8;
 	#loadingMessage;
 	#can;
 	#polyMeshMaker;
 	#imageBlob;
-	/** @type {ImageData} */
-	#imageBlobData;
-	/** @type {THREE.Vector3} */
-	#center;
-	#maxDim;
-	#maxDimPixels;
-	#lastFrameTime = performance.now();
 	/** @type {Vec3[][]} */
 	#blockPositions = [];
-	/** @type {THREE.DirectionalLight} */
-	#directionalLight;
-	/** @type {PreviewPointLight[]} */
-	#pointLights = [];
-	/** @type {THREE.PointLight[]} */
-	#pointLightsInScene = [];
-	/** @type {WeakMap<THREE.PointLight, THREE.PointLightHelper>} */
-	#pointLightHelpers = new WeakMap();
-	/** @type {THREE.WebGLRenderer} */
-	#renderer;
-	/** @type {THREE.Scene} */
-	#scene;
-	/** @type {THREE.PerspectiveCamera} */
-	#camera;
-	/** @type {OrbitControls} */
-	#controls;
-	/** @type {THREE.CubeTexture} */
-	#skyboxCubemap;
-	#shouldRenderNextFrame = true;
-	#stats;
+	#lastFrameTime = performance.now();
 	#optionsGui;
-	/** @type {THREE.Object3D[]} */
+	/** @type {import("three").Object3D[]} */
 	#debugHelpers = [];
+
 	/**
-	 * Create a preview renderer for a completed geometry file.
+	 * Sole public list accessor — storage lives on EntityAttachSystem.
+	 * @returns {import("./viewer/entityExtract.js").PreviewEntity[]}
+	 */
+	get previewEntities() {
+		return this.#entities?.list ?? [];
+	}
+
+	/**
+	 * @returns {import("./viewer/inspectStructure.js").InspectIndex|null}
+	 */
+	get inspectIndex() {
+		return this.#ctx?.inspectIndex ?? null;
+	}
+
+	/**
+	 * @param {import("./viewer/inspectStructure.js").InspectIndex|null} v
+	 */
+	set inspectIndex(v) {
+		if (this.#ctx) this.#ctx.inspectIndex = v;
+	}
+
+	/**
 	 * @param {Node} cont
 	 * @param {string} packName
 	 * @param {Blob} imageBlob
@@ -108,8 +157,19 @@ export default class PreviewRenderer extends AsyncFactory {
 	 * @param {PolyMeshTemplateFaceWithUvs[][]} polyMeshTemplatePalette
 	 * @param {[Int32Array, Int32Array]} blockIndices
 	 * @param {Partial<typeof this.options>} [options]
+	 * @param {import("./viewer/entityExtract.js").PreviewEntity[]} [entitiesArg]
 	 */
-	constructor(cont, packName, imageBlob, structureSize, blockPalette, polyMeshTemplatePalette, blockIndices, options = {}) {
+	constructor(
+		cont,
+		packName,
+		imageBlob,
+		structureSize,
+		blockPalette,
+		polyMeshTemplatePalette,
+		blockIndices,
+		options = {},
+		entitiesArg = []
+	) {
 		super();
 		this.cont = cont;
 		this.packName = packName;
@@ -117,610 +177,524 @@ export default class PreviewRenderer extends AsyncFactory {
 		this.blockPalette = blockPalette;
 		this.polyMeshTemplatePalette = polyMeshTemplatePalette;
 		this.blockIndices = blockIndices;
-		this.options = { ...this.options, ...options };
-		
+		const fromArg = Array.isArray(entitiesArg) && entitiesArg.length ? entitiesArg : null;
+		const fromOpts = Array.isArray(options?.entities) && options.entities.length
+			? options.entities
+			: null;
+		const entityList = fromArg ?? fromOpts ?? [];
+		this.options = {
+			...this.options,
+			...options,
+			entities: entityList
+		};
+		this.#canvasSize = min(window.innerWidth, window.innerHeight) * (this.options.canvasScale ?? 0.8);
 		this.#can = document.createElement("canvas");
 		this.#polyMeshMaker = new PolyMeshMaker(polyMeshTemplatePalette);
 		this.#imageBlob = imageBlob;
-		this.#maxDim = max(...this.structureSize);
-		this.#maxDimPixels = this.#maxDim * 16;
-		
+		this.#initSystems();
+		this.#entities.setList(entityList);
+		if (options?.inspectIndex) this.#ctx.inspectIndex = options.inspectIndex;
+		console.info("[sdb] PreviewRenderer constructed, entities:", this.previewEntities.length);
+		this.#buildLoadingChrome();
+	}
+
+	#buildLoadingChrome() {
 		this.#loadingMessage = document.createElement("div");
 		this.#loadingMessage.classList.add("previewMessage");
-		let p = document.createElement("p");
-		let span = document.createElement("span");
+		const p = document.createElement("p");
+		const span = document.createElement("span");
 		span.dataset.translate = "preview.loading";
 		p.appendChild(span);
-		let loader = document.createElement("div");
+		const loader = document.createElement("div");
 		loader.classList.add("loader");
 		p.appendChild(loader);
 		this.#loadingMessage.appendChild(p);
 		this.cont.appendChild(this.#loadingMessage);
-		
-		if(this.options.showFps) {
-			this.#stats = new Stats();
-			this.#stats.showPanel(0);
-			this.#stats.dom.classList.add("statsPanel");
-			this.#stats.dom.childNodes.forEach(can => {
-				if(!(can instanceof HTMLCanvasElement)) {
-					return;
-				}
-				let ctx = can.getContext("2d");
-				const defaultFontFamilies = "Helvetica"; // https://github.com/mrdoob/stats.js/blob/71e88f65280fd5c6e91d1f84f0f633d372ed7eae/src/Stats.js#L128
-				ctx.font = ctx.font.replace(defaultFontFamilies, `"Space Grotesk", ${defaultFontFamilies}`);
+
+		if (this.options.showFps) {
+			const stats = new Stats();
+			stats.showPanel(0);
+			stats.dom.classList.add("statsPanel");
+			stats.dom.childNodes.forEach(can => {
+				if (!(can instanceof HTMLCanvasElement)) return;
+				const c2d = can.getContext("2d");
+				const defaultFontFamilies = "Helvetica";
+				c2d.font = c2d.font.replace(
+					defaultFontFamilies,
+					`"Space Grotesk", ${defaultFontFamilies}`
+				);
 			});
+			this.#ctx.stats = stats;
 		}
-		if(this.options.showOptions) {
-			let guiEl = document.createElement("lil-gui");
-			this.cont.appendChild(guiEl);
-			this.#optionsGui = guiEl.gui;
-			this.#optionsGui.$title.dataset.translate = "preview.options";
-			this.#optionsGui.hide();
-			this.#optionsGui.close();
-			this.#optionsGui.onChange(() => {
-				this.#shouldRenderNextFrame = true;
-			});
+		if (this.options.showOptions) {
+			try {
+				const guiEl = document.createElement("lil-gui");
+				this.cont.appendChild(guiEl);
+				// Upgrade + connect: custom elements only run connectedCallback when in a document
+				try {
+					customElements.upgrade?.(guiEl);
+				} catch {
+					/* ignore */
+				}
+				const gui = /** @type {{ gui?: import("lil-gui").GUI }} */ (guiEl).gui;
+				if (!gui) {
+					console.warn("[sdb] lil-gui panel not ready — options disabled for this preview");
+					guiEl.remove();
+				} else {
+					this.#optionsGui = gui;
+					if (gui.$title) {
+						gui.$title.dataset.translate = "preview.options";
+					}
+					gui.hide?.();
+					gui.close?.();
+					gui.onChange?.(() => this.#viewport?.requestRender?.());
+				}
+			} catch (e) {
+				console.warn("[sdb] options GUI setup failed:", e);
+				this.#optionsGui = undefined;
+			}
 		}
 	}
+
+	#initSystems() {
+		const ctx = new PreviewContext();
+		this.#ctx = ctx;
+
+		ctx.pool = this.#pool;
+		ctx.options = this.options;
+		ctx.cont = this.cont;
+		ctx.canvas = this.#can;
+		ctx.structureSize = this.structureSize;
+		ctx.blockIndices = this.blockIndices;
+		ctx.blockPalette = this.blockPalette;
+		ctx.polyMeshTemplatePalette = this.polyMeshTemplatePalette;
+		ctx.polyMeshMaker = this.#polyMeshMaker;
+		ctx.maxDim = max(...this.structureSize);
+		ctx.maxDimPixels = ctx.maxDim * 16;
+		ctx.canvasSizeFallback = this.#canvasSize;
+		ctx.hostEl =
+			this.cont?.closest?.(".sdb-preview-host")
+			|| this.cont?.parentElement
+			|| this.cont;
+
+		this.#geo = new BlockGeoSystem(ctx);
+		this.#lighting = new LightingSystem(ctx);
+		this.#layers = new LayerMeshSystem(ctx);
+		this.#entities = new EntityAttachSystem(ctx);
+		this.#cameraCtrl = new CameraController(ctx);
+		this.#inspect = new InspectRaycaster(ctx);
+		this.#viewport = new ViewportSystem(ctx);
+		this.#overlays = new SpecialBlockOverlay(ctx);
+
+		ctx.geo = this.#geo;
+		ctx.lighting = this.#lighting;
+		ctx.layers = this.#layers;
+		ctx.entities = this.#entities;
+		ctx.cameraCtrl = this.#cameraCtrl;
+		ctx.inspect = this.#inspect;
+		ctx.viewport = this.#viewport;
+	}
+
+	/** Redstone arms + sign/lectern text overlays for current layer. */
+	#rebuildOverlays() {
+		try {
+			this.#overlays?.rebuild?.({
+				inspectIndex: this.inspectIndex,
+				layerFilter: this.#layers?.selectedLayer ?? null
+			});
+		} catch (e) {
+			console.warn("[sdb] special overlays failed:", e);
+		}
+	}
+
+	#initAborted() {
+		if (this.#ctx.isDisposed()) return true;
+		const signal = this.options?.abortSignal;
+		return !!(signal && signal.aborted);
+	}
+
 	async init() {
+		if (this.#initAborted()) return;
 		THREE ??= await import("three");
-		OrbitControls ??= (await import("three/examples/jsm/controls/OrbitControls.js")).OrbitControls;
-		GLTFExporter ??= (await import("three/examples/jsm/exporters/GLTFExporter.js")).GLTFExporter;
-		BufferGeometryUtils ??= (await import("three/examples/jsm/utils/BufferGeometryUtils.js"));
-		
-		this.#center = new THREE.Vector3(-this.structureSize[0] * 8, this.structureSize[1] * 8, -this.structureSize[2] * 8);
-		this.#imageBlobData = await toImageData(this.#imageBlob);
-		
-		this.#renderer = new THREE.WebGLRenderer({
+		if (this.#initAborted()) return;
+		OrbitControls ??= (await import("three/examples/jsm/controls/OrbitControls.js"))
+			.OrbitControls;
+		if (this.#initAborted()) return;
+
+		const ctx = this.#ctx;
+		ctx.THREE = THREE;
+		ctx.center = new THREE.Vector3(
+			-this.structureSize[0] * 8,
+			this.structureSize[1] * 8,
+			-this.structureSize[2] * 8
+		);
+		ctx.imageBlobData = await toImageData(this.#imageBlob);
+		if (this.#initAborted()) return;
+
+		ctx.renderer = new THREE.WebGLRenderer({
 			canvas: this.#can,
 			alpha: true,
-			antialias: true,
+			antialias: this.options.antialias,
+			powerPreference: "high-performance",
+			stencil: false,
+			depth: true
 		});
-		
-		if(this.#isWeakDevice()) {
+
+		if (isWeakGpu(ctx.renderer)) {
 			console.info("Switching to faster preview options");
-			this.options = {
-				...this.options,
-				...PreviewRenderer.#WEAK_DEVICE_OPTIONS
-			};
+			Object.assign(this.options, PreviewRenderer.#WEAK_DEVICE_OPTIONS);
 		}
-		
-		this.#renderer.setPixelRatio(window.devicePixelRatio);
-		this.#renderer.shadowMap.enabled = true;
-		this.#renderer.shadowMap.type = THREE.PCFShadowMap;
-		this.#setupCameraAndControls();
-		this.#setSize();
-		this.#scene = new THREE.Scene();
-		this.#controls.addEventListener("change", () => {
-			this.#shouldRenderNextFrame = true;
-			const epsilon = 0.001;
-			const targetFps = 60;
-			let timeSinceLastFrame = performance.now() - this.#lastFrameTime;
-			let fps = 1000 / timeSinceLastFrame;
-			let effectiveEpsilon = epsilon * targetFps / fps;
-			if(abs(this.#controls._sphericalDelta.phi) < effectiveEpsilon) {
-				this.#controls._sphericalDelta.phi = 0;
-			}
-			if(abs(this.#controls._sphericalDelta.theta) < effectiveEpsilon) {
-				this.#controls._sphericalDelta.theta = 0;
-			}
+
+		ctx.renderer.setPixelRatio(
+			min(window.devicePixelRatio || 1, this.options.maxPixelRatio)
+		);
+		ctx.renderer.shadowMap.enabled = this.options.shadowsEnabled;
+		ctx.renderer.shadowMap.type = THREE.BasicShadowMap;
+
+		const { camera, controls, axesHelper } = createOrbitCameraAndControls({
+			THREE,
+			OrbitControls,
+			canvas: this.#can,
+			structureSize: this.structureSize,
+			maxDimPixels: ctx.maxDimPixels,
+			enableDamping: this.options.enableDamping,
+			fov: DEFAULT_FOV
 		});
-		
-		this.#addLighting();
-		await this.#initBackground();
-		
-		if(this.options.showFps) {
-			this.cont.appendChild(this.#stats.dom);
-		}
-		if(this.options.showOptions) {
-			if(this.#pointLights.length > 0) {
-				this.#guiLocName(this.#optionsGui.add(this.options, "maxPointLights", 0, this.#pointLights.length, 1).onChange(() => this.#createPointLightsInScene()), "preview.options.maxPointLights");
-			}
-			let shadowOption;
-			this.#guiLocName(this.#optionsGui.add(this.#directionalLight, "castShadow").onChange(() => {
-				if(this.#directionalLight.castShadow) {
-					shadowOption.show();
-				} else {
-					shadowOption.hide();
-				}
-			}), "preview.options.shadowsEnabled");
-			shadowOption = this.#guiLocName(this.#optionsGui.add(this.options, "directionalLightShadowMapResolution", 1, 5, 1).onChange(() => this.#updateDirectionalLightShadowMapSize()), "preview.options.shadowQuality");
-			if(!this.#directionalLight.castShadow) {
-				shadowOption.hide();
-			}
-			this.#guiLocName(this.#optionsGui.add(this.options, "directionalLightAngle", 0, 360, 1).onChange(() => this.#setDirectionalLightPos()), "preview.options.lightAngle");
-			this.#guiLocName(this.#optionsGui.add(this.options, "directionalLightHeight", 0.1, 2, 0.01).onChange(() => this.#setDirectionalLightPos()), "preview.options.lightHeight");
-			this.#guiLocName(this.#optionsGui.add(this.options, "showSkybox").onChange(() => this.#initBackground()), "preview.options.showSkybox");
-			this.#guiLocName(this.#optionsGui.add(this.options, "highResolution").onChange(() => this.#setSize()), "preview.options.highRes");
-			this.#guiLocName(this.#optionsGui.add(this, "downloadScreenshot"), "preview.options.takeScreenshot");
-			this.#guiLocName(this.#optionsGui.add(this, "exportGlb"), "preview.options.exportGlb");
-			if(!IN_PRODUCTION) {
-				this.#optionsGui.add(this.options, "debugHelpersVisible").onChange(() => {
-					if(this.options.debugHelpersVisible) {
-						this.#scene.add(...this.#debugHelpers);
-					} else {
-						this.#scene.remove(...this.#debugHelpers);
-					}
-				}).name("Debug");
-			}
-			this.#optionsGui.show();
-		}
-		
-		// let animator = this.#viewer.getModel().animator;
-		// let animation = this.animations["animations"]["animation.holoprint.hologram.spawn"];
-		// Object.values(animation["bones"] ?? {}).map(bone => Object.values(bone).forEach(animationChannel => {
-		// 	animationChannel["Infinity"] = Object.values(animationChannel).at(-1); // hold last keyframe.
-		// }));
-		// animator.addAnimation("spawn", animation);
-		// animator.play("spawn");
-		
-		let texture = await this.#createTexture();
-		let regularMat = new THREE.MeshLambertMaterial({
-			map: texture,
-			side: THREE.DoubleSide,
-			alphaTest: 0.2
+		ctx.camera = camera;
+		ctx.controls = controls;
+		this.#debugHelpers.push(axesHelper);
+
+		this.#viewport.setInitialSize();
+		ctx.scene = new THREE.Scene();
+		this.#viewport.bindHostResize();
+
+		bindOrbitInteraction({
+			controls: ctx.controls,
+			camera: ctx.camera,
+			canvas: this.#can,
+			getOptions: () => this.options,
+			getLastFrameTime: () => this.#lastFrameTime,
+			cameraCtrl: this.#cameraCtrl,
+			requestRender: () => this.#viewport.requestRender()
 		});
-		let transparentMat = new THREE.MeshLambertMaterial({
-			map: texture,
-			side: THREE.DoubleSide,
-			alphaTest: 0.2,
-			transparent: true
-		});
-		
-		/** @type {THREE.BufferGeometry[]} */
-		let opaqueBlockGeos = [];
-		/** @type {THREE.BufferGeometry[]} */
-		let translucentBlockGeos = [];
-		for(let i in this.#blockPositions) {
-			let polyMeshTemplate = this.polyMeshTemplatePalette[i];
-			if(!polyMeshTemplate.length) { // a template is an array of faces. no faces = nothing to be rendered for this block
-				continue;
-			}
-			let geo = this.#polyMeshTemplateToBufferGeo(+i);
-			let positions = this.#blockPositions[i].map(([x, y, z]) => [-16 * x - 16, 16 * y, -16 * z - 16]);
-			let isTranslucent = this.#isPolyMeshTemplateTranslucent(polyMeshTemplate);
-			let material = isTranslucent? transparentMat : regularMat;
-			
-			// Blocks that appear more than 3 times in the structure use instanced rendering, but all other blocks are merged into meshes
-			// Note: 3 was not chosen for any technical reason.
-			if(positions.length <= 3) {
-				positions.forEach(pos => {
-					let geoAtThisPosition = geo.clone();
-					let translationMatrix = (new THREE.Matrix4()).makeTranslation(...pos);
-					geoAtThisPosition.applyMatrix4(translationMatrix);
-					if(isTranslucent) {
-						translucentBlockGeos.push(geoAtThisPosition);
-					} else {
-						opaqueBlockGeos.push(geoAtThisPosition);
-					}
-				});
-				continue;
-			}
-			
-			let instancedMesh = this.#instanceBufferGeoAtPositions(geo, positions, material);
-			if(isTranslucent) {
-				instancedMesh.renderOrder = positions.length; // more common transparent blocks will be rendered after less common transparent blocks, minimising the amount of visual issues
-			}
-			instancedMesh.castShadow = true;
-			instancedMesh.receiveShadow = true;
-			this.#scene.add(instancedMesh);
-		}
-		if(opaqueBlockGeos.length) {
-			this.#mergeGeosAndAddToScene(opaqueBlockGeos, regularMat);
-		}
-		if(translucentBlockGeos.length) {
-			this.#mergeGeosAndAddToScene(translucentBlockGeos, transparentMat);
-		}
-		
-		this.#loop();
-		this.#loadingMessage.replaceWith(this.#can);
-	}
-	/** Downloads a screenshot of the preview. */
-	downloadScreenshot() {
-		this.#render();
-		this.#renderer.domElement.toBlob(imageBlob => {
-			let imageFile = new File([imageBlob], `Screenshot ${this.packName}.png`);
-			downloadFile(imageFile);
-		});
-	}
-	/** Downloads a GLB file of the scene. */
-	exportGlb() {
-		let exporter = new GLTFExporter();
-		let exportReadyScene = this.#expandInstancedMeshes();
-		exporter.parse(exportReadyScene, glbData => {
-			TS: assertAs(glbData, ArrayBuffer);
-			let glbFile = new File([glbData], `${this.packName}.glb`, {
-				type: "model/gltf-binary"
+
+		// Scan indices once (mesh positions + optional emissive lights)
+		{
+			const collectLights = (this.options.maxPointLights ?? 0) > 0;
+			const scan = scanStructureBlocks({
+				structureSize: this.structureSize,
+				blockIndices: this.blockIndices,
+				polyMeshTemplatePalette: this.polyMeshTemplatePalette,
+				blockPalette: this.blockPalette,
+				pointLightDefs: POINT_LIGHT_DEFS,
+				defaultLightIntensity: POINT_LIGHT_DEFAULT_INTENSITY,
+				collectLights
 			});
-			downloadFile(glbFile);
-		}, e => {
-			console.error("Error exporting GLB:", e);
-		}, {
-			binary: true,
-			trs: true // decreases file size by a little, idk how
-		});
-	}
-	
-	#loop() {
-		this.#controls.update();
-		if(this.#shouldRenderNextFrame) {
-			this.#shouldRenderNextFrame = false;
-			this.#render();
+			this.#blockPositions = scan.blockPositions;
+			if (collectLights) this.#lighting.setPointLightSources(scan.pointLights);
 		}
-		
-		this.#lastFrameTime = performance.now();
-		window.requestAnimationFrame(() => this.#loop());
-	}
-	#render() {
-		this.#stats?.begin();
-		
-		this.#updatePointLights();
-		// console.log(this.#renderer.capabilities.maxVertexUniforms, this.#renderer.capabilities.maxFragmentUniforms);
-		this.#renderer.render(this.#scene, this.#camera);
-		
-		this.#stats?.end();
-	}
-	/**
-	 * Adds the localised name to a lil-gui controller.
-	 * @template {Controller} T
-	 * @param {T} controller
-	 * @param {string} translationKey
-	 * @returns {T}
-	 */
-	#guiLocName(controller, translationKey) {
-		controller.$name.dataset.translate = translationKey;
-		return controller;
-	}
-	/** Sets the canvas size, scaling up if the high resolution option is enabled. */
-	#setSize() {
-		let size = this.#canvasSize * (this.options.highResolution? 2 : 1);
-		this.#renderer.setSize(size, size, false);
-	}
-	/** Sets the directional light position. */
-	#setDirectionalLightPos() {
-		let lightSin = sinDeg(this.options.directionalLightAngle);
-		let lightCos = cosDeg(this.options.directionalLightAngle);
-		this.#directionalLight.position.set(this.#center.x + this.#maxDimPixels * lightSin, this.#center.y + this.#maxDimPixels * this.options.directionalLightHeight, this.#center.z + this.#maxDimPixels * lightCos);
-		this.#directionalLight.shadow.needsUpdate = true;
-	}
-	/** Initialises and positions the camera and orbit controls. */
-	#setupCameraAndControls() {
-		let controlsMaxDist = this.#maxDimPixels / tanDeg(PreviewRenderer.#CAMERA_FOV / 2) * 5;
-		this.#camera = new THREE.PerspectiveCamera(PreviewRenderer.#CAMERA_FOV, 1, 0.1, controlsMaxDist * 1.25);
-		this.#controls = new OrbitControls(this.#camera, this.#can);
-		this.#controls.minDistance = 10;
-		this.#controls.maxDistance = controlsMaxDist;
-		this.#controls.enableDamping = true;
-		this.#controls.dampingFactor = 0.1;
-		
-		// this part is adapted from @bridge-core/model-viewer, itself adapted from https://github.com/mrdoob/three.js/issues/6784#issuecomment-315963625
-		const scale = 1.7;
-		let boundingBox = new THREE.Box3(new THREE.Vector3(this.structureSize[0] * -16, 0, this.structureSize[2] * -16), new THREE.Vector3(0, this.structureSize[1] * 16, 0));
-		let boundingSphere = boundingBox.getBoundingSphere(new THREE.Sphere());
-		let objectAngularSize = this.#camera.fov * scale;
-		let distanceToCamera = boundingSphere.radius / tanDeg(objectAngularSize / 2);
-		let len = distanceToCamera * Math.SQRT2;
-		this.#camera.position.set(len, len, len);
-		this.#camera.lookAt(boundingSphere.center);
-		this.#camera.updateProjectionMatrix();
-		this.#controls.target.copy(boundingSphere.center);
-		
-		this.#debugHelpers.push(new THREE.AxesHelper(16));
-	}
-	/** Adds the main directional light, the z-lights, the ambient light, the shadow floor, and the point lights. */
-	#addLighting() {
-		this.#directionalLight = new THREE.DirectionalLight(0xFFFFFF, PreviewRenderer.#DIRECTIONAL_LIGHT_STRENGTH);
-		this.#directionalLight.position.set(this.#center.x + this.#maxDimPixels, this.#center.y + this.#maxDimPixels, this.#center.z + this.#maxDimPixels);
-		this.#directionalLight.target.position.copy(this.#center);
-		this.#directionalLight.castShadow = true;
-		this.#directionalLight.shadow.camera.near = 0.1;
-		this.#directionalLight.shadow.camera.far = this.#maxDimPixels * 4;
-		this.#directionalLight.shadow.camera.left = -this.#maxDimPixels;
-		this.#directionalLight.shadow.camera.right = this.#maxDimPixels;
-		this.#directionalLight.shadow.camera.bottom = -this.#maxDimPixels;
-		this.#directionalLight.shadow.camera.top = this.#maxDimPixels;
-		this.#directionalLight.shadow.bias = -0.001;
-		this.#directionalLight.shadow.normalBias = 0.1;
-		this.#scene.add(this.#directionalLight);
-		this.#scene.add(this.#directionalLight.target);
-		this.#directionalLight.shadow.autoUpdate = false;
-		this.#setDirectionalLightPos();
-		this.#updateDirectionalLightShadowMapSize();
-		this.#debugHelpers.push(new THREE.CameraHelper(this.#directionalLight.shadow.camera));
-		
-		// these lights add extra shading on z-facing faces. this is vanilla MC behaviour. lines 53-54 in shaders/glsl/entity.vertex
-		let zLight1 = new THREE.DirectionalLight(0xFFFFFF, 0.31);
-		zLight1.position.set(this.#center.x + this.#maxDimPixels * 0.6, this.#center.y + this.#maxDimPixels, this.#center.z + this.#maxDimPixels * 3);
-		zLight1.target.position.copy(this.#center);
-		this.#scene.add(zLight1);
-		this.#scene.add(zLight1.target);
-		let zLight2 = new THREE.DirectionalLight(0xFFFFFF, 0.31);
-		zLight2.position.set(this.#center.x - this.#maxDimPixels * 0.6, this.#center.y + this.#maxDimPixels, this.#center.z - this.#maxDimPixels * 3);
-		zLight2.target.position.copy(this.#center);
-		this.#scene.add(zLight2);
-		this.#scene.add(zLight2.target);
-		this.#debugHelpers.push(new THREE.DirectionalLightHelper(zLight1, 5), new THREE.DirectionalLightHelper(zLight2, 5));
-		
-		let ambientLight = new THREE.AmbientLight(0xFFFFFF, 1.88);
-		this.#scene.add(ambientLight);
-		
-		let shadowFloor = new THREE.Mesh(new THREE.PlaneGeometry(this.#maxDimPixels * 5, this.#maxDimPixels * 5), new THREE.ShadowMaterial({
-			opacity: PreviewRenderer.#FLOOR_SHADOW_DARKNESS
-		}));
-		shadowFloor.rotation.x = -pi / 2;
-		shadowFloor.position.set(this.#center.x, 0, this.#center.z);
-		shadowFloor.receiveShadow = true;
-		this.#scene.add(shadowFloor);
-		
-		this.#initPointLights();
-		this.#createPointLightsInScene();
-	}
-	/**
-	 * Checks if a block matches a stringified block.
-	 * @param {string} stringifiedBlock
-	 * @param {Block} block
-	 */
-	#checkBlockNameAndStates(stringifiedBlock, block) {
-		let blockName = stringifiedBlock.includes("[")? stringifiedBlock.slice(0, stringifiedBlock.indexOf("[")) : stringifiedBlock;
-		if(blockName != block["name"]) {
-			return false;
+		this.#lighting.addBaseLighting();
+		this.#debugHelpers.push(...this.#lighting.debugHelpers);
+		await this.#lighting.initBackground(this.#pool);
+		if (this.#initAborted()) return;
+
+		if (this.options.showFps && ctx.stats) {
+			this.cont.appendChild(ctx.stats.dom);
 		}
-		let allBlockStates = stringifiedBlock.match(/\[(.+)\]/)?.[1];
-		if(allBlockStates) {
-			let blockStates = allBlockStates.split(",").map(stateAndValue => stateAndValue.split("="));
-			if(!blockStates.every(([name, value]) => block["states"]?.[name] == value)) {
-				return false;
+		if (this.options.showOptions && this.#optionsGui) {
+			wirePreviewOptionsGui({
+				gui: this.#optionsGui,
+				options: this.options,
+				owner: this,
+				lighting: this.#lighting,
+				renderer: ctx.renderer,
+				scene: ctx.scene,
+				debugHelpers: this.#debugHelpers,
+				requestRender: () => this.#viewport.requestRender(),
+				setSize: () => this.#viewport.setInitialSize(),
+				pool: this.#pool,
+				inProduction: IN_PRODUCTION
+			});
+		}
+
+		const texture = this.#geo.createAtlasTexture(ctx.imageBlobData);
+		if (this.#initAborted()) {
+			try {
+				texture?.dispose?.();
+			} catch {
+				/* ignore */
 			}
-		}
-		return true;
-	}
-	/** Sets the size of the directional light's shadow map. */
-	#updateDirectionalLightShadowMapSize() {
-		let optionsFactor = 2 ** (this.options.directionalLightShadowMapResolution - 2);
-		let shadowMapSize = (this.#maxDim < 24? 1024 : this.#maxDim < 45? 2048 : 4096) * optionsFactor;
-		this.#directionalLight.shadow.mapSize.set(shadowMapSize, shadowMapSize)
-		this.#directionalLight.shadow.map?.setSize(shadowMapSize, shadowMapSize);
-		this.#directionalLight.shadow.needsUpdate = true;
-	}
-	#initPointLights() {
-		let palettePointLights = this.blockPalette.map(block => PreviewRenderer.#POINT_LIGHTS[block["name"]] ?? Object.entries(PreviewRenderer.#POINT_LIGHTS).find(([stringifiedBlock]) => this.#checkBlockNameAndStates(stringifiedBlock, block))?.[1]);
-		for(let x = 0; x < this.structureSize[0]; x++) {
-			for(let y = 0; y < this.structureSize[1]; y++) {
-				for(let z = 0; z < this.structureSize[2]; z++) {
-					let blockI = (x * this.structureSize[1] + y) * this.structureSize[2] + z;
-					for(let layerI = 0; layerI < 2; layerI++) {
-						let paletteI = this.blockIndices[layerI][blockI];
-						if(!(paletteI in this.polyMeshTemplatePalette)) {
-							continue;
-						}
-						this.#blockPositions[paletteI] ??= [];
-						this.#blockPositions[paletteI].push([x, y, z]);
-						
-						let lightInfo = palettePointLights[paletteI];
-						if(lightInfo) {
-							let [col, intensity] = Array.isArray(lightInfo)? lightInfo : [lightInfo, PreviewRenderer.#POINT_LIGHT_DEFAULT_INTENSITY];
-							this.#pointLights.push({
-								"pos": [-16 * x - 8, 16 * y + 8, -16 * z - 8],
-								"col": new THREE.Color(col),
-								"intensity": intensity
-							});
-						}
-					}
-				}
-			}
-		}
-		this.options.maxPointLights = min(this.options.maxPointLights, this.#pointLights.length);
-	}
-	/** Syncs the number of point lights in the scene with how many should be rendered. */
-	#createPointLightsInScene() {
-		while(this.#pointLightsInScene.length < this.options.maxPointLights) {
-			let light = new THREE.PointLight(0, 0, PreviewRenderer.#POINT_LIGHT_MAX_DISTANCE, 0.35);
-			this.#pointLightsInScene.push(light);
-			this.#scene.add(light);
-			let helper = new THREE.PointLightHelper(light, PreviewRenderer.#POINT_LIGHT_MAX_DISTANCE);
-			this.#debugHelpers.push(helper);
-			this.#pointLightHelpers.set(light, helper);
-			if(this.options.debugHelpersVisible && this.#debugHelpers.length) {
-				this.#scene.add(helper);
-			}
-		}
-		while(this.#pointLightsInScene.length > this.options.maxPointLights) {
-			let light = this.#pointLightsInScene.pop();
-			this.#scene.remove(light);
-			let helper = this.#pointLightHelpers.get(light);
-			this.#scene.remove(helper);
-			this.#debugHelpers.splice(this.#debugHelpers.indexOf(helper), 1);
-		}
-	}
-	/** Finds which point lights should be rendered, and shows them. */
-	#updatePointLights() {
-		let maxLightsInScene = min(this.#pointLights.length, this.options.maxPointLights);
-		if(maxLightsInScene == 0) {
 			return;
 		}
-		let cameraPosVec = this.#camera.getWorldPosition(new THREE.Vector3());
-		let cameraPos = [cameraPosVec.x, cameraPosVec.y, cameraPosVec.z];
-		
-		let lightsInView = this.#getPointLightsInView();
-		
-		let sortedLights = lightsInView.sort((a, b) => distanceSquared(a.pos, cameraPos) - distanceSquared(b.pos, cameraPos));
-		let closestSortedLights = sortedLights.slice(0, this.options.maxPointLights);
-		
-		closestSortedLights.forEach((lightInfo, i) => {
-			this.#pointLightsInScene[i].visible = true;
-			this.#pointLightsInScene[i].position.set(...lightInfo.pos);
-			this.#pointLightsInScene[i].intensity = lightInfo["intensity"];
-			this.#pointLightsInScene[i].color.copy(lightInfo["col"])
-		});
-		if(closestSortedLights.length < maxLightsInScene) {
-			for(let i = closestSortedLights.length; i < maxLightsInScene; i++) {
-				this.#pointLightsInScene[i].intensity = 0; // setting .visible = false causes lag
+		this.#pool.atlasTexture = texture;
+		this.#pool.ensureMaterials(THREE, texture, this.options);
+
+		this.#layers.mount(ctx.scene, this.#blockPositions);
+		this.#inspect.init();
+		this.#layers.rebuildBlockMeshes(null);
+		this.#rebuildOverlays();
+		if (this.#initAborted()) return;
+
+		try {
+			await this.attachEntities(this.previewEntities, this.options.entityResourcePackStack);
+		} catch (e) {
+			console.error("[sdb] entity attach during init failed:", e);
+		}
+		if (this.#initAborted()) return;
+
+		this.#viewport.start();
+		this.#loadingMessage.replaceWith(this.#can);
+	}
+
+	// —— Public API ——
+
+	getMaxLayer() {
+		return Math.max(0, (this.structureSize?.[1] ?? 1) - 1);
+	}
+
+	getSelectedLayer() {
+		return this.#layers.selectedLayer;
+	}
+
+	/**
+	 * Layer change: mesh rebuild + camera layer-mode policy only.
+	 * @param {number|null} layer
+	 */
+	setSelectedLayer(layer) {
+		const prev = this.#layers.selectedLayer;
+		const maxY = this.getMaxLayer();
+		const want =
+			layer == null || !Number.isFinite(layer)
+				? null
+				: Math.max(0, Math.min(maxY, Math.floor(layer)));
+		// No-op when already on this layer (avoids double rebuild after init)
+		if (want === prev) {
+			return prev;
+		}
+		this.#layers.setSelectedLayer(layer, maxY);
+		this.#rebuildOverlays();
+		void this.#entities
+			.rebuildForLayer(this.options.showEntities !== false)
+			.then(() => this.#viewport.requestRender());
+
+		const next = this.#layers.selectedLayer;
+		const entering = prev == null && next != null;
+		const leaving = prev != null && next == null;
+
+		// Layer camera policy: N@67 on enter, reframe while layered, restore on leave
+		if (entering) {
+			if (typeof this.#cameraCtrl.enterLayerMode === "function") {
+				this.#cameraCtrl.enterLayerMode();
+			} else {
+				this.#cameraCtrl.tiltDeg = 67;
+				this.#cameraCtrl.setPreset("north");
+			}
+		} else if (next != null) {
+			if (typeof this.#cameraCtrl.stayInLayerMode === "function") {
+				this.#cameraCtrl.stayInLayerMode();
+			} else {
+				this.#cameraCtrl.setPreset(this.#cameraCtrl.lastPreset || "north");
+			}
+		} else if (leaving) {
+			if (typeof this.#cameraCtrl.leaveLayerMode === "function") {
+				this.#cameraCtrl.leaveLayerMode();
+			} else {
+				this.#cameraCtrl.setPreset("iso-north");
 			}
 		}
+		this.#viewport.requestRender();
+		this.#viewport.paintNow?.();
+		return next;
 	}
+
 	/**
-	 * Finds all the point lights in the camera's view.
-	 * @returns {PreviewPointLight[]}
+	 * @param {1|-1} delta
 	 */
-	#getPointLightsInView() {
-		let cameraFrustum = new THREE.Frustum();
-		let projMatrix = new THREE.Matrix4();
-		projMatrix.multiplyMatrices(this.#camera.projectionMatrix, this.#camera.matrixWorldInverse);
-		cameraFrustum.setFromProjectionMatrix(projMatrix);
-		return this.#pointLights.filter(light => {
-			let lightSphere = new THREE.Sphere(new THREE.Vector3(...light["pos"]), PreviewRenderer.#POINT_LIGHT_MAX_DISTANCE);
-			return cameraFrustum.intersectsSphere(lightSphere);
+	stepLayer(delta) {
+		const maxY = this.getMaxLayer();
+		if (this.#layers.selectedLayer == null) {
+			return this.setSelectedLayer(delta > 0 ? 0 : maxY);
+		}
+		const next = this.#layers.selectedLayer + delta;
+		if (next < 0 || next > maxY) return this.#layers.selectedLayer;
+		return this.setSelectedLayer(next);
+	}
+
+	showAllLayers() {
+		return this.setSelectedLayer(null);
+	}
+
+	get isFlyMode() {
+		return this.#cameraCtrl.isFlyMode;
+	}
+
+	getCameraTilt() {
+		return this.#cameraCtrl.tiltDeg;
+	}
+
+	getCameraPreset() {
+		return this.#cameraCtrl.lastPreset || "iso";
+	}
+
+	/**
+	 * @param {number} deg
+	 * @param {{ reframe?: boolean }} [opts]
+	 */
+	setCameraTilt(deg, opts = {}) {
+		return this.#cameraCtrl.setTilt(deg, opts);
+	}
+
+	/**
+	 * @param {string} [preset]
+	 */
+	setCameraPreset(preset = "iso") {
+		this.#cameraCtrl.setPreset(preset);
+	}
+
+	resetCamera() {
+		this.#cameraCtrl.resetCamera();
+	}
+
+	requestRedraw(_opts = {}) {
+		this.#viewport.fitCanvasToHost();
+		this.#viewport.requestRender();
+	}
+
+	/**
+	 * @param {number} clientX
+	 * @param {number} clientY
+	 */
+	pickAtClient(clientX, clientY) {
+		return this.#inspect.pickAtClient(clientX, clientY);
+	}
+
+	/**
+	 * @param {import("./viewer/entityExtract.js").PreviewEntity[]} entityList
+	 * @param {import("./ResourcePackStack.js").default} [resourcePackStack]
+	 * @param {{ keepFullList?: boolean }} [opts]
+	 */
+	async attachEntities(entityList, resourcePackStack, opts = {}) {
+		return this.#entities.attach(entityList, resourcePackStack, opts);
+	}
+
+	/** @deprecated use previewEntities */
+	get entities() {
+		return this.previewEntities;
+	}
+
+	downloadScreenshot() {
+		exportScreenshot(this.#ctx.renderer, this.packName, () => this.#viewport.paintNow());
+	}
+
+	async exportGlb() {
+		return exportGlbFile({
+			scene: this.#ctx.scene,
+			geo: this.#geo,
+			packName: this.packName
 		});
 	}
-	/** Adds the background skybox, or clears the background, depending on current options. */
-	async #initBackground() {
-		if(this.options.showSkybox) {
-			if(!this.#skyboxCubemap) {
-				let loader = new THREE.CubeTextureLoader();
-				loader.setPath("assets/previewPanorama/");
-				this.#skyboxCubemap = await loader.loadAsync([1, 3, 4, 5, 0, 2].map(x => `${x}.png`));
-			}
-			this.#scene.background = this.#skyboxCubemap;
-		} else {
-			this.#scene.background = null;
+
+	dispose() {
+		this.#ctx?.markDisposed();
+		try {
+			this.#viewport?.dispose?.();
+		} catch {
+			/* ignore */
 		}
-	}
-	/**
-	 * Checks if the GPU on the current device is not very powerful.
-	 * @returns {boolean}
-	 */
-	#isWeakDevice() {
-		let gl = this.#renderer.getContext();
-		return gl.getParameter(gl.MAX_VERTEX_UNIFORM_VECTORS) <= 1024 || gl.getParameter(gl.MAX_FRAGMENT_UNIFORM_VECTORS) <= 256; // yes
-	}
-	/** @returns {Promise<THREE.Texture>} */
-	async #createTexture() {
-		let texture = new THREE.DataTexture(this.#imageBlobData.data, this.#imageBlobData.width, this.#imageBlobData.height, THREE.RGBAFormat);
-		texture.colorSpace = THREE.SRGBColorSpace;
-		texture.minFilter = THREE.LinearFilter; // helps make the texture outlines more visible and far-away textures less noisy, at the expense of occasional texture bleeding
-		texture.needsUpdate = true;
-		return texture;
-	}
-	/**
-	 * Converts a poly mesh template in the palette to a Three.js BufferGeometry.
-	 * @param {number} polyMeshTemplatePaletteI
-	 * @returns {THREE.BufferGeometry}
-	 */
-	#polyMeshTemplateToBufferGeo(polyMeshTemplatePaletteI) {
-		this.#polyMeshMaker.add(polyMeshTemplatePaletteI);
-		let polyMesh = this.#polyMeshMaker.export();
-		this.#polyMeshMaker.clear();
-		let i = 0; // this bit is adapted from https://github.com/bridge-core/model-viewer/blob/main/lib/PolyMesh.ts#L45
-		let positions = [], normals = [], uvs = [], indices = [];
-		polyMesh["polys"].forEach(face => {
-			face.forEach(([posIndex, normalIndex, uvIndex]) => {
-				let pos = polyMesh.positions[posIndex];
-				positions.push(pos[0], pos[1], 16 - pos[2]);
-				normals.push(...polyMesh.normals[normalIndex]);
-				uvs.push(polyMesh.uvs[uvIndex][0], 1 - polyMesh.uvs[uvIndex][1]);
+		try {
+			this.#cameraCtrl?.setFlyMode?.(false);
+		} catch {
+			/* ignore */
+		}
+		try {
+			this.#ctx?.controls?.dispose?.();
+		} catch (e) {
+			console.warn("OrbitControls dispose failed:", e);
+		}
+		if (this.#ctx) this.#ctx.controls = null;
+
+		try {
+			this.#entities?.dispose?.();
+		} catch {
+			/* ignore */
+		}
+		try {
+			this.#layers?.dispose?.();
+		} catch {
+			/* ignore */
+		}
+		try {
+			this.#inspect?.dispose?.();
+		} catch {
+			/* ignore */
+		}
+		try {
+			this.#cameraCtrl?.dispose?.();
+		} catch {
+			/* ignore */
+		}
+		try {
+			this.#lighting?.dispose?.();
+		} catch {
+			/* ignore */
+		}
+		try {
+			this.#overlays?.dispose?.();
+		} catch {
+			/* ignore */
+		}
+
+		const scene = this.#ctx?.scene;
+		if (scene) {
+			const policy = this.#pool?.disposePolicy?.() ?? {};
+			const kids = [...scene.children];
+			for (const child of kids) {
+				scene.remove(child);
+				disposeObject3D(child, policy);
+			}
+		}
+		try {
+			this.#pool?.disposeAll?.();
+		} catch {
+			/* ignore */
+		}
+		try {
+			this.#ctx?.renderer?.dispose?.();
+			this.#ctx?.renderer?.forceContextLoss?.();
+		} catch (e) {
+			console.warn("WebGLRenderer dispose failed:", e);
+		}
+		if (this.#ctx) {
+			this.#ctx.renderer = null;
+			this.#ctx.scene = null;
+			this.#ctx.camera = null;
+			this.#ctx.stats?.dom?.remove?.();
+			this.#ctx.stats = null;
+		}
+		try {
+			this.#optionsGui?.destroy?.();
+		} catch {
+			/* ignore */
+		}
+		this.#optionsGui = undefined;
+		try {
+			this.cont?.querySelectorAll?.("lil-gui")?.forEach(el => {
+				el.destroyGui?.();
+				el.remove();
 			});
-			indices.push(i + 2, i + 1, i, i + 2, i, i + 3);
-			i += face.length;
-		});
-		let geo = new THREE.BufferGeometry();
-		geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(positions), 3));
-		geo.setAttribute("normal", new THREE.BufferAttribute(new Float32Array(normals), 3));
-		geo.setAttribute("uv", new THREE.BufferAttribute(new Float32Array(uvs), 2));
-		geo.setIndex(indices);
-		geo.computeVertexNormals();
-		return geo;
+		} catch {
+			/* ignore */
+		}
+		this.#can?.remove?.();
+		this.#loadingMessage?.remove?.();
+		this.#geo = null;
+		this.#blockPositions = [];
+		if (this.#ctx) this.#ctx.inspectIndex = null;
 	}
-	/**
-	 * Checks whether a poly mesh template has translucent textures.
-	 * @param {PolyMeshTemplateFaceWithUvs[]} polyMeshTemplate
-	 * @returns {boolean}
-	 */
-	#isPolyMeshTemplateTranslucent(polyMeshTemplate) {
-		let allUvs = polyMeshTemplate.map(face => {
-			let uvCoords = face["vertices"].map(v => v["uv"]);
-			let xs = uvCoords.map(([x]) => round(x * this.#imageBlobData.width));
-			let ys = uvCoords.map(([, y]) => round((1 - y) * this.#imageBlobData.height));
-			let minUvCoords = tuple([min(...xs), min(...ys)]);
-			let maxUvCoords = tuple([max(...xs), max(...ys)]);
-			let unscaledUvSize = vec2.sub(maxUvCoords, minUvCoords);
-			let uv = [minUvCoords[0], minUvCoords[1]];
-			let uvSize = [unscaledUvSize[0], unscaledUvSize[1]];
-			return { uv, uvSize };
-		});
-		let uvs = Array.from(new JSONSet(allUvs));
-		return uvs.some(({ uv, uvSize }) => {
-			for(let x = uv[0]; x < uv[0] + uvSize[0]; x++) {
-				for(let y = uv[1]; y < uv[1] + uvSize[1]; y++) {
-					let i = (y * this.#imageBlobData.width + x) * 4;
-					let alpha = this.#imageBlobData.data[i + 3];
-					if(alpha > 0 && alpha < 255) { // any pixel with a non-full or non-empty alpha channel makes the entire geo translucent
-						return true;
-					}
-				}
-			}
-			return false;
-		});
-	}
-	/**
-	 * Creates an instanced mesh from a group.
-	 * @param {THREE.BufferGeometry} bufferGeo
-	 * @param {Vec3[]} positions
-	 * @param {THREE.Material} material
-	 * @returns {THREE.InstancedMesh}
-	 */
-	#instanceBufferGeoAtPositions(bufferGeo, positions, material) { // todo: investigate better performance w/ InstancedBufferGeometry
-		let instancedMesh = new THREE.InstancedMesh(bufferGeo, material, positions.length);
-		let dummy = new THREE.Object3D();
-		positions.forEach((pos, i) => {
-			let vecPos = new THREE.Vector3(...pos);
-			dummy.position.copy(vecPos);
-			dummy.updateMatrix();
-			instancedMesh.setMatrixAt(i, dummy.matrix);
-		});
-		return instancedMesh;
-	}
-	/**
-	 * Merges multiple geometries into a single mesh then adds it to the scene. Shadows are enabled on the mesh.
-	 * @param {THREE.BufferGeometry[]} geos
-	 * @param {THREE.Material} material
-	 */
-	#mergeGeosAndAddToScene(geos, material) {
-		let mergedGeo = BufferGeometryUtils.mergeGeometries(geos, false);
-		let mesh = new THREE.Mesh(mergedGeo, material);
-		mesh.castShadow = true;
-		mesh.receiveShadow = true;
-		mesh.userData.includeInGlbExport = true;
-		this.#scene.add(mesh);
-	}
-	/**
-	 * Expands the scene's instanced meshes into a new scene.
-	 * @returns {THREE.Scene}
-	 */
-	#expandInstancedMeshes() {
-		let scene = new THREE.Scene();
-		this.#scene.traverse(obj => {
-			if(obj.userData.includeInGlbExport) {
-				scene.add(obj.clone());
-				return;
-			}
-			if(!(obj instanceof THREE.InstancedMesh)) {
-				return;
-			}
-			let dummy = new THREE.Object3D();
-			for(let i = 0; i < obj.count; i++) {
-				let mesh = new THREE.Mesh(obj.geometry, obj.material);
-				obj.getMatrixAt(i, dummy.matrix);
-				dummy.matrix.decompose(mesh.position, mesh.quaternion, mesh.scale);
-				scene.add(mesh);
-			}
-		});
-		return scene;
+
+	get disposed() {
+		return this.#ctx?.isDisposed() === true;
 	}
 }
 
-/** @import { I32Vec3, Vec3, Block, PreviewPointLight, PolyMeshTemplateFaceWithUvs} from "./HoloPrint.js" */
-/** @import { Controller } from "lil-gui" */
-/** @import * as THREE from "three" */
-/** @import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js" */
-/** @import { GLTFExporter } from "three/examples/jsm/exporters/GLTFExporter.js" */
-/** @import BufferGeometryUtils from "three/examples/jsm/utils/BufferGeometryUtils.js" */
+/** @import { I32Vec3, Vec3, Block, PolyMeshTemplateFaceWithUvs } from "./HoloPrint.js" */

@@ -1,15 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
 	<head>
-		<title>Structure DB Viewer</title>
+		<title>Advanced Structure Inspector</title>
 		<meta charset="UTF-8">
 		<meta name="viewport" content="width=device-width, initial-scale=1">
-		<meta name="description" content="Browse and preview Minecraft Bedrock .mcstructure files locally or on the web. Adapted from HoloPrint.">
-		<meta name="keywords" content="mcstructure, minecraft bedrock, structure viewer, structure database">
-
-		<meta property="og:type" content="website">
-		<meta property="og:title" content="Structure DB Viewer">
-		<meta property="og:description" content="Web-based Minecraft Bedrock structure database viewer. Runs locally or from static hosting.">
+		<meta name="description" content="Advanced Structure Inspector — browse, preview, and inspect Minecraft Bedrock .mcstructure files.">
 
 		<link rel="manifest" href="manifest.webmanifest"/>
 		<link rel="icon" sizes="48x48" href="favicon.ico"/>
@@ -18,8 +13,9 @@
 		<link rel="stylesheet" href="https://fonts.bunny.net/css?family=catamaran:400,500,700&display=swap"/>
 		<link rel="stylesheet" href="https://fonts.bunny.net/css?family=space-grotesk:400,600&display=swap"/>
 
-		<link rel="stylesheet" href="styles/index.css"/>
-		<link rel="stylesheet" href="viewer/viewer.css"/>
+		<link rel="stylesheet" href="styles/base.css?v=judo15"/>
+		<link rel="stylesheet" href="styles/preview.css?v=judo15"/>
+		<link rel="stylesheet" href="viewer/viewer.css?v=judo15"/>
 		<script type="importmap">
 			{
 				"imports": {
@@ -38,87 +34,270 @@
 				}
 			}
 		</script>
-		<script src="index.js" type="module"></script>
+		<script src="index.js?v=judo15" type="module"></script>
+		<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+		<meta http-equiv="Pragma" content="no-cache"/>
 	</head>
-	<body class="sdb-app">
+	<body class="sdb-app sdb-no-selection">
 		<header class="sdb-header">
-			<div>
-				<h1>Structure DB Viewer</h1>
-				<p class="tagline">Local / web catalog for Bedrock <code>.mcstructure</code> files</p>
+			<div class="sdb-header-brand">
+				<h1>Advanced Structure Inspector</h1>
+				<p class="tagline" id="appTagline">Hover left edge for list · right for stats &amp; materials</p>
 			</div>
-			<div class="sdb-header-actions">
-				<label class="sdb-btn">
-					Import…
-					<input id="importInput" type="file" multiple hidden
-						accept=".mcstructure,.mcworld,.mctemplate,.mcpack,.zip,application/zip"/>
-				</label>
-				<button type="button" class="sdb-btn secondary" id="clearCatalogBtn" title="Clear in-memory catalog">Clear</button>
-				<a class="sdb-btn secondary" href="holoprintPack.html" title="Original HoloPrint pack generator">Pack generator</a>
+
+			<!-- Shown when a structure is selected: name, source, hoppers, actions -->
+			<div class="sdb-selection-bar hidden" id="selectionBar">
+				<div class="sdb-sel-meta">
+					<strong id="headerName" class="sdb-sel-name">—</strong>
+					<span id="headerSource" class="sdb-sel-source"></span>
+				</div>
+				<div class="sdb-hopper-chip" id="hopperStatsChip" title="Bedrock: hopper toggle_bit = locked when powered by redstone">
+					<span class="sdb-hopper-label" id="hopperStatsLabel">Hoppers —</span>
+					<span class="sdb-hopper-detail" id="hopperStatsDetail"></span>
+				</div>
+				<div class="sdb-sel-actions">
+					<button type="button" class="sdb-btn secondary" id="previewBtn" title="Force rebuild preview">Reload</button>
+					<button type="button" class="sdb-btn secondary" id="downloadBtn">Download</button>
+					<button type="button" class="sdb-btn secondary" id="removeBtn">Remove</button>
+				</div>
+			</div>
+
+			<div class="sdb-header-actions" id="globalActions">
+				<span id="bootBadge" class="sdb-boot">Loading…</span>
+				<button type="button" class="sdb-btn" id="importBtn">Import…</button>
+				<input id="importInput" type="file" multiple hidden
+					accept=".mcstructure,.mcworld,.mctemplate,.mcpack,.zip,application/octet-stream,*/*"/>
+				<button type="button" class="sdb-btn secondary" id="clearCatalogBtn">Clear list</button>
+				<button type="button" class="sdb-btn secondary" id="creditsBtn" title="Open credits">Credits</button>
 			</div>
 		</header>
 
-		<div class="sdb-layout">
-			<aside class="sdb-sidebar">
-				<div class="sdb-dropzone" id="dropzone">
-					<p>Drop <code>.mcstructure</code>, <code>.mcworld</code>, <code>.mctemplate</code>, <code>.mcpack</code>, or <code>.zip</code> here</p>
-					<button type="button" class="sdb-btn secondary" id="dropzoneBrowseBtn">Browse files</button>
-				</div>
-				<input class="sdb-search" id="searchInput" type="search" placeholder="Search name, size, blocks…" autocomplete="off"/>
-				<div class="sdb-list-meta">
-					<span id="catalogCount">0 structures</span>
-					<span id="catalogHint"></span>
-				</div>
-				<ul class="sdb-catalog-list" id="catalogList" aria-label="Structure catalog"></ul>
-				<div class="sdb-status hidden" id="statusBox" role="status"></div>
-			</aside>
-
-			<main class="sdb-main">
+		<!-- Full-stage preview with floating auto-hide docks -->
+		<div class="sdb-stage" id="appStage">
+			<main class="sdb-main" id="previewMain">
 				<section class="sdb-empty" id="emptyState">
-					<h2>No structure selected</h2>
-					<p>
-						Import structure files to build a browsable catalog. Parsing and world/pack extraction
-						reuse <strong>HoloPrint</strong> core modules; this fork adds a catalog UI for local
-						or static-web viewing.
-					</p>
-					<ul>
-						<li>Parse <code>.mcstructure</code> NBT (size, palette, origin, block counts)</li>
-						<li>Extract templates from worlds and HoloPrint packs</li>
-						<li>Optional 3D preview via existing pack/preview pipeline</li>
-					</ul>
-					<p><em>Persistence of structure binaries (IndexedDB / OPFS) is planned next — this scaffold keeps files in session memory and stores a metadata index in <code>localStorage</code>.</em></p>
+					<h2>Select a structure</h2>
+					<p>Hover the <strong>left edge</strong> for the structure list, or use <strong>Import…</strong>. Preview fills this view.</p>
 				</section>
 
 				<section class="sdb-detail hidden" id="detailPanel">
-					<div class="sdb-detail-header">
-						<div>
-							<h2 id="detailName">—</h2>
-							<p class="meta" id="detailSource"></p>
+					<section class="sdb-preview-section" aria-label="Preview">
+						<div class="sdb-cam-bar" id="camBar" title="Camera presets">
+							<button type="button" class="sdb-cam-btn" data-cam="iso" id="camIsoBtn" title="Cycle isometric N → S → E → W">Iso N</button>
+							<button type="button" class="sdb-cam-btn" data-cam="north" title="From north">N</button>
+							<button type="button" class="sdb-cam-btn" data-cam="south" title="From south">S</button>
+							<button type="button" class="sdb-cam-btn" data-cam="east" title="From east">E</button>
+							<button type="button" class="sdb-cam-btn" data-cam="west" title="From west">W</button>
+							<button type="button" class="sdb-cam-btn" data-cam="top" title="Top-down">Top</button>
+							<button type="button" class="sdb-cam-btn" data-cam="layer" title="Frame current layer">Layer</button>
+							<button type="button" class="sdb-cam-btn" data-cam="free" title="Free camera — no auto reframe (auto when you orbit)">Free</button>
+							<button type="button" class="sdb-cam-btn" data-cam="fly" title="Fly camera — WASD move, Space up, Shift down, drag to look">Fly</button>
+							<label class="sdb-cam-tilt hidden" title="Elevation for N/S/E/W in layer mode">
+								<span>Tilt</span>
+								<input type="range" id="camTilt" min="0" max="85" value="67" step="1"/>
+								<span id="camTiltVal" class="sdb-cam-tilt-val">67°</span>
+							</label>
+							<span class="sdb-layer-badge hidden" id="layerBadge" aria-live="polite">Layer 0</span>
+							<span class="sdb-preview-keys" title="Keyboard controls when preview is ready">↑↓ layer · ← all · → cam · Fly: WASD Space/Shift · drag look · dbl-click inspect</span>
 						</div>
-						<div class="sdb-header-actions">
-							<button type="button" class="sdb-btn" id="previewBtn">Load 3D preview</button>
-							<button type="button" class="sdb-btn secondary" id="downloadBtn">Download .mcstructure</button>
-							<button type="button" class="sdb-btn secondary" id="removeBtn">Remove</button>
-						</div>
-					</div>
-					<div class="sdb-stats" id="detailStats"></div>
-					<h3>Block palette</h3>
-					<div class="sdb-palette" id="detailPalette"></div>
-					<section class="sdb-preview-section">
-						<h3>Preview</h3>
-						<div class="sdb-preview-host" id="previewHost">
-							<p class="meta" style="padding:12px;color:#ccc;margin:0">Click “Load 3D preview” to render with HoloPrint’s PreviewRenderer (runs the structure through the existing geometry pipeline).</p>
-						</div>
+						<div class="sdb-preview-host" id="previewHost" tabindex="0"></div>
+						<div class="sdb-inspect-panel hidden" id="inspectPanel" aria-live="polite"></div>
 					</section>
 				</section>
 			</main>
+
+			<!-- Left: structure catalog — peeks / expands on hover near edge -->
+			<aside class="sdb-float sdb-float-left" id="catalogFloat" aria-label="Structure list">
+				<div class="sdb-float-hit" aria-hidden="true"></div>
+				<div class="sdb-float-panel sdb-sidebar">
+					<div class="sdb-float-label-row">
+						<div class="sdb-float-label">Structures</div>
+						<button type="button" class="sdb-float-pin" id="pinCatalogBtn" title="Pin menu open" aria-pressed="false" aria-label="Pin structure list open">📌</button>
+					</div>
+
+					<input class="sdb-search" id="searchInput" type="search" placeholder="Filter list…" autocomplete="off"/>
+
+					<div class="sdb-list-header sdb-list-header-row">
+						<span id="catalogCount">0 structures</span>
+						<button type="button" class="sdb-cat-btn sdb-cat-add" id="addCategoryBtn" title="Create a new category">+ Category</button>
+					</div>
+
+					<ul class="sdb-catalog-list" id="catalogList" role="listbox" aria-label="Imported structures"></ul>
+
+					<div class="sdb-status hidden" id="statusBox" role="status"></div>
+				</div>
+			</aside>
+
+			<!-- Right: stats + materials — peeks / expands when structure selected -->
+			<aside class="sdb-float sdb-float-right" id="detailFloat" aria-label="Structure details">
+				<div class="sdb-float-hit" aria-hidden="true"></div>
+				<div class="sdb-float-panel sdb-detail-side">
+					<div class="sdb-float-label-row">
+						<div class="sdb-float-label">Details</div>
+						<button type="button" class="sdb-float-pin" id="pinDetailBtn" title="Pin menu open" aria-pressed="false" aria-label="Pin details panel open">📌</button>
+					</div>
+
+					<section class="sdb-collapsible" id="detailsInfoSection" data-section="details">
+						<button type="button" class="sdb-collapse-header" id="detailsCollapseBtn" aria-expanded="true">
+							<span class="sdb-collapse-toggle" aria-hidden="true">▾</span>
+							<span class="sdb-collapse-title">Info</span>
+						</button>
+						<div class="sdb-collapse-body" id="detailsCollapseBody">
+							<label class="sdb-default-cam" title="Camera used when this structure opens">
+								<span class="sdb-default-cam-label">Default camera</span>
+								<select id="defaultCamSelect" class="sdb-default-cam-select" aria-label="Default camera view">
+									<option value="iso-north">Iso North</option>
+									<option value="iso-south">Iso South</option>
+									<option value="iso-east">Iso East</option>
+									<option value="iso-west">Iso West</option>
+									<option value="north">North</option>
+									<option value="south">South</option>
+									<option value="east">East</option>
+									<option value="west">West</option>
+									<option value="top">Top</option>
+									<option value="layer">Layer</option>
+									<option value="free">Free</option>
+									<option value="fly">Fly (WASD)</option>
+								</select>
+							</label>
+
+							<div class="sdb-meta-fields" id="structureMetaFields">
+								<label class="sdb-meta-field">
+									<span class="sdb-meta-field-label">Creator</span>
+									<input type="text" id="metaCreator" class="sdb-meta-input" placeholder="Who made this structure" autocomplete="off" spellcheck="false"/>
+								</label>
+								<label class="sdb-meta-field">
+									<span class="sdb-meta-field-label">Credits</span>
+									<input type="text" id="metaCredits" class="sdb-meta-input" placeholder="Additional credits" autocomplete="off" spellcheck="false"/>
+								</label>
+								<label class="sdb-meta-field">
+									<span class="sdb-meta-field-label">Source link</span>
+									<input type="url" id="metaSourceLink" class="sdb-meta-input" placeholder="https://…" inputmode="url" autocomplete="off" spellcheck="false"/>
+									<span class="sdb-meta-field-error hidden" id="metaSourceLinkError">Enter a valid web link (http:// or https://)</span>
+								</label>
+							</div>
+
+							<div class="sdb-stats" id="detailStats"></div>
+
+							<button type="button" class="sdb-btn secondary sdb-add-detail-btn" id="addDetailBtn">+ Add detail</button>
+							<ul class="sdb-user-details" id="userDetailsList" aria-label="Structure details"></ul>
+						</div>
+					</section>
+
+					<section class="sdb-collapsible" id="materialsSection" data-section="materials">
+						<button type="button" class="sdb-collapse-header sdb-material-header" id="materialsCollapseBtn" aria-expanded="true">
+							<span class="sdb-collapse-toggle" aria-hidden="true">▾</span>
+							<span class="sdb-collapse-title">Materials List</span>
+							<span class="sdb-material-hint" id="materialListHint"></span>
+						</button>
+						<div class="sdb-collapse-body" id="materialsCollapseBody">
+							<ul class="sdb-material-list" id="detailMaterialList" aria-label="Material list"></ul>
+						</div>
+					</section>
+				</div>
+			</aside>
+
+			<div class="sdb-status-toast hidden" id="statusToast" role="status" aria-live="polite"></div>
 		</div>
 
 		<footer class="sdb-footer">
-			Adapted Material based on
-			<a href="https://github.com/SuperLlama88888/holoprint" rel="noopener" target="_blank">HoloPrint</a>
-			by SuperLlama88888 —
-			<a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" rel="noopener" target="_blank">CC BY-NC-SA 4.0</a>.
-			See <code>NOTICE.md</code> and <code>LICENSE</code>. NonCommercial use only.
+			<span class="sdb-footer-hint">Left edge = list · Right edge = details · 📌 pins menus open</span>
+			<span class="sdb-footer-meta">
+				Adapted from <a href="https://github.com/SuperLlama88888/holoprint" rel="noopener" target="_blank">HoloPrint</a>
+				· <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" rel="noopener" target="_blank">CC BY-NC-SA 4.0</a>
+				· JaydeeWetwork · Grok Build
+				· <button type="button" class="sdb-footer-link" id="creditsFooterBtn">Credits</button>
+			</span>
 		</footer>
+
+		<!-- Credits dialog -->
+		<dialog class="sdb-credits-dialog" id="creditsDialog" aria-labelledby="creditsTitle">
+			<form method="dialog" class="sdb-credits-panel">
+				<header class="sdb-credits-header">
+					<h2 id="creditsTitle">Credits</h2>
+					<button type="submit" class="sdb-credits-close" value="close" aria-label="Close">×</button>
+				</header>
+				<div class="sdb-credits-body">
+					<section>
+						<h3>Project</h3>
+						<ul>
+							<li><strong>Advanced Structure Inspector</strong> — local / web browser for Minecraft Bedrock <code>.mcstructure</code> files (import, list, materials, 3D preview, layer inspect).</li>
+						</ul>
+					</section>
+					<section>
+						<h3>Team</h3>
+						<ul>
+							<li><strong>Written and directed by</strong> JaydeeWetwork</li>
+							<li><strong>Lead developer</strong> Grok Build (xAI)</li>
+						</ul>
+					</section>
+					<section>
+						<h3>Source &amp; license</h3>
+						<ul>
+							<li>
+								Adapted from
+								<a href="https://github.com/SuperLlama88888/holoprint" rel="noopener" target="_blank">HoloPrint</a>
+								by SuperLlama88888
+							</li>
+							<li>
+								License:
+								<a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" rel="noopener" target="_blank">CC BY-NC-SA 4.0</a>
+								(NonCommercial · Attribution · ShareAlike)
+							</li>
+						</ul>
+					</section>
+					<section>
+						<h3>Libraries &amp; runtimes</h3>
+						<ul>
+							<li><a href="https://threejs.org/" rel="noopener" target="_blank">three.js</a> — 3D preview</li>
+							<li><a href="https://github.com/mrdoob/stats.js" rel="noopener" target="_blank">stats.js</a> — FPS panel</li>
+							<li><a href="https://github.com/georgealways/lil-gui" rel="noopener" target="_blank">lil-gui</a> — preview options UI</li>
+							<li><a href="https://github.com/Offroaders123/NBTify" rel="noopener" target="_blank">nbtify-readonly-typeless</a> — NBT parse for structures</li>
+							<li><a href="https://github.com/Offroaders123/mcbe-leveldb-reader" rel="noopener" target="_blank">mcbe-leveldb-reader</a> — extract structures from worlds</li>
+							<li><a href="https://gildas-lormeau.github.io/zip.js/" rel="noopener" target="_blank">@zip.js/zip.js</a> — zip / pack I/O</li>
+							<li><a href="https://github.com/mapbox/potpack" rel="noopener" target="_blank">potpack</a> — texture atlas packing</li>
+							<li><a href="https://github.com/TehShrike/deepmerge" rel="noopener" target="_blank">deepmerge</a> — JSON resource merge</li>
+							<li><a href="https://github.com/vthibault/tga.js" rel="noopener" target="_blank">tga-js</a> — TGA texture decode</li>
+							<li><a href="https://github.com/sindresorhus/strip-json-comments" rel="noopener" target="_blank">strip-json-comments</a> — JSONC parse</li>
+							<li><a href="https://supabase.com/" rel="noopener" target="_blank">@supabase/supabase-js</a> — optional (HoloPrint stack)</li>
+							<li>Loaded via <a href="https://esm.sh/" rel="noopener" target="_blank">esm.sh</a></li>
+						</ul>
+					</section>
+					<section>
+						<h3>Game data &amp; assets</h3>
+						<ul>
+							<li>
+								Vanilla Bedrock resource pack samples:
+								<a href="https://github.com/Mojang/bedrock-samples" rel="noopener" target="_blank">Mojang/bedrock-samples</a>
+								(block/item textures via jsDelivr CDN)
+							</li>
+							<li>Preview skybox / branding assets from the HoloPrint project tree</li>
+							<li>Minecraft is a trademark of Mojang Studios / Microsoft — not affiliated</li>
+						</ul>
+					</section>
+					<section>
+						<h3>Fonts</h3>
+						<ul>
+							<li>
+								<a href="https://fonts.bunny.net/family/catamaran" rel="noopener" target="_blank">Catamaran</a>
+								&amp;
+								<a href="https://fonts.bunny.net/family/space-grotesk" rel="noopener" target="_blank">Space Grotesk</a>
+								via <a href="https://fonts.bunny.net/" rel="noopener" target="_blank">Bunny Fonts</a>
+							</li>
+						</ul>
+					</section>
+					<section>
+						<h3>Thanks</h3>
+						<ul>
+							<li>HoloPrint and Bedrock community tooling authors</li>
+							<li>Everyone who packs structures and finds bugs</li>
+						</ul>
+					</section>
+				</div>
+				<footer class="sdb-credits-footer">
+					<button type="submit" class="sdb-btn secondary" value="close">Close</button>
+				</footer>
+			</form>
+		</dialog>
 	</body>
 </html>
