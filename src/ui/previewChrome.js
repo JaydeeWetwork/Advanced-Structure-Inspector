@@ -377,7 +377,7 @@ export async function onPreviewDblClick(e) {
 		const node = renderContainerUi(hit);
 		showInspectPanelNode(node);
 		// Load Bedrock item icons into slots (vanilla samples via CDN)
-		void import("../viewer/itemIconLoader.js?v=judo16")
+		void import("../viewer/itemIconLoader.js?v=judo17")
 			.then(async ({ hydrateInventoryIcons }) => {
 				const wanted = node.querySelectorAll?.("img[data-item-icon]")?.length ?? 0;
 				// Empty inventories have no icon imgs — not an error

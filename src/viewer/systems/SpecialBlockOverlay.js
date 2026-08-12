@@ -5,12 +5,9 @@
  * (Redstone neighbour walk removed — dust uses original power-tint plate only.)
  */
 
-import { disposeObject3D } from "./disposeObject3D.js?v=judo16";
-import { structurePosToThree } from "../entityMeshes.js?v=judo16";
-import {
-	applyBlockGeoEuler,
-	blockGeoEulerToThree
-} from "../itemFrameItems.js?v=judo16";
+import { disposeObject3D } from "./disposeObject3D.js?v=judo17";
+import { structurePosToThree } from "../entityMeshes.js?v=judo17";
+import { applyBlockGeoEuler } from "../itemFrameItems.js?v=judo17";
 import { extractSignText, extractLecternBook } from "../inspectStructure.js";
 
 /** Wall-sign board center in 0–16 geo (template_wall_sign). */
@@ -125,21 +122,32 @@ export default class SpecialBlockOverlay {
 
 		const board = isStanding ? STAND_BOARD : WALL_BOARD;
 		// Wall board sits on +Z edge; room-side (front) is −Z. Standing front is +Z (south @ dir 0).
+		// Half thickness of board plate is 0.75 geo units.
+		const halfT = 0.75;
 		let localZ;
 		if (isStanding) {
-			localZ = board.z + (isBack ? -1 : 1) * (0.75 + TEXT_LIFT);
+			localZ = board.z + (isBack ? -1 : 1) * (halfT + TEXT_LIFT);
 		} else {
 			// wall / hanging: front toward room (−Z of default geo), back toward wall
-			localZ = board.z - (isBack ? -1 : 1) * (0.75 + TEXT_LIFT);
+			localZ = board.z - (isBack ? -1 : 1) * (halfT + TEXT_LIFT);
 		}
-		const localPos = [board.x, board.y, localZ];
 
 		const eulerDeg = this.#signEulerDeg(b, isWall || isHanging);
-		const [gx, gy, gz] = applyBlockGeoEuler(localPos, eulerDeg);
+
+		// Text anchor slightly off the wood face
+		const [gx, gy, gz] = applyBlockGeoEuler([board.x, board.y, localZ], eulerDeg);
 		const [tx, ty, tz] = structurePosToThree(
 			b.x + gx / 16,
 			b.y + gy / 16,
 			b.z + gz / 16
+		);
+
+		// Board center in three-space — outward = text − board (toward the reader for that face)
+		const [bcx, bcy, bcz] = applyBlockGeoEuler([board.x, board.y, board.z], eulerDeg);
+		const [bx, by, bz] = structurePosToThree(
+			b.x + bcx / 16,
+			b.y + bcy / 16,
+			b.z + bcz / 16
 		);
 
 		const glowing = !!face.glowing;
@@ -151,7 +159,8 @@ export default class SpecialBlockOverlay {
 		const mat = new THREE.MeshBasicMaterial({
 			map: tex,
 			transparent: true,
-			side: THREE.DoubleSide,
+			// FrontSide only: DoubleSide shows a mirrored back when the normal is wrong
+			side: THREE.FrontSide,
 			depthWrite: false,
 			// Slight lift so wood z-fighting doesn't eat glyphs
 			polygonOffset: true,
@@ -168,20 +177,20 @@ export default class SpecialBlockOverlay {
 		);
 		mesh.position.set(tx, ty, tz);
 
-		// Orient like the board, then face the reader:
-		// - standing front: default plane +Z is correct for south-facing dir 0
-		// - wall front: default geo board faces room as −Z → flip 180° around Y
-		const qFace = new THREE.Quaternion().setFromEuler(
-			blockGeoEulerToThree(eulerDeg[0], eulerDeg[1], eulerDeg[2], THREE)
-		);
-		const qFlip = new THREE.Quaternion();
-		if (!isStanding) {
-			// Face room (−Z in default geo) for front; back faces +Z (no extra flip vs front+π)
-			qFlip.setFromAxisAngle(new THREE.Vector3(0, 1, 0), isBack ? 0 : Math.PI);
-		} else if (isBack) {
-			qFlip.setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI);
+		// Orient with lookAt so the plane's +Z faces the reader without the horizontal
+		// mirror that a bare 180° Y flip introduces on some wall facings.
+		// Object3D.lookAt points local −Z at the target, so aim "behind" the board:
+		// then local +Z (PlaneGeometry normal) points outward toward the reader.
+		const outward = new THREE.Vector3(tx - bx, ty - by, tz - bz);
+		if (outward.lengthSq() < 1e-8) {
+			// Degenerate — fall back to geo −Z / +Z
+			outward.set(0, 0, isStanding ? (isBack ? 1 : -1) : (isBack ? -1 : 1));
+		} else {
+			outward.normalize();
 		}
-		mesh.quaternion.copy(qFace).multiply(qFlip);
+		const behind = new THREE.Vector3(tx, ty, tz).sub(outward);
+		mesh.up.set(0, 1, 0);
+		mesh.lookAt(behind);
 
 		mesh.userData.sdbSpecialOverlay = true;
 		mesh.frustumCulled = false;
