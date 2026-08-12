@@ -14,4 +14,4 @@ export {
 	hydrateInventoryIcons,
 	resetItemIconCache,
 	stripItemNs
-} from "../itemIconLoader.js?v=judo15";
+} from "../itemIconLoader.js?v=judo16";

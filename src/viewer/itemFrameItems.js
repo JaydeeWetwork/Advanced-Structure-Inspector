@@ -6,7 +6,7 @@
  */
 
 import { structurePosToThree } from "./entityMeshes.js";
-import { getItemIconUrl } from "./itemIconLoader.js?v=judo15";
+import { getItemIconUrl } from "./itemIconLoader.js?v=judo16";
 
 /**
  * @typedef {object} ItemFramePlacement

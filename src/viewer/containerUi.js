@@ -438,7 +438,7 @@ async function applyCrafterResult(root, resultSlot, slots, disabled) {
 			}
 			resultSlot.title = `${formatItemLabel(result.item)} × ${result.count} (crafted)`;
 			// load icon
-			void import("./itemIconLoader.js?v=judo15")
+			void import("./itemIconLoader.js?v=judo16")
 				.then(m => m.hydrateInventoryIcons(resultSlot))
 				.catch(() => {});
 		};
