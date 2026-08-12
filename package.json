@@ -10,7 +10,8 @@
 		"test:viewer": "npm run test -w viewer_unit",
 		"build": "npm run build -w pipeline",
 		"serve": "npx --yes serve src -p 5173",
-		"serve:dist": "npx --yes serve dist -p 5173"
+		"serve:dist": "npx --yes serve dist -p 5173",
+		"fill:sign-text": "node scripts/fill-sign-test-text.mjs"
 	},
 	"workspaces": [
 		"pipeline",
@@ -22,6 +23,7 @@
 		"url": "https://github.com/YOUR_USER/structure-inspector.git"
 	},
 	"devDependencies": {
+		"nbtify": "^2.2.0",
 		"nbtify-readonly-typeless": "^1.1.2"
 	}
 }
