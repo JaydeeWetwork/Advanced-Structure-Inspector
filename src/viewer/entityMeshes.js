@@ -9,7 +9,8 @@
  * Coordinate mapping matches PreviewRenderer block placement (Z-flip).
  */
 
-export { structurePosToThree } from "./previewSpace.js";
+import { structurePosToThree } from "./previewSpace.js";
+export { structurePosToThree };
 
 /**
  * Infer pitch (degrees, nose up positive) from Bedrock rail_direction under the cart.

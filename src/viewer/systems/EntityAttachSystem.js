@@ -142,7 +142,7 @@ export default class EntityAttachSystem {
 			let loadMinecartTexture;
 			try {
 				({ createEntityObject3D, loadMinecartTexture } = await import(
-					"../entityMeshes.js"
+					"../entityMeshes.js?v=judo18"
 				));
 			} catch (e) {
 				console.error("[sdb] failed to load entityMeshes module:", e);

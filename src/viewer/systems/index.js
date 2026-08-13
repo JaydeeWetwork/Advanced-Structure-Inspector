@@ -10,7 +10,7 @@ export { default as LayerMeshSystem } from "./LayerMeshSystem.js?v=judo17";
 export {
 	default as EntityAttachSystem,
 	entityStructureLayer
-} from "./EntityAttachSystem.js?v=judo17";
+} from "./EntityAttachSystem.js?v=judo18";
 export { default as CameraController } from "./CameraController.js?v=judo17";
 export { default as FlyController } from "./FlyController.js?v=judo17";
 export { default as InspectRaycaster } from "./InspectRaycaster.js?v=judo17";
