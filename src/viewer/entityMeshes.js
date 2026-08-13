@@ -9,21 +9,7 @@
  * Coordinate mapping matches PreviewRenderer block placement (Z-flip).
  */
 
-/**
- * Structure-local continuous coords → PreviewRenderer three.js space.
- * @param {number} lx
- * @param {number} ly
- * @param {number} lz
- * @returns {[number, number, number]}
- */
-export function structurePosToThree(lx, ly, lz) {
-	const fx = Math.floor(lx);
-	const ux = lx - fx;
-	const x = -16 * fx - 16 + 16 * ux;
-	const y = 16 * ly;
-	const z = -16 * lz;
-	return [x, y, z];
-}
+export { structurePosToThree } from "./previewSpace.js";
 
 /**
  * Infer pitch (degrees, nose up positive) from Bedrock rail_direction under the cart.

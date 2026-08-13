@@ -615,6 +615,51 @@ describe("itemIconLoader buckets", async () => {
 	});
 });
 
+describe("signPlacement", async () => {
+	const {
+		kindOfSign,
+		eulerOfSign,
+		placeSignFace,
+		SIGN_BOARD,
+		woodKind
+	} = await import("../../src/viewer/signPlacement.js");
+
+	it("classifies wall / standing / hanging from name", () => {
+		assert.equal(kindOfSign("oak_wall_sign", {}), "wall");
+		assert.equal(kindOfSign("minecraft:standing_sign", {}), "standing");
+		assert.equal(kindOfSign("oak_hanging_sign", { facing_direction: 2 }), "hanging");
+		assert.equal(woodKind("darkoak_wall_sign"), "darkoak");
+		assert.equal(woodKind("oak_hanging_sign"), "oak");
+	});
+
+	it("uses hanging board at cell center, not wall plate z=15", () => {
+		assert.equal(SIGN_BOARD.hanging.cz, 8);
+		assert.equal(SIGN_BOARD.wall.cz, 15);
+		const h = placeSignFace(
+			{ x: 0, y: 0, z: 0, states: { facing_direction: 2, attached_bit: 0 } },
+			"oak_hanging_sign",
+			false
+		);
+		assert.equal(h.kind, "hanging");
+		assert.ok(Math.abs(h.board.cy - 5) < 0.01, `hanging cy=${h.board.cy}`);
+	});
+
+	it("hanging attached_bit uses ground_sign_direction yaw", () => {
+		const e = eulerOfSign("hanging", {
+			attached_bit: 1,
+			facing_direction: 0,
+			ground_sign_direction: 4
+		});
+		assert.deepEqual(e, [0, 90, 0]);
+		const wallLike = eulerOfSign("hanging", {
+			attached_bit: 0,
+			facing_direction: 3,
+			ground_sign_direction: 0
+		});
+		assert.deepEqual(wallLike, [0, 180, 0]);
+	});
+});
+
 describe("itemFrameItems", async () => {
 	const {
 		extractItemFramePlacements,

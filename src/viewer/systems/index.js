@@ -1,6 +1,6 @@
 /**
  * Preview systems used by PreviewRenderer.
- * ?v=judo17 busts stale browser caches.
+ * ?v=judo18 busts stale browser caches.
  */
 
 export { disposeObject3D, clearChildren } from "./disposeObject3D.js?v=judo17";
@@ -34,4 +34,4 @@ export {
 } from "./orbitBootstrap.js?v=judo17";
 export { downloadScreenshot, exportGlb } from "./PreviewExport.js?v=judo17";
 export { wirePreviewOptionsGui } from "./PreviewOptionsGui.js?v=judo17";
-export { default as SpecialBlockOverlay } from "./SpecialBlockOverlay.js?v=judo17";
+export { default as SpecialBlockOverlay } from "./SpecialBlockOverlay.js?v=judo18";

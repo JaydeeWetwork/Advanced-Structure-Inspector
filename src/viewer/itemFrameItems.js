@@ -5,8 +5,14 @@
  * ItemFrame / GlowItemFrame holding Item { Name, Count, Damage } and ItemRotation.
  */
 
-import { structurePosToThree } from "./entityMeshes.js";
+import {
+	applyBlockGeoEuler,
+	blockGeoEulerToThree,
+	structurePosToThree
+} from "./previewSpace.js";
 import { getItemIconUrl } from "./itemIconLoader.js?v=judo17";
+
+export { applyBlockGeoEuler, blockGeoEulerToThree };
 
 /**
  * @typedef {object} ItemFramePlacement
@@ -96,74 +102,6 @@ export function frameFacingEulerDeg(facing) {
 		case 5: return [0, 90, 0]; // east
 		default: return [0, 0, 0];
 	}
-}
-
-/**
- * Rotate a point around block center with BlockGeoMaker.#applyEulerRotation
- * (X-Y-Z order, each axis using the *negated* blockStateDefs angle).
- *
- * Plain Three.js Euler(rx,ry,rz) matches wall Y facings but flips up/down:
- * icons then sit ~1 block on the wrong side of floor/ceiling frames.
- *
- * @param {[number, number, number]} pos
- * @param {[number, number, number]} rotationDeg [rx, ry, rz] from blockStateDefs
- * @param {[number, number, number]} [pivot=[8,8,8]]
- * @returns {[number, number, number]}
- */
-export function applyBlockGeoEuler(pos, rotationDeg, pivot = [8, 8, 8]) {
-	const deg = Math.PI / 180;
-	let x = pos[0] - pivot[0];
-	let y = pos[1] - pivot[1];
-	let z = pos[2] - pivot[2];
-	const [rx, ry, rz] = rotationDeg;
-	// X: rotate (y,z) by -rx
-	{
-		const a = -rx * deg;
-		const c = Math.cos(a), s = Math.sin(a);
-		const ny = y * c - z * s;
-		const nz = y * s + z * c;
-		y = ny;
-		z = nz;
-	}
-	// Y: rotate (x,z) by -ry
-	{
-		const a = -ry * deg;
-		const c = Math.cos(a), s = Math.sin(a);
-		const nx = x * c - z * s;
-		const nz = x * s + z * c;
-		x = nx;
-		z = nz;
-	}
-	// Z: rotate (x,y) by -rz
-	{
-		const a = -rz * deg;
-		const c = Math.cos(a), s = Math.sin(a);
-		const nx = x * c - y * s;
-		const ny = x * s + y * c;
-		x = nx;
-		y = ny;
-	}
-	return [x + pivot[0], y + pivot[1], z + pivot[2]];
-}
-
-/**
- * Convert blockStateDefs euler into a Three.js Euler matching BlockGeoMaker.
- * @param {number} rx
- * @param {number} ry
- * @param {number} rz
- * @param {typeof import("three")} THREE
- * @returns {import("three").Euler}
- */
-export function blockGeoEulerToThree(rx, ry, rz, THREE) {
-	// BlockGeoMaker X: rotate(y,z) by -rx  ≡  Three.js Rx(-rx)
-	// BlockGeoMaker Y: rotate(x,z) by -ry  ≡  Three.js Ry(+ry)
-	// BlockGeoMaker Z: rotate(x,y) by -rz  ≡  Three.js Rz(-rz)
-	return new THREE.Euler(
-		-rx * (Math.PI / 180),
-		ry * (Math.PI / 180),
-		-rz * (Math.PI / 180),
-		"XYZ"
-	);
 }
 
 /**

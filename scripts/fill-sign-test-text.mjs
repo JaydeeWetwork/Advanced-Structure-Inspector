@@ -13,6 +13,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import * as NBT from "nbtify";
+import { facingLabel, kindOfSign, woodKind } from "../src/viewer/signPlacement.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
@@ -48,15 +49,6 @@ const COLOR_CYCLE = [
 	COLORS.pink
 ];
 
-const FACING_NAME = {
-	0: "down",
-	1: "up",
-	2: "N",
-	3: "S",
-	4: "W",
-	5: "E"
-};
-
 /**
  * @param {unknown} name
  * @returns {string}
@@ -67,42 +59,6 @@ function bareName(name) {
 		return String(/** @type {{ value: unknown }} */ (name).value).replace(/^minecraft:/, "");
 	}
 	return "?";
-}
-
-/**
- * @param {string} blockName
- */
-function woodKind(blockName) {
-	const n = blockName.replace(/_?(wall|standing|hanging)_?sign$/i, "").replace(/_sign$/i, "");
-	if (!n || n === "wall" || n === "standing" || n === "hanging") return "oak";
-	return n || "oak";
-}
-
-/**
- * @param {Record<string, unknown>|undefined} states
- * @param {string} blockName
- */
-function facingLabel(states, blockName) {
-	if (!states || typeof states !== "object") return "face=?";
-	if (states.facing_direction != null) {
-		const fd = Number(states.facing_direction);
-		return `fd=${fd}(${FACING_NAME[fd] ?? "?"})`;
-	}
-	if (states.ground_sign_direction != null) {
-		const g = Number(states.ground_sign_direction);
-		const deg = ((g / 16) * 360).toFixed(0);
-		return `gsd=${g}(${deg}°)`;
-	}
-	if (typeof states.minecraft_cardinal_direction === "string") {
-		return `card=${states.minecraft_cardinal_direction}`;
-	}
-	if (typeof states.attached_bit !== "undefined" || /hanging/i.test(blockName)) {
-		const bits = Object.entries(states)
-			.map(([k, v]) => `${k}=${v}`)
-			.join(",");
-		return bits || "hanging";
-	}
-	return "face=?";
 }
 
 /**
@@ -215,12 +171,8 @@ async function fillFile(filePath) {
 		const blockName = bareName(block?.name);
 		const states = block?.states ?? {};
 		const wood = woodKind(blockName);
-		const kind = /hanging/i.test(blockName) || id === "HangingSign"
-			? "hanging"
-			: /wall/i.test(blockName)
-				? "wall"
-				: "stand";
-		const facing = facingLabel(states, blockName);
+		const kind = kindOfSign(blockName, states);
+		const facing = facingLabel(kind, states);
 
 		// Alternate glow; back face uses next color in cycle so sides differ
 		const glowFront = signIndex % 3 === 0;
