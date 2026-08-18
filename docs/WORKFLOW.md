@@ -18,6 +18,7 @@ Local-only repo: no `origin` / HoloPrint `upstream` required. Branches: **dev** 
 
 - App shell (`src/app/`, `src/ui/`) should import from `viewer/api/*` (or thin app modules), not deep into `systems/` or HoloPrint entry points.
 - Growing surface today: `icons`, `inventory`, `catalog`, `previewSession`, `build`, `ingest`.
+- Map of APIs, classes, and data structures: [API.md](./API.md).
 - Future appearance work: see [APPEARANCE_ARCHITECTURE.md](./APPEARANCE_ARCHITECTURE.md) — implement under `viewer/api` + `viewer/appearance` when started.
 
 ## 4. Cache-bust browser modules
