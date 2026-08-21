@@ -5,6 +5,8 @@
  * not every solid cell. Pick falls back to palette for plain blocks.
  */
 
+import { describeSignPlacement } from "./signPlacement.js";
+
 /**
  * @param {unknown} v
  * @returns {number[]}
@@ -733,6 +735,9 @@ export function formatInspectText(hit) {
 
 		const sign = extractSignText(b.blockEntity);
 		if (sign) {
+			const d = describeSignPlacement(b, b.name);
+			lines.push(`Sign ${d.kind} ${d.wood} ${d.facing}`);
+			lines.push(`  euler ${d.eulerDeg.join(",")}  F sX=${d.front.scaleX} B sX=${d.back.scaleX}`);
 			const f = sign.front.lines.filter(Boolean);
 			const bk = sign.back.lines.filter(Boolean);
 			if (f.length) {
@@ -744,6 +749,8 @@ export function formatInspectText(hit) {
 			if (bk.length) {
 				lines.push("Back:");
 				bk.forEach(l => lines.push(`  ${l}`));
+			} else {
+				lines.push("Back: (blank)");
 			}
 			if (sign.waxed) lines.push("Waxed");
 		}

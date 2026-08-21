@@ -1509,6 +1509,19 @@ body.sdb-no-selection .sdb-float-left::after {
 	color: #3f3f3f;
 	margin-bottom: 4px;
 }
+.mc-sign-debug {
+	margin: 0 0 8px;
+	padding: 6px 8px;
+	background: #2a2030;
+	color: #ffe566;
+	border: 1px solid #373737;
+	border-radius: 2px;
+	font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+	font-size: 0.68rem;
+	line-height: 1.35;
+	white-space: pre-wrap;
+	word-break: break-word;
+}
 .mc-text-lines {
 	margin: 0;
 	padding: 8px 10px;

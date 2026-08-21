@@ -23,3 +23,10 @@ export {
 	renderContainerUi,
 	readComposterFillLevel
 } from "../containerUi.js";
+
+export {
+	kindOfSign,
+	describeSignPlacement,
+	signDebugFooter,
+	placeSignFace
+} from "../signPlacement.js";

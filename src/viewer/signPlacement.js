@@ -139,7 +139,60 @@ export function placeSignFace(block, name, isBack) {
 	const localZ = board.cz + side * (board.halfT + TEXT_LIFT);
 	const [gx, gy, gz] = applyBlockGeoEuler([board.cx, board.cy, localZ], eulerDeg);
 	const [tx, ty, tz] = geoPointToThree(block.x, block.y, block.z, gx, gy, gz);
-	return { kind, board, eulerDeg, side, tx, ty, tz };
+	return { kind, board, eulerDeg, side, localZ, tx, ty, tz };
+}
+
+/**
+ * Snapshot used by inspect UI + overlay footer (no THREE).
+ * @param {{ x: number, y: number, z: number, states?: Record<string, unknown> }} block
+ * @param {string} name
+ */
+export function describeSignPlacement(block, name) {
+	const kind = kindOfSign(name, block.states);
+	const wood = woodKind(name);
+	const facing = facingLabel(kind, block.states);
+	const front = placeSignFace(block, name, false);
+	const back = placeSignFace(block, name, true);
+	const st = block.states && typeof block.states === "object" ? { ...block.states } : {};
+	return {
+		name: String(name || "").replace(/^minecraft:/, ""),
+		wood,
+		kind,
+		facing,
+		states: st,
+		eulerDeg: front.eulerDeg,
+		pos: { x: block.x, y: block.y, z: block.z },
+		front: summarizeFace(front),
+		back: summarizeFace(back)
+	};
+}
+
+/**
+ * One-line overlay footer, e.g. `F wall fd=2(N) sX=-1`.
+ * @param {ReturnType<typeof describeSignPlacement>} desc
+ * @param {boolean} isBack
+ */
+export function signDebugFooter(desc, isBack) {
+	const face = isBack ? desc.back : desc.front;
+	const tag = isBack ? "B" : "F";
+	return `${tag} ${desc.kind} ${desc.facing} sX=${face.scaleX}`;
+}
+
+/**
+ * @param {{ side: number, localZ: number, tx: number, ty: number, tz: number }} placed
+ */
+function summarizeFace(placed) {
+	return {
+		side: placed.side,
+		scaleX: placed.side < 0 ? -1 : 1,
+		localZ: round3(placed.localZ),
+		three: [round3(placed.tx), round3(placed.ty), round3(placed.tz)]
+	};
+}
+
+/** @param {number} n */
+function round3(n) {
+	return Math.round(Number(n) * 1000) / 1000;
 }
 
 /**

@@ -8,6 +8,7 @@ import {
 	extractLecternBook,
 	readRedstoneSignal
 } from "./inspectStructure.js";
+import { describeSignPlacement } from "./signPlacement.js";
 
 /**
  * @typedef {{ name: string, count: number, slot: number|null, damage: number|null }} ItemStack
@@ -356,7 +357,7 @@ export function renderContainerUi(hit) {
 	} else if (layout.layout === "composter") {
 		body.appendChild(renderComposterLayout(blockStates));
 	} else if (layout.layout === "sign") {
-		body.appendChild(renderSignLayout(blockEntity));
+		body.appendChild(renderSignLayout(blockEntity, hit.kind === "block" ? hit.block : null));
 	} else if (layout.layout === "lectern") {
 		body.appendChild(renderLecternLayout(blockEntity));
 	} else if (layout.layout === "redstone") {
@@ -659,10 +660,11 @@ function renderComposterLayout(states) {
 }
 
 /**
- * Sign face text panel.
+ * Sign face text panel + placement dump for overlay QA.
  * @param {any} blockEntity
+ * @param {import("./inspectStructure.js").InspectBlock|null} [block]
  */
-function renderSignLayout(blockEntity) {
+function renderSignLayout(blockEntity, block = null) {
 	const wrap = document.createElement("div");
 	wrap.className = "mc-inv-text-panel mc-inv-sign";
 	const data = extractSignText(blockEntity);
@@ -671,26 +673,28 @@ function renderSignLayout(blockEntity) {
 		return wrap;
 	}
 
+	if (block) {
+		wrap.appendChild(renderSignPlacementDump(block));
+	}
+
 	const addFace = (label, face) => {
 		const sec = document.createElement("div");
 		sec.className = "mc-text-face";
 		const h = document.createElement("div");
 		h.className = "mc-text-face-label";
-		h.textContent = label + (face.glowing ? " · glowing" : "");
+		const bits = [label];
+		if (face.glowing) bits.push("glowing");
+		if (face.color != null) bits.push(`argb=${face.color >>> 0}`);
+		h.textContent = bits.join(" · ");
 		sec.appendChild(h);
 		const pre = document.createElement("pre");
 		pre.className = "mc-text-lines";
-		const lines = face.lines.length ? face.lines : ["(blank)"];
-		// Always show up to 4 lines for signs
-		while (lines.length < 4 && face.lines.length) lines.push("");
 		pre.textContent = (face.lines.length ? face.lines : ["(blank)"]).join("\n");
 		if (face.color != null) {
-			// Bedrock SignTextColor is ARGB signed int
 			const c = face.color >>> 0;
 			const r = (c >> 16) & 0xff;
 			const g = (c >> 8) & 0xff;
 			const b = c & 0xff;
-			// Skip pure black default as unreadable on dark UI
 			if (!(r === 0 && g === 0 && b === 0)) {
 				pre.style.color = `rgb(${r},${g},${b})`;
 			}
@@ -700,9 +704,7 @@ function renderSignLayout(blockEntity) {
 	};
 
 	addFace("Front", data.front);
-	if (data.back.lines.some(l => l.trim()) || data.back.raw) {
-		addFace("Back", data.back);
-	}
+	addFace("Back", data.back);
 	if (data.waxed) {
 		const w = document.createElement("div");
 		w.className = "mc-text-meta";
@@ -710,6 +712,29 @@ function renderSignLayout(blockEntity) {
 		wrap.appendChild(w);
 	}
 	return wrap;
+}
+
+/**
+ * @param {import("./inspectStructure.js").InspectBlock} block
+ */
+function renderSignPlacementDump(block) {
+	const desc = describeSignPlacement(block, block.name);
+	const box = document.createElement("pre");
+	box.className = "mc-sign-debug";
+	const st = Object.entries(desc.states)
+		.map(([k, v]) => `${k}=${v}`)
+		.join(" ");
+	const f = desc.front;
+	const b = desc.back;
+	box.textContent = [
+		`${desc.kind} ${desc.wood}  ${desc.facing}`,
+		`cell ${desc.pos.x},${desc.pos.y},${desc.pos.z}  euler ${desc.eulerDeg.join(",")}`,
+		st ? `states ${st}` : "states (none)",
+		`F side=${f.side} sX=${f.scaleX} localZ=${f.localZ} three=${f.three.join(",")}`,
+		`B side=${b.side} sX=${b.scaleX} localZ=${b.localZ} three=${b.three.join(",")}`,
+		"3D: green L / red R on the plane — if L is on your right, text is mirrored."
+	].join("\n");
+	return box;
 }
 
 /**

@@ -4,9 +4,14 @@
  *  - lectern open-book indicator
  */
 
-import { disposeObject3D } from "./disposeObject3D.js?v=judo18";
-import { geoPointToThree } from "../previewSpace.js?v=judo18";
-import { placeSignFace, signFaceOrientation } from "../signPlacement.js?v=judo18";
+import { disposeObject3D } from "./disposeObject3D.js?v=judo19";
+import { geoPointToThree } from "../previewSpace.js?v=judo19";
+import {
+	describeSignPlacement,
+	placeSignFace,
+	signDebugFooter,
+	signFaceOrientation
+} from "../signPlacement.js?v=judo19";
 import { isOnActiveLayer } from "../layerVisibility.js";
 import { extractSignText, extractLecternBook } from "../inspectStructure.js";
 
@@ -80,6 +85,7 @@ export default class SpecialBlockOverlay {
 			if (!isOnActiveLayer(b.y, layerFilter)) continue;
 			const sign = extractSignText(b.blockEntity);
 			if (!sign) continue;
+			const desc = describeSignPlacement(b, name);
 
 			for (const { face, isBack } of [
 				{ face: sign.front, isBack: false },
@@ -87,7 +93,7 @@ export default class SpecialBlockOverlay {
 			]) {
 				const lines = face?.lines;
 				if (!lines?.some(l => String(l).trim())) continue;
-				root.add(this.#makeSignTextMesh(THREE, b, name, lines, face, isBack));
+				root.add(this.#makeSignTextMesh(THREE, b, name, lines, face, isBack, desc));
 			}
 		}
 	}
@@ -99,13 +105,16 @@ export default class SpecialBlockOverlay {
 	 * @param {string[]} lines
 	 * @param {{ color?: number|null, glowing?: boolean }} face
 	 * @param {boolean} isBack
+	 * @param {ReturnType<typeof describeSignPlacement>} [desc]
 	 */
-	#makeSignTextMesh(THREE, b, name, lines, face, isBack) {
+	#makeSignTextMesh(THREE, b, name, lines, face, isBack, desc) {
 		const placed = placeSignFace(b, name, isBack);
 		const glowing = !!face.glowing;
 		const tex = this.#makeTextTexture(THREE, lines, face.color, {
 			glowing,
-			outline: true
+			outline: true,
+			debugFooter: desc ? signDebugFooter(desc, isBack) : "",
+			debugLr: true
 		});
 		const mat = new THREE.MeshBasicMaterial({
 			map: tex,
@@ -127,6 +136,9 @@ export default class SpecialBlockOverlay {
 		mesh.quaternion.copy(quaternion);
 		mesh.scale.x = scaleX;
 		mesh.userData.sdbSpecialOverlay = true;
+		mesh.userData.sdbSignDebug = desc
+			? { ...desc, isBack, footer: signDebugFooter(desc, isBack) }
+			: null;
 		mesh.frustumCulled = false;
 		return mesh;
 	}
@@ -200,7 +212,9 @@ export default class SpecialBlockOverlay {
 	 *   font?: string,
 	 *   fill?: string,
 	 *   outline?: boolean,
-	 *   glowing?: boolean
+	 *   glowing?: boolean,
+	 *   debugFooter?: string,
+	 *   debugLr?: boolean
 	 * }} [opts]
 	 */
 	#makeTextTexture(THREE, lines, argb = null, opts = {}) {
@@ -233,14 +247,15 @@ export default class SpecialBlockOverlay {
 		c2d.lineJoin = "round";
 		c2d.miterLimit = 2;
 
+		const footerH = opts.debugFooter || opts.debugLr ? 18 : 0;
 		const usable = lines.length ? lines : [""];
-		const lineH = h / Math.max(usable.length, 4);
+		const lineH = (h - footerH) / Math.max(usable.length, 4);
 
 		usable.slice(0, 8).forEach((line, i) => {
 			const text = String(line).slice(0, 42);
 			const x = w / 2;
 			const y = lineH * (i + 0.5);
-			const maxW = w - 16;
+			const maxW = w - 28;
 
 			if (glowing) {
 				c2d.save();
@@ -268,6 +283,34 @@ export default class SpecialBlockOverlay {
 			c2d.fillStyle = glowing ? lightenCss(fill, 0.25) : fill;
 			c2d.fillText(text, x, y, maxW);
 		});
+
+		if (opts.debugLr) {
+			c2d.save();
+			c2d.font = "bold 20px monospace";
+			c2d.lineWidth = 3;
+			c2d.strokeStyle = "rgba(0,0,0,0.85)";
+			c2d.textBaseline = "middle";
+			c2d.textAlign = "left";
+			c2d.strokeText("L", 6, (h - footerH) / 2);
+			c2d.fillStyle = "#22dd55";
+			c2d.fillText("L", 6, (h - footerH) / 2);
+			c2d.textAlign = "right";
+			c2d.strokeText("R", w - 6, (h - footerH) / 2);
+			c2d.fillStyle = "#ff4466";
+			c2d.fillText("R", w - 6, (h - footerH) / 2);
+			c2d.restore();
+		}
+		if (opts.debugFooter) {
+			c2d.save();
+			c2d.font = "bold 11px monospace";
+			c2d.textAlign = "center";
+			c2d.textBaseline = "middle";
+			c2d.fillStyle = "rgba(0,0,0,0.55)";
+			c2d.fillRect(0, h - footerH, w, footerH);
+			c2d.fillStyle = "#ffe566";
+			c2d.fillText(String(opts.debugFooter).slice(0, 48), w / 2, h - footerH / 2, w - 8);
+			c2d.restore();
+		}
 
 		const tex = new THREE.CanvasTexture(canvas);
 		tex.colorSpace = THREE.SRGBColorSpace;

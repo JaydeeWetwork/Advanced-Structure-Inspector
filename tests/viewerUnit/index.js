@@ -658,6 +658,19 @@ describe("signPlacement", async () => {
 		});
 		assert.deepEqual(wallLike, [0, 180, 0]);
 	});
+
+	it("describeSignPlacement reports F/B scale and footer", async () => {
+		const { describeSignPlacement, signDebugFooter } = await import("../../src/viewer/signPlacement.js");
+		const d = describeSignPlacement(
+			{ x: 2, y: 0, z: 0, states: { facing_direction: 4 } },
+			"oak_wall_sign"
+		);
+		assert.equal(d.kind, "wall");
+		assert.equal(d.facing.includes("fd=4"), true);
+		assert.equal(d.front.scaleX, -1);
+		assert.equal(d.back.scaleX, 1);
+		assert.match(signDebugFooter(d, false), /^F wall fd=4/);
+	});
 });
 
 describe("itemFrameItems", async () => {
