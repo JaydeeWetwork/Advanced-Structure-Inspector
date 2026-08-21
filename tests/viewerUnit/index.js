@@ -701,6 +701,16 @@ describe("signPlacement", async () => {
 		assert.notEqual(p.tz, flipped[2]);
 	});
 
+	it("wall front is geo -Z (side -1) not isBack", async () => {
+		const { SIGN_BOARD, signFaceLocalOffset } = await import("../../src/viewer/signPlacement.js");
+		const f = signFaceLocalOffset(SIGN_BOARD.wall, false);
+		const b = signFaceLocalOffset(SIGN_BOARD.wall, true);
+		assert.equal(f.side, -1);
+		assert.equal(b.side, 1);
+		assert.ok(f.z < SIGN_BOARD.wall.cz - 8, "wall F is on the room side of the plate");
+		assert.ok(b.z > SIGN_BOARD.wall.cz - 8, "wall B is on the wall side of the plate");
+	});
+
 	it("standing face offsets sit outside plaque thickness", async () => {
 		const { SIGN_BOARD, signFaceLocalOffset, TEXT_LIFT } = await import("../../src/viewer/signPlacement.js");
 		const board = SIGN_BOARD.standing;

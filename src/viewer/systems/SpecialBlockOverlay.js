@@ -4,13 +4,13 @@
  *  - lectern open-book indicator
  */
 
-import { disposeObject3D } from "./disposeObject3D.js?v=judo23";
-import { blockVertexToThree } from "../previewSpace.js?v=judo23";
+import { disposeObject3D } from "./disposeObject3D.js?v=judo24";
+import { blockVertexToThree } from "../previewSpace.js?v=judo24";
 import {
 	signFaceLocalOffset,
 	signFaceOrientation,
 	signGroupPose
-} from "../signPlacement.js?v=judo23";
+} from "../signPlacement.js?v=judo24";
 import { isOnActiveLayer } from "../layerVisibility.js";
 import { extractSignText, extractLecternBook } from "../inspectStructure.js";
 
@@ -133,7 +133,9 @@ export default class SpecialBlockOverlay {
 			mat
 		);
 		mesh.position.set(off.x, off.y, off.z);
-		if (isBack) mesh.rotation.y = Math.PI;
+		// Face -Z in board space (wall fronts, standing backs). isBack is the
+		// NBT face, not the geo normal — wall F is side=-1 but isBack=false.
+		if (off.side < 0) mesh.rotation.y = Math.PI;
 		mesh.renderOrder = 8;
 		mesh.userData.sdbSpecialOverlay = true;
 		mesh.frustumCulled = false;
