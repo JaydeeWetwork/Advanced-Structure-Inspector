@@ -700,6 +700,21 @@ describe("signPlacement", async () => {
 		assert.deepEqual([p.tx, p.ty, p.tz], inst);
 		assert.notEqual(p.tz, flipped[2]);
 	});
+
+	it("F minus B is along baked board +Z for gsd=15", async () => {
+		const { placeSignFace, boardCenterThree, signBoardAxes, eulerOfSign } =
+			await import("../../src/viewer/signPlacement.js");
+		const block = { x: 0, y: 0, z: 0, states: { ground_sign_direction: 15 } };
+		const f = placeSignFace(block, "standing_sign", false);
+		const mid = boardCenterThree(block, "standing_sign");
+		const axes = signBoardAxes(eulerOfSign("standing", block.states));
+		const dx = f.tx - mid.x, dy = f.ty - mid.y, dz = f.tz - mid.z;
+		const len = Math.hypot(dx, dy, dz);
+		const nx = dx / len, ny = dy / len, nz = dz / len;
+		assert.ok(Math.abs(nx - axes.z[0]) < 1e-6, `nx ${nx} vs ${axes.z[0]}`);
+		assert.ok(Math.abs(ny - axes.z[1]) < 1e-6, `ny ${ny}`);
+		assert.ok(Math.abs(nz - axes.z[2]) < 1e-6, `nz ${nz} vs ${axes.z[2]}`);
+	});
 });
 
 describe("itemFrameItems", async () => {

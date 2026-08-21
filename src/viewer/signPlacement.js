@@ -5,7 +5,6 @@
 
 import {
 	applyBlockGeoEuler,
-	blockGeoEulerToThree,
 	blockVertexToThree
 } from "./previewSpace.js";
 
@@ -210,21 +209,43 @@ function round3(n) {
 }
 
 /**
- * Same euler as the baked sign geo. Back face: 180° Y then scale.x so UVs
- * are not mirrored. Positions use blockVertexToThree (no extra Z-flip).
+ * Board local +X/+Y/+Z after BlockGeoMaker euler (same map as plaque vertices).
+ * @param {[number, number, number]} eulerDeg
+ * @returns {{ x: [number, number, number], y: [number, number, number], z: [number, number, number] }}
+ */
+export function signBoardAxes(eulerDeg) {
+	const o = applyBlockGeoEuler([8, 8, 8], eulerDeg);
+	const px = applyBlockGeoEuler([9, 8, 8], eulerDeg);
+	const py = applyBlockGeoEuler([8, 9, 8], eulerDeg);
+	const pz = applyBlockGeoEuler([8, 8, 9], eulerDeg);
+	return {
+		x: [px[0] - o[0], px[1] - o[1], px[2] - o[2]],
+		y: [py[0] - o[0], py[1] - o[1], py[2] - o[2]],
+		z: [pz[0] - o[0], pz[1] - o[1], pz[2] - o[2]]
+	};
+}
+
+/**
+ * Plane axes = baked board axes. Back = 180° around board Y (flip X and Z)
+ * so F and B face outward on opposite plaque faces with LTR text.
  *
  * @param {typeof import("three")} THREE
  * @param {[number, number, number]} eulerDeg
  * @param {number} side
  */
 export function signFaceOrientation(THREE, eulerDeg, side) {
-	const q = new THREE.Quaternion().setFromEuler(
-		blockGeoEulerToThree(eulerDeg[0], eulerDeg[1], eulerDeg[2], THREE)
-	);
+	const axes = signBoardAxes(eulerDeg);
+	const x = new THREE.Vector3(axes.x[0], axes.x[1], axes.x[2]);
+	const y = new THREE.Vector3(axes.y[0], axes.y[1], axes.y[2]);
+	const z = new THREE.Vector3(axes.z[0], axes.z[1], axes.z[2]);
 	if (side < 0) {
-		q.multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI));
+		x.multiplyScalar(-1);
+		z.multiplyScalar(-1);
 	}
-	return { quaternion: q, scaleX: side < 0 ? -1 : 1 };
+	const q = new THREE.Quaternion().setFromRotationMatrix(
+		new THREE.Matrix4().makeBasis(x, y, z)
+	);
+	return { quaternion: q, scaleX: 1 };
 }
 
 /**

@@ -27,8 +27,8 @@ import {
 	exportGlb as exportGlbFile,
 	wirePreviewOptionsGui,
 	SpecialBlockOverlay
-} from "./viewer/systems/index.js?v=judo21";
-import { disposeObject3D } from "./viewer/systems/disposeObject3D.js?v=judo21";
+} from "./viewer/systems/index.js?v=judo22";
+import { disposeObject3D } from "./viewer/systems/disposeObject3D.js?v=judo22";
 
 import Stats from "stats.js";
 

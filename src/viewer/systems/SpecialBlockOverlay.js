@@ -4,12 +4,12 @@
  *  - lectern open-book indicator
  */
 
-import { disposeObject3D } from "./disposeObject3D.js?v=judo21";
-import { blockVertexToThree } from "../previewSpace.js?v=judo21";
+import { disposeObject3D } from "./disposeObject3D.js?v=judo22";
+import { blockVertexToThree } from "../previewSpace.js?v=judo22";
 import {
 	placeSignFace,
 	signFaceOrientation
-} from "../signPlacement.js?v=judo21";
+} from "../signPlacement.js?v=judo22";
 import { isOnActiveLayer } from "../layerVisibility.js";
 import { extractSignText, extractLecternBook } from "../inspectStructure.js";
 
