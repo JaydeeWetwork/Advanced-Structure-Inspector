@@ -737,7 +737,7 @@ export function formatInspectText(hit) {
 		if (sign) {
 			const d = describeSignPlacement(b, b.name);
 			lines.push(`Sign ${d.kind} ${d.wood} ${d.facing}`);
-			lines.push(`  euler ${d.eulerDeg.join(",")}  F sX=${d.front.scaleX} B sX=${d.back.scaleX}`);
+			lines.push(`  euler ${d.eulerDeg.join(",")}  F side=${d.front.side} B side=${d.back.side}`);
 			const f = sign.front.lines.filter(Boolean);
 			const bk = sign.back.lines.filter(Boolean);
 			if (f.length) {

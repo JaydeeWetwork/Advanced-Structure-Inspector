@@ -5,7 +5,6 @@
 
 import {
 	applyBlockGeoEuler,
-	blockGeoEulerToThree,
 	geoPointToThree
 } from "./previewSpace.js";
 
@@ -143,6 +142,20 @@ export function placeSignFace(block, name, isBack) {
 }
 
 /**
+ * Wood plaque center in three.js space (between F and B text planes).
+ * @param {{ x: number, y: number, z: number, states?: Record<string, unknown> }} block
+ * @param {string} name
+ */
+export function boardCenterThree(block, name) {
+	const kind = kindOfSign(name, block.states);
+	const board = SIGN_BOARD[kind];
+	const eulerDeg = eulerOfSign(kind, block.states);
+	const [gx, gy, gz] = applyBlockGeoEuler([board.cx, board.cy, board.cz], eulerDeg);
+	const [x, y, z] = geoPointToThree(block.x, block.y, block.z, gx, gy, gz);
+	return { x, y, z, kind, board, eulerDeg };
+}
+
+/**
  * Snapshot used by inspect UI + overlay footer (no THREE).
  * @param {{ x: number, y: number, z: number, states?: Record<string, unknown> }} block
  * @param {string} name
@@ -153,6 +166,7 @@ export function describeSignPlacement(block, name) {
 	const facing = facingLabel(kind, block.states);
 	const front = placeSignFace(block, name, false);
 	const back = placeSignFace(block, name, true);
+	const board = boardCenterThree(block, name);
 	const st = block.states && typeof block.states === "object" ? { ...block.states } : {};
 	return {
 		name: String(name || "").replace(/^minecraft:/, ""),
@@ -162,20 +176,20 @@ export function describeSignPlacement(block, name) {
 		states: st,
 		eulerDeg: front.eulerDeg,
 		pos: { x: block.x, y: block.y, z: block.z },
+		boardThree: [round3(board.x), round3(board.y), round3(board.z)],
 		front: summarizeFace(front),
 		back: summarizeFace(back)
 	};
 }
 
 /**
- * One-line overlay footer, e.g. `F wall fd=2(N) sX=-1`.
+ * One-line overlay footer, e.g. `F standing gsd=15(338°)`.
  * @param {ReturnType<typeof describeSignPlacement>} desc
  * @param {boolean} isBack
  */
 export function signDebugFooter(desc, isBack) {
-	const face = isBack ? desc.back : desc.front;
 	const tag = isBack ? "B" : "F";
-	return `${tag} ${desc.kind} ${desc.facing} sX=${face.scaleX}`;
+	return `${tag} ${desc.kind} ${desc.facing}`;
 }
 
 /**
@@ -184,7 +198,6 @@ export function signDebugFooter(desc, isBack) {
 function summarizeFace(placed) {
 	return {
 		side: placed.side,
-		scaleX: placed.side < 0 ? -1 : 1,
 		localZ: round3(placed.localZ),
 		three: [round3(placed.tx), round3(placed.ty), round3(placed.tz)]
 	};
@@ -196,19 +209,32 @@ function round3(n) {
 }
 
 /**
- * Plane +Z faces the reader. Local Y-π would also mirror U; scale.x undoes that.
+ * Orient a text plane in three.js space so +Z points from the board toward the
+ * glyphs, and +X is the viewer's right (world-up × outward).
+ *
+ * Euler + local Y-π + scale.x is not stable at 22.5° yaws (standing gsd=15).
+ *
  * @param {typeof import("three")} THREE
- * @param {[number, number, number]} eulerDeg
- * @param {number} side local-Z sign of this face
+ * @param {{ tx: number, ty: number, tz: number }} textPos
+ * @param {{ x: number, y: number, z: number }} boardPos
  */
-export function signFaceOrientation(THREE, eulerDeg, side) {
-	const q = new THREE.Quaternion().setFromEuler(
-		blockGeoEulerToThree(eulerDeg[0], eulerDeg[1], eulerDeg[2], THREE)
+export function signFaceOrientation(THREE, textPos, boardPos) {
+	const z = new THREE.Vector3(
+		textPos.tx - boardPos.x,
+		textPos.ty - boardPos.y,
+		textPos.tz - boardPos.z
 	);
-	if (side < 0) {
-		q.multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI));
-	}
-	return { quaternion: q, scaleX: side < 0 ? -1 : 1 };
+	if (z.lengthSq() < 1e-10) z.set(0, 0, 1);
+	else z.normalize();
+	const up = new THREE.Vector3(0, 1, 0);
+	const x = new THREE.Vector3().crossVectors(up, z);
+	if (x.lengthSq() < 1e-10) x.set(1, 0, 0);
+	else x.normalize();
+	const y = new THREE.Vector3().crossVectors(z, x);
+	const q = new THREE.Quaternion().setFromRotationMatrix(
+		new THREE.Matrix4().makeBasis(x, y, z)
+	);
+	return { quaternion: q, scaleX: 1 };
 }
 
 /**

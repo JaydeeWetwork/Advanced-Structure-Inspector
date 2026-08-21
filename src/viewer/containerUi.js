@@ -318,6 +318,10 @@ export function renderContainerUi(hit) {
 	const title = document.createElement("span");
 	title.className = "mc-inv-title";
 	title.textContent = layout.title;
+	if (kind === "sign" && hit.kind === "block" && hit.block) {
+		const d = describeSignPlacement(hit.block, hit.block.name);
+		title.textContent = `Sign · ${d.kind}`;
+	}
 	header.appendChild(title);
 	const badgeText = lockedHint || compostHint;
 	if (badgeText) {
@@ -730,9 +734,10 @@ function renderSignPlacementDump(block) {
 		`${desc.kind} ${desc.wood}  ${desc.facing}`,
 		`cell ${desc.pos.x},${desc.pos.y},${desc.pos.z}  euler ${desc.eulerDeg.join(",")}`,
 		st ? `states ${st}` : "states (none)",
-		`F side=${f.side} sX=${f.scaleX} localZ=${f.localZ} three=${f.three.join(",")}`,
-		`B side=${b.side} sX=${b.scaleX} localZ=${b.localZ} three=${b.three.join(",")}`,
-		"3D: green L / red R on the plane — if L is on your right, text is mirrored."
+		`board three ${desc.boardThree.join(",")}`,
+		`F side=${f.side} localZ=${f.localZ} three=${f.three.join(",")}`,
+		`B side=${b.side} localZ=${b.localZ} three=${b.three.join(",")}`,
+		"3D: green L / red R — L should be on your left when facing that side."
 	].join("\n");
 	return box;
 }

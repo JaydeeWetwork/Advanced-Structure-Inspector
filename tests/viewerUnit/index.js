@@ -659,7 +659,7 @@ describe("signPlacement", async () => {
 		assert.deepEqual(wallLike, [0, 180, 0]);
 	});
 
-	it("describeSignPlacement reports F/B scale and footer", async () => {
+	it("describeSignPlacement reports F/B and footer", async () => {
 		const { describeSignPlacement, signDebugFooter } = await import("../../src/viewer/signPlacement.js");
 		const d = describeSignPlacement(
 			{ x: 2, y: 0, z: 0, states: { facing_direction: 4 } },
@@ -667,9 +667,24 @@ describe("signPlacement", async () => {
 		);
 		assert.equal(d.kind, "wall");
 		assert.equal(d.facing.includes("fd=4"), true);
-		assert.equal(d.front.scaleX, -1);
-		assert.equal(d.back.scaleX, 1);
+		assert.equal(d.front.side, -1);
+		assert.equal(d.back.side, 1);
 		assert.match(signDebugFooter(d, false), /^F wall fd=4/);
+	});
+
+	it("standing gsd=15 board sits between F and B", async () => {
+		const { describeSignPlacement } = await import("../../src/viewer/signPlacement.js");
+		const d = describeSignPlacement(
+			{ x: 5, y: 0, z: 0, states: { ground_sign_direction: 15 } },
+			"standing_sign"
+		);
+		assert.equal(d.kind, "standing");
+		assert.equal(d.eulerDeg[1], 337.5);
+		const [fx, , fz] = d.front.three;
+		const [bx, , bz] = d.back.three;
+		const [ox, , oz] = d.boardThree;
+		assert.ok(ox > Math.min(fx, bx) && ox < Math.max(fx, bx), `board x ${ox} not between ${fx} ${bx}`);
+		assert.ok(oz > Math.min(fz, bz) && oz < Math.max(fz, bz), `board z ${oz} not between ${fz} ${bz}`);
 	});
 });
 
