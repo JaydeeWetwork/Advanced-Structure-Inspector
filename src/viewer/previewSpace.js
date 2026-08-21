@@ -34,6 +34,23 @@ export function geoPointToThree(bx, by, bz, gx, gy, gz) {
 }
 
 /**
+ * Block-local 0–16 vertex → three.js, matching LayerMeshSystem instances
+ * (`[-16x-16, 16y, -16z-16]` + local vertex). Use this for overlays that must
+ * sit on baked block geo. Do not use geoPointToThree for that — it flips Z.
+ *
+ * @param {number} bx
+ * @param {number} by
+ * @param {number} bz
+ * @param {number} gx
+ * @param {number} gy
+ * @param {number} gz
+ * @returns {[number, number, number]}
+ */
+export function blockVertexToThree(bx, by, bz, gx, gy, gz) {
+	return [-16 * bx - 16 + gx, 16 * by + gy, -16 * bz - 16 + gz];
+}
+
+/**
  * Rotate a point around block center with BlockGeoMaker.#applyEulerRotation
  * (X-Y-Z order, each axis using the *negated* blockStateDefs angle).
  *

@@ -686,6 +686,20 @@ describe("signPlacement", async () => {
 		assert.ok(ox > Math.min(fx, bx) && ox < Math.max(fx, bx), `board x ${ox} not between ${fx} ${bx}`);
 		assert.ok(oz > Math.min(fz, bz) && oz < Math.max(fz, bz), `board z ${oz} not between ${fz} ${bz}`);
 	});
+
+	it("sign vertices use block instance space not Z-flipped geoPointToThree", async () => {
+		const { blockVertexToThree, geoPointToThree } = await import("../../src/viewer/previewSpace.js");
+		const { placeSignFace } = await import("../../src/viewer/signPlacement.js");
+		const p = placeSignFace(
+			{ x: 0, y: 0, z: 0, states: { ground_sign_direction: 0 } },
+			"standing_sign",
+			false
+		);
+		const inst = blockVertexToThree(0, 0, 0, 8, 12.125, p.localZ);
+		const flipped = geoPointToThree(0, 0, 0, 8, 12.125, p.localZ);
+		assert.deepEqual([p.tx, p.ty, p.tz], inst);
+		assert.notEqual(p.tz, flipped[2]);
+	});
 });
 
 describe("itemFrameItems", async () => {

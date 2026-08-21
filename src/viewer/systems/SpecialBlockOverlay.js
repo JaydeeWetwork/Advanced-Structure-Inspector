@@ -4,15 +4,12 @@
  *  - lectern open-book indicator
  */
 
-import { disposeObject3D } from "./disposeObject3D.js?v=judo20";
-import { geoPointToThree } from "../previewSpace.js?v=judo20";
+import { disposeObject3D } from "./disposeObject3D.js?v=judo21";
+import { blockVertexToThree } from "../previewSpace.js?v=judo21";
 import {
-	boardCenterThree,
-	describeSignPlacement,
 	placeSignFace,
-	signDebugFooter,
 	signFaceOrientation
-} from "../signPlacement.js?v=judo20";
+} from "../signPlacement.js?v=judo21";
 import { isOnActiveLayer } from "../layerVisibility.js";
 import { extractSignText, extractLecternBook } from "../inspectStructure.js";
 
@@ -86,7 +83,6 @@ export default class SpecialBlockOverlay {
 			if (!isOnActiveLayer(b.y, layerFilter)) continue;
 			const sign = extractSignText(b.blockEntity);
 			if (!sign) continue;
-			const desc = describeSignPlacement(b, name);
 
 			for (const { face, isBack } of [
 				{ face: sign.front, isBack: false },
@@ -94,7 +90,7 @@ export default class SpecialBlockOverlay {
 			]) {
 				const lines = face?.lines;
 				if (!lines?.some(l => String(l).trim())) continue;
-				root.add(this.#makeSignTextMesh(THREE, b, name, lines, face, isBack, desc));
+				root.add(this.#makeSignTextMesh(THREE, b, name, lines, face, isBack));
 			}
 		}
 	}
@@ -106,16 +102,13 @@ export default class SpecialBlockOverlay {
 	 * @param {string[]} lines
 	 * @param {{ color?: number|null, glowing?: boolean }} face
 	 * @param {boolean} isBack
-	 * @param {ReturnType<typeof describeSignPlacement>} [desc]
 	 */
-	#makeSignTextMesh(THREE, b, name, lines, face, isBack, desc) {
+	#makeSignTextMesh(THREE, b, name, lines, face, isBack) {
 		const placed = placeSignFace(b, name, isBack);
 		const glowing = !!face.glowing;
 		const tex = this.#makeTextTexture(THREE, lines, face.color, {
 			glowing,
-			outline: true,
-			debugFooter: desc ? signDebugFooter(desc, isBack) : "",
-			debugLr: true
+			outline: true
 		});
 		const mat = new THREE.MeshBasicMaterial({
 			map: tex,
@@ -133,14 +126,10 @@ export default class SpecialBlockOverlay {
 			mat
 		);
 		mesh.position.set(placed.tx, placed.ty, placed.tz);
-		const board = boardCenterThree(b, name);
-		const { quaternion, scaleX } = signFaceOrientation(THREE, placed, board);
+		const { quaternion, scaleX } = signFaceOrientation(THREE, placed.eulerDeg, placed.side);
 		mesh.quaternion.copy(quaternion);
 		mesh.scale.x = scaleX;
 		mesh.userData.sdbSpecialOverlay = true;
-		mesh.userData.sdbSignDebug = desc
-			? { ...desc, isBack, footer: signDebugFooter(desc, isBack) }
-			: null;
 		mesh.frustumCulled = false;
 		return mesh;
 	}
@@ -163,7 +152,7 @@ export default class SpecialBlockOverlay {
 			if (!lec?.hasBook) continue;
 
 			const g = new THREE.Group();
-			const [tx, ty, tz] = geoPointToThree(b.x, b.y, b.z, 8, 14, 8);
+			const [tx, ty, tz] = blockVertexToThree(b.x, b.y, b.z, 8, 14, 8);
 			g.position.set(tx, ty, tz);
 
 			const left = new THREE.Mesh(new THREE.BoxGeometry(5, 0.4, 7), pageMat);

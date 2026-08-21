@@ -5,7 +5,8 @@
 
 import {
 	applyBlockGeoEuler,
-	geoPointToThree
+	blockGeoEulerToThree,
+	blockVertexToThree
 } from "./previewSpace.js";
 
 /** @typedef {"wall"|"standing"|"hanging"} SignKind */
@@ -137,7 +138,7 @@ export function placeSignFace(block, name, isBack) {
 	const side = faceSide(kind, isBack);
 	const localZ = board.cz + side * (board.halfT + TEXT_LIFT);
 	const [gx, gy, gz] = applyBlockGeoEuler([board.cx, board.cy, localZ], eulerDeg);
-	const [tx, ty, tz] = geoPointToThree(block.x, block.y, block.z, gx, gy, gz);
+	const [tx, ty, tz] = blockVertexToThree(block.x, block.y, block.z, gx, gy, gz);
 	return { kind, board, eulerDeg, side, localZ, tx, ty, tz };
 }
 
@@ -151,7 +152,7 @@ export function boardCenterThree(block, name) {
 	const board = SIGN_BOARD[kind];
 	const eulerDeg = eulerOfSign(kind, block.states);
 	const [gx, gy, gz] = applyBlockGeoEuler([board.cx, board.cy, board.cz], eulerDeg);
-	const [x, y, z] = geoPointToThree(block.x, block.y, block.z, gx, gy, gz);
+	const [x, y, z] = blockVertexToThree(block.x, block.y, block.z, gx, gy, gz);
 	return { x, y, z, kind, board, eulerDeg };
 }
 
@@ -209,32 +210,21 @@ function round3(n) {
 }
 
 /**
- * Orient a text plane in three.js space so +Z points from the board toward the
- * glyphs, and +X is the viewer's right (world-up × outward).
- *
- * Euler + local Y-π + scale.x is not stable at 22.5° yaws (standing gsd=15).
+ * Same euler as the baked sign geo. Back face: 180° Y then scale.x so UVs
+ * are not mirrored. Positions use blockVertexToThree (no extra Z-flip).
  *
  * @param {typeof import("three")} THREE
- * @param {{ tx: number, ty: number, tz: number }} textPos
- * @param {{ x: number, y: number, z: number }} boardPos
+ * @param {[number, number, number]} eulerDeg
+ * @param {number} side
  */
-export function signFaceOrientation(THREE, textPos, boardPos) {
-	const z = new THREE.Vector3(
-		textPos.tx - boardPos.x,
-		textPos.ty - boardPos.y,
-		textPos.tz - boardPos.z
+export function signFaceOrientation(THREE, eulerDeg, side) {
+	const q = new THREE.Quaternion().setFromEuler(
+		blockGeoEulerToThree(eulerDeg[0], eulerDeg[1], eulerDeg[2], THREE)
 	);
-	if (z.lengthSq() < 1e-10) z.set(0, 0, 1);
-	else z.normalize();
-	const up = new THREE.Vector3(0, 1, 0);
-	const x = new THREE.Vector3().crossVectors(up, z);
-	if (x.lengthSq() < 1e-10) x.set(1, 0, 0);
-	else x.normalize();
-	const y = new THREE.Vector3().crossVectors(z, x);
-	const q = new THREE.Quaternion().setFromRotationMatrix(
-		new THREE.Matrix4().makeBasis(x, y, z)
-	);
-	return { quaternion: q, scaleX: 1 };
+	if (side < 0) {
+		q.multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI));
+	}
+	return { quaternion: q, scaleX: side < 0 ? -1 : 1 };
 }
 
 /**
