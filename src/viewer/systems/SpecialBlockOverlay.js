@@ -4,12 +4,13 @@
  *  - lectern open-book indicator
  */
 
-import { disposeObject3D } from "./disposeObject3D.js?v=judo22";
-import { blockVertexToThree } from "../previewSpace.js?v=judo22";
+import { disposeObject3D } from "./disposeObject3D.js?v=judo23";
+import { blockVertexToThree } from "../previewSpace.js?v=judo23";
 import {
-	placeSignFace,
-	signFaceOrientation
-} from "../signPlacement.js?v=judo22";
+	signFaceLocalOffset,
+	signFaceOrientation,
+	signGroupPose
+} from "../signPlacement.js?v=judo23";
 import { isOnActiveLayer } from "../layerVisibility.js";
 import { extractSignText, extractLecternBook } from "../inspectStructure.js";
 
@@ -83,6 +84,12 @@ export default class SpecialBlockOverlay {
 			if (!isOnActiveLayer(b.y, layerFilter)) continue;
 			const sign = extractSignText(b.blockEntity);
 			if (!sign) continue;
+			const pose = signGroupPose(b, name);
+			const group = new THREE.Group();
+			group.name = `sdb-sign:${name}@${b.x},${b.y},${b.z}`;
+			group.position.set(pose.origin[0], pose.origin[1], pose.origin[2]);
+			group.quaternion.copy(signFaceOrientation(THREE, pose.eulerDeg, 1).quaternion);
+			group.userData.sdbSpecialOverlay = true;
 
 			for (const { face, isBack } of [
 				{ face: sign.front, isBack: false },
@@ -90,21 +97,21 @@ export default class SpecialBlockOverlay {
 			]) {
 				const lines = face?.lines;
 				if (!lines?.some(l => String(l).trim())) continue;
-				root.add(this.#makeSignTextMesh(THREE, b, name, lines, face, isBack));
+				group.add(this.#makeSignFaceMesh(THREE, pose.board, lines, face, isBack));
 			}
+			if (group.children.length) root.add(group);
 		}
 	}
 
 	/**
 	 * @param {typeof import("three")} THREE
-	 * @param {{ x: number, y: number, z: number, states?: Record<string, unknown> }} b
-	 * @param {string} name
+	 * @param {typeof import("../signPlacement.js").SIGN_BOARD[import("../signPlacement.js").SignKind]} board
 	 * @param {string[]} lines
 	 * @param {{ color?: number|null, glowing?: boolean }} face
 	 * @param {boolean} isBack
 	 */
-	#makeSignTextMesh(THREE, b, name, lines, face, isBack) {
-		const placed = placeSignFace(b, name, isBack);
+	#makeSignFaceMesh(THREE, board, lines, face, isBack) {
+		const off = signFaceLocalOffset(board, isBack);
 		const glowing = !!face.glowing;
 		const tex = this.#makeTextTexture(THREE, lines, face.color, {
 			glowing,
@@ -116,19 +123,18 @@ export default class SpecialBlockOverlay {
 			side: THREE.FrontSide,
 			depthWrite: false,
 			polygonOffset: true,
-			polygonOffsetFactor: -1,
-			polygonOffsetUnits: -1
+			polygonOffsetFactor: -4,
+			polygonOffsetUnits: -4
 		});
 		if (glowing) mat.color?.setHex?.(0xffffee);
 
 		const mesh = new THREE.Mesh(
-			new THREE.PlaneGeometry(placed.board.w, placed.board.h),
+			new THREE.PlaneGeometry(board.w, board.h),
 			mat
 		);
-		mesh.position.set(placed.tx, placed.ty, placed.tz);
-		const { quaternion, scaleX } = signFaceOrientation(THREE, placed.eulerDeg, placed.side);
-		mesh.quaternion.copy(quaternion);
-		mesh.scale.x = scaleX;
+		mesh.position.set(off.x, off.y, off.z);
+		if (isBack) mesh.rotation.y = Math.PI;
+		mesh.renderOrder = 8;
 		mesh.userData.sdbSpecialOverlay = true;
 		mesh.frustumCulled = false;
 		return mesh;

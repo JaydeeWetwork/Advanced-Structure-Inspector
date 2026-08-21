@@ -701,6 +701,18 @@ describe("signPlacement", async () => {
 		assert.notEqual(p.tz, flipped[2]);
 	});
 
+	it("standing face offsets sit outside plaque thickness", async () => {
+		const { SIGN_BOARD, signFaceLocalOffset, TEXT_LIFT } = await import("../../src/viewer/signPlacement.js");
+		const board = SIGN_BOARD.standing;
+		const f = signFaceLocalOffset(board, false);
+		const bk = signFaceLocalOffset(board, true);
+		assert.ok(Math.abs(f.z) > board.halfT, `front |z| ${f.z} should exceed halfT ${board.halfT}`);
+		assert.ok(Math.abs(bk.z) > board.halfT, `back |z| ${bk.z}`);
+		assert.equal(Math.sign(f.z), 1);
+		assert.equal(Math.sign(bk.z), -1);
+		assert.ok(TEXT_LIFT > 0.3);
+	});
+
 	it("F minus B is along baked board +Z for gsd=15", async () => {
 		const { placeSignFace, boardCenterThree, signBoardAxes, eulerOfSign } =
 			await import("../../src/viewer/signPlacement.js");

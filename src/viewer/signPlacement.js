@@ -25,7 +25,7 @@ export const SIGN_BOARD = {
 };
 
 /** Push text off the wood face (geo units). */
-export const TEXT_LIFT = 0.35;
+export const TEXT_LIFT = 0.55;
 
 /** facing_direction 2–5 (wall_sign / hopper,hanging_sign). */
 const CARDINAL_EULER = {
@@ -123,6 +123,42 @@ export function facingLabel(kind, states) {
 export function faceSide(kind, isBack) {
 	const front = SIGN_BOARD[kind].front;
 	return isBack ? -front : front;
+}
+
+/**
+ * Block-center origin in instance space + board pose (group parent).
+ * @param {{ x: number, y: number, z: number, states?: Record<string, unknown> }} block
+ * @param {string} name
+ */
+export function signGroupPose(block, name) {
+	const kind = kindOfSign(name, block.states);
+	const board = SIGN_BOARD[kind];
+	const eulerDeg = eulerOfSign(kind, block.states);
+	return {
+		kind,
+		board,
+		eulerDeg,
+		origin: [
+			-16 * block.x - 8,
+			16 * block.y + 8,
+			-16 * block.z - 8
+		]
+	};
+}
+
+/**
+ * Face center in board-local space (block center at 0). Unrotated; group carries euler.
+ * @param {{ cx: number, cy: number, cz: number, front: number, halfT: number }} board
+ * @param {boolean} isBack
+ */
+export function signFaceLocalOffset(board, isBack) {
+	const side = isBack ? -board.front : board.front;
+	return {
+		x: board.cx - 8,
+		y: board.cy - 8,
+		z: board.cz - 8 + side * (board.halfT + TEXT_LIFT),
+		side
+	};
 }
 
 /**

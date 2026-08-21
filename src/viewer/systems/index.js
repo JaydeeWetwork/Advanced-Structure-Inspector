@@ -34,4 +34,4 @@ export {
 } from "./orbitBootstrap.js?v=judo17";
 export { downloadScreenshot, exportGlb } from "./PreviewExport.js?v=judo17";
 export { wirePreviewOptionsGui } from "./PreviewOptionsGui.js?v=judo17";
-export { default as SpecialBlockOverlay } from "./SpecialBlockOverlay.js?v=judo22";
+export { default as SpecialBlockOverlay } from "./SpecialBlockOverlay.js?v=judo23";

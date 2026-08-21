@@ -737,7 +737,7 @@ function renderSignPlacementDump(block) {
 		`board three ${desc.boardThree.join(",")}`,
 		`F side=${f.side} localZ=${f.localZ} three=${f.three.join(",")}`,
 		`B side=${b.side} localZ=${b.localZ} three=${b.three.join(",")}`,
-		"3D: green L / red R — L should be on your left when facing that side."
+		"Planes are parented to the board; F/B offsets are along board +Z."
 	].join("\n");
 	return box;
 }
