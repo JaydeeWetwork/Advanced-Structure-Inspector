@@ -4,27 +4,34 @@
  *  - lectern open-book indicator
  */
 
-import { disposeObject3D } from "./disposeObject3D.js?v=judo31";
-import { geoPointToThree } from "../previewSpace.js?v=judo31";
-import { signPlaneInstanceVerts } from "../signPlacement.js?v=judo31";
+import { disposeObject3D } from "./disposeObject3D.js?v=judo32";
+import { geoPointToThree } from "../previewSpace.js?v=judo32";
+import { signPlaneInstanceVerts } from "../signPlacement.js?v=judo32";
 import {
 	applySignTweaks,
 	signTweaks,
+	subscribeSignTweaks,
 	tweaksAffectSign,
 	tweaksAreIdentity
-} from "../signDebug.js?v=judo31";
+} from "../signDebug.js?v=judo32";
 import { isOnActiveLayer } from "../layerVisibility.js";
 import { extractSignText, extractLecternBook } from "../inspectStructure.js";
 
 export default class SpecialBlockOverlay {
 	/** @type {import("three").Group|null} */
 	#root = null;
+	/** @type {(() => void)|null} */
+	#unsubTweaks = null;
 
 	/**
 	 * @param {import("./PreviewContext.js").default} ctx
 	 */
 	constructor(ctx) {
 		this.ctx = ctx;
+		this.#unsubTweaks = subscribeSignTweaks(() => {
+			if (this.ctx.isDisposed()) return;
+			this.applyLiveTweaks();
+		});
 	}
 
 	clear() {
@@ -79,16 +86,21 @@ export default class SpecialBlockOverlay {
 	applyLiveTweaks() {
 		const THREE = this.ctx.THREE;
 		if (!THREE || !this.#root) return false;
-		let n = 0;
+		/** @type {import("three").Mesh[]} */
+		const meshes = [];
 		this.#root.traverse(obj => {
-			const baseline = obj.userData?.sdbSignBaseline;
-			if (!baseline || !obj.isMesh) return;
-			const block = obj.userData.sdbSignBlock;
-			const name = obj.userData.sdbSignName;
-			let baked = baseline;
-			if (tweaksAffectSign(block, name, signTweaks) && !tweaksAreIdentity(signTweaks)) {
-				baked = applySignTweaks(baseline, signTweaks);
-			}
+			if (obj.isMesh && obj.userData?.sdbSignBaseline) meshes.push(obj);
+		});
+		if (!meshes.length) return false;
+		let targets = meshes.filter(m =>
+			tweaksAffectSign(m.userData.sdbSignBlock, m.userData.sdbSignName, signTweaks)
+		);
+		if (!targets.length) targets = meshes;
+		for (const obj of targets) {
+			const baseline = obj.userData.sdbSignBaseline;
+			const baked = tweaksAreIdentity(signTweaks)
+				? baseline
+				: applySignTweaks(baseline, signTweaks);
 			writeSignPlaneVerts(obj, baked);
 			if (obj.material) {
 				obj.material.side = signTweaks.doubleSide ? THREE.DoubleSide : THREE.FrontSide;
@@ -99,10 +111,9 @@ export default class SpecialBlockOverlay {
 				markers.visible = !!signTweaks.markers;
 				updateSignMarkers(THREE, markers, baked);
 			}
-			n++;
-		});
+		}
 		this.ctx.requestRender();
-		return n > 0;
+		return true;
 	}
 
 	/**
@@ -390,6 +401,12 @@ export default class SpecialBlockOverlay {
 	}
 
 	dispose() {
+		try {
+			this.#unsubTweaks?.();
+		} catch {
+			/* ignore */
+		}
+		this.#unsubTweaks = null;
 		this.clear();
 	}
 }

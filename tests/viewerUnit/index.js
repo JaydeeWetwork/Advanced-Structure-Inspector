@@ -837,6 +837,17 @@ describe("signPlacement", async () => {
 		assert.equal(tweaksAffectSign(oak, "oak_standing_sign", { ...DEFAULT_SIGN_TWEAKS, applyTo: "this" }), true);
 		assert.equal(tweaksAffectSign(wall, "warped_wall_sign", { ...DEFAULT_SIGN_TWEAKS, applyTo: "this" }), false);
 		assert.equal(tweaksAffectSign(wall, "warped_wall_sign", { ...DEFAULT_SIGN_TWEAKS, applyTo: "wall" }), true);
+		const { subscribeSignTweaks, notifySignTweaksChanged, signTweaks } =
+			await import("../../src/viewer/signDebug.js");
+		let hits = 0;
+		const off = subscribeSignTweaks(() => {
+			hits++;
+		});
+		signTweaks.liftAdd = 1.25;
+		notifySignTweaksChanged();
+		assert.equal(hits >= 1, true, "overlay must hear slider notify");
+		off();
+		signTweaks.liftAdd = 0;
 	});
 
 	it("F minus B is along baked board +Z for gsd=15", async () => {

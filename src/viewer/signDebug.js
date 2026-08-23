@@ -17,6 +17,19 @@ const RECIPE_KEY = "sdb.signTweakRecipe.last";
 
 export const SIGN_TWEAK_EVENT = "sdb-sign-tweaks-changed";
 
+/** Shared across duplicate ESM copies (?v= cache splits). */
+function signDebugStore() {
+	const g = globalThis;
+	if (!g.__sdbSignDebug) {
+		g.__sdbSignDebug = {
+			tweaks: { ...DEFAULT_SIGN_TWEAKS },
+			focus: /** @type {{ block: object, name: string }|null} */ (null),
+			listeners: new Set()
+		};
+	}
+	return g.__sdbSignDebug;
+}
+
 /**
  * @typedef {object} SignTweaks
  * @property {SignTweakApplyTo} applyTo
@@ -40,7 +53,7 @@ export const SIGN_TWEAK_EVENT = "sdb-sign-tweaks-changed";
 
 /** @type {SignTweaks} */
 export const DEFAULT_SIGN_TWEAKS = {
-	applyTo: "this",
+	applyTo: "all",
 	liftAdd: 0,
 	slideX: 0,
 	slideY: 0,
@@ -59,11 +72,8 @@ export const DEFAULT_SIGN_TWEAKS = {
 	note: ""
 };
 
-/** Live object bound to lil-gui. */
-export const signTweaks = { ...DEFAULT_SIGN_TWEAKS };
-
-/** @type {{ block: object, name: string }|null} */
-let focus = null;
+/** Live object — one instance even if this module is loaded twice. */
+export const signTweaks = signDebugStore().tweaks;
 
 loadSignTweaks();
 
@@ -72,18 +82,29 @@ loadSignTweaks();
  * @param {string} [name]
  */
 export function setSignDebugFocus(block, name) {
+	const store = signDebugStore();
 	if (!block) {
-		focus = null;
+		store.focus = null;
 		return;
 	}
-	focus = {
+	store.focus = {
 		block,
 		name: String(name || block.name || "")
 	};
 }
 
 export function getSignDebugFocus() {
-	return focus;
+	return signDebugStore().focus;
+}
+
+/**
+ * Overlay / renderer subscribe here (not CustomEvent — those can miss across copies).
+ * @param {(tweaks: SignTweaks) => void} fn
+ */
+export function subscribeSignTweaks(fn) {
+	const listeners = signDebugStore().listeners;
+	listeners.add(fn);
+	return () => listeners.delete(fn);
 }
 
 /** @param {string} kind */
@@ -101,6 +122,7 @@ export function tweaksAffectKind(kind, tweaks = signTweaks) {
 export function tweaksAffectSign(block, name, tweaks = signTweaks) {
 	const a = tweaks.applyTo || "this";
 	if (a === "this") {
+		const focus = signDebugStore().focus;
 		if (!focus?.block) return true;
 		return Number(block?.x) === Number(focus.block.x)
 			&& Number(block?.y) === Number(focus.block.y)
@@ -111,6 +133,14 @@ export function tweaksAffectSign(block, name, tweaks = signTweaks) {
 
 export function notifySignTweaksChanged() {
 	saveSignTweaks();
+	const tweaks = signDebugStore().tweaks;
+	for (const fn of [...signDebugStore().listeners]) {
+		try {
+			fn(tweaks);
+		} catch (e) {
+			console.warn("[sdb] sign tweak listener failed", e);
+		}
+	}
 	try {
 		globalThis.dispatchEvent(new CustomEvent(SIGN_TWEAK_EVENT));
 	} catch {
@@ -289,7 +319,7 @@ export function formatSignTweakRecipe(extra = {}) {
 	const t = extra.tweaks || signTweaks;
 	const lines = [
 		"---SIGN_TWEAK---",
-		"judo31",
+		"judo32",
 		`note: ${t.note || extra.note || "(none)"}`,
 		`applyTo: ${t.applyTo}`,
 		`liftAdd: ${t.liftAdd}`,
@@ -363,6 +393,7 @@ export async function copySignTweakRecipe(text) {
 export async function emitSignTweakRecipe(opts = {}) {
 	/** @type {Record<string, unknown>} */
 	const extra = { tweaks: { ...signTweaks }, note: signTweaks.note };
+	const focus = signDebugStore().focus;
 	if (focus?.block) {
 		const name = focus.name;
 		extra.desc = describeSignPlacement(focus.block, name);
