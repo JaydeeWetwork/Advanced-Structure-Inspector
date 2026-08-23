@@ -289,7 +289,7 @@ export function formatSignTweakRecipe(extra = {}) {
 	const t = extra.tweaks || signTweaks;
 	const lines = [
 		"---SIGN_TWEAK---",
-		"judo29",
+		"judo31",
 		`note: ${t.note || extra.note || "(none)"}`,
 		`applyTo: ${t.applyTo}`,
 		`liftAdd: ${t.liftAdd}`,
@@ -533,15 +533,17 @@ export function renderSignTweakControls(block = null, opts = {}) {
 	hint.textContent = "Drag until text sits on wood, then Log recipe and paste it in chat.";
 	root.appendChild(hint);
 
-	let timer = 0;
+	let logTimer = 0;
 	const fire = () => {
-		clearTimeout(timer);
-		timer = setTimeout(() => {
-			notifySignTweaksChanged();
-			const dumpEl = opts.dumpEl || root.parentElement?.querySelector?.(".mc-sign-debug");
-			if (dumpEl && block) dumpEl.textContent = formatSignInspectDump(block);
-			if (signTweaks.logOnChange) void emitSignTweakRecipe({ reason: "slider" });
-		}, 30);
+		notifySignTweaksChanged();
+		const dumpEl = opts.dumpEl || root.parentElement?.querySelector?.(".mc-sign-debug");
+		if (dumpEl && block) dumpEl.textContent = formatSignInspectDump(block);
+		if (signTweaks.logOnChange) {
+			clearTimeout(logTimer);
+			logTimer = setTimeout(() => {
+				void emitSignTweakRecipe({ reason: "slider" });
+			}, 200);
+		}
 	};
 
 	const readWidgets = () => {

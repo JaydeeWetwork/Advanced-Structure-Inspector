@@ -4,15 +4,15 @@
  *  - lectern open-book indicator
  */
 
-import { disposeObject3D } from "./disposeObject3D.js?v=judo29";
-import { geoPointToThree } from "../previewSpace.js?v=judo29";
-import { signPlaneInstanceVerts } from "../signPlacement.js?v=judo29";
+import { disposeObject3D } from "./disposeObject3D.js?v=judo31";
+import { geoPointToThree } from "../previewSpace.js?v=judo31";
+import { signPlaneInstanceVerts } from "../signPlacement.js?v=judo31";
 import {
 	applySignTweaks,
 	signTweaks,
 	tweaksAffectSign,
 	tweaksAreIdentity
-} from "../signDebug.js?v=judo29";
+} from "../signDebug.js?v=judo31";
 import { isOnActiveLayer } from "../layerVisibility.js";
 import { extractSignText, extractLecternBook } from "../inspectStructure.js";
 
@@ -73,6 +73,39 @@ export default class SpecialBlockOverlay {
 	}
 
 	/**
+	 * Slider-time path: rewrite existing sign verts (no texture rebuild).
+	 * @returns {boolean} true if live meshes were updated
+	 */
+	applyLiveTweaks() {
+		const THREE = this.ctx.THREE;
+		if (!THREE || !this.#root) return false;
+		let n = 0;
+		this.#root.traverse(obj => {
+			const baseline = obj.userData?.sdbSignBaseline;
+			if (!baseline || !obj.isMesh) return;
+			const block = obj.userData.sdbSignBlock;
+			const name = obj.userData.sdbSignName;
+			let baked = baseline;
+			if (tweaksAffectSign(block, name, signTweaks) && !tweaksAreIdentity(signTweaks)) {
+				baked = applySignTweaks(baseline, signTweaks);
+			}
+			writeSignPlaneVerts(obj, baked);
+			if (obj.material) {
+				obj.material.side = signTweaks.doubleSide ? THREE.DoubleSide : THREE.FrontSide;
+				obj.material.needsUpdate = true;
+			}
+			const markers = obj.userData.sdbSignMarkers;
+			if (markers) {
+				markers.visible = !!signTweaks.markers;
+				updateSignMarkers(THREE, markers, baked);
+			}
+			n++;
+		});
+		this.ctx.requestRender();
+		return n > 0;
+	}
+
+	/**
 	 * @param {typeof import("three")} THREE
 	 * @param {import("three").Group} root
 	 * @param {import("../inspectStructure.js").InspectIndex} inspectIndex
@@ -107,9 +140,10 @@ export default class SpecialBlockOverlay {
 	 * @param {boolean} isBack
 	 */
 	#makeSignTextMesh(THREE, b, name, lines, face, isBack) {
-		let baked = signPlaneInstanceVerts(b, name, isBack);
+		const baseline = signPlaneInstanceVerts(b, name, isBack);
+		let baked = baseline;
 		if (tweaksAffectSign(b, name, signTweaks) && !tweaksAreIdentity(signTweaks)) {
-			baked = applySignTweaks(baked, signTweaks);
+			baked = applySignTweaks(baseline, signTweaks);
 		}
 		const glowing = !!face.glowing;
 		const tex = this.#makeTextTexture(THREE, lines, face.color, {
@@ -129,28 +163,23 @@ export default class SpecialBlockOverlay {
 		if (glowing) mat.color?.setHex?.(0xffffee);
 
 		const geo = new THREE.PlaneGeometry(1, 1);
-		const pos = geo.attributes.position;
-		for (let i = 0; i < 4; i++) {
-			pos.setXYZ(i, baked.verts[i][0], baked.verts[i][1], baked.verts[i][2]);
-		}
-		pos.needsUpdate = true;
-		geo.computeVertexNormals();
-		geo.computeBoundingBox();
-		geo.computeBoundingSphere();
-
 		const mesh = new THREE.Mesh(geo, mat);
-		mesh.position.set(baked.origin[0], baked.origin[1], baked.origin[2]);
+		writeSignPlaneVerts(mesh, baked);
 		mesh.renderOrder = 8;
 		mesh.userData.sdbSpecialOverlay = true;
-		mesh.userData.sdbSignBaked = baked;
+		mesh.userData.sdbSignBaseline = baseline;
+		mesh.userData.sdbSignBlock = b;
+		mesh.userData.sdbSignName = name;
+		mesh.userData.sdbSignIsBack = isBack;
 		mesh.frustumCulled = false;
-
-		if (!signTweaks.markers) return mesh;
 
 		const g = new THREE.Group();
 		g.userData.sdbSpecialOverlay = true;
 		g.add(mesh);
-		g.add(this.#makeSignMarkers(THREE, baked, isBack));
+		const markers = this.#makeSignMarkers(THREE, baked, isBack);
+		markers.visible = !!signTweaks.markers;
+		mesh.userData.sdbSignMarkers = markers;
+		g.add(markers);
 		return g;
 	}
 
@@ -179,6 +208,8 @@ export default class SpecialBlockOverlay {
 		const arrow = new THREE.ArrowHelper(dir, origin, 5, isBack ? 0xff8800 : 0x00e8ff, 1.2, 0.7);
 		arrow.renderOrder = 20;
 		g.add(arrow);
+		g.userData.sdbSignDot = dot;
+		g.userData.sdbSignArrow = arrow;
 		return g;
 	}
 
@@ -364,9 +395,41 @@ export default class SpecialBlockOverlay {
 }
 
 /**
- * @param {string} css
- * @param {number} amount 0–1 toward white
+ * @param {import("three").Mesh} mesh
+ * @param {{ origin: [number, number, number], verts: [number, number, number][] }} baked
  */
+function writeSignPlaneVerts(mesh, baked) {
+	const pos = mesh.geometry.attributes.position;
+	for (let i = 0; i < 4; i++) {
+		pos.setXYZ(i, baked.verts[i][0], baked.verts[i][1], baked.verts[i][2]);
+	}
+	pos.needsUpdate = true;
+	mesh.geometry.computeVertexNormals();
+	mesh.geometry.computeBoundingBox();
+	mesh.geometry.computeBoundingSphere();
+	mesh.position.set(baked.origin[0], baked.origin[1], baked.origin[2]);
+}
+
+/**
+ * @param {typeof import("three")} THREE
+ * @param {import("three").Object3D} markers
+ * @param {ReturnType<typeof signPlaneInstanceVerts>} baked
+ */
+function updateSignMarkers(THREE, markers, baked) {
+	const dot = markers.userData?.sdbSignDot;
+	const arrow = markers.userData?.sdbSignArrow;
+	if (dot && baked.boardPos) {
+		dot.position.set(baked.boardPos.x, baked.boardPos.y, baked.boardPos.z);
+	}
+	if (arrow) {
+		arrow.position.set(baked.placed.tx, baked.placed.ty, baked.placed.tz);
+		const dir = new THREE.Vector3(baked.basis.z[0], baked.basis.z[1], baked.basis.z[2]);
+		if (dir.lengthSq() < 1e-8) dir.set(0, 0, 1);
+		else dir.normalize();
+		arrow.setDirection(dir);
+	}
+}
+
 function lightenCss(css, amount) {
 	const m = /^rgb\((\d+),\s*(\d+),\s*(\d+)\)$/.exec(css);
 	if (!m) return css;

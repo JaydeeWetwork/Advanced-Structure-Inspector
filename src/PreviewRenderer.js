@@ -27,9 +27,9 @@ import {
 	exportGlb as exportGlbFile,
 	wirePreviewOptionsGui,
 	SpecialBlockOverlay
-} from "./viewer/systems/index.js?v=judo29";
-import { disposeObject3D } from "./viewer/systems/disposeObject3D.js?v=judo29";
-import { SIGN_TWEAK_EVENT } from "./viewer/signDebug.js?v=judo29";
+} from "./viewer/systems/index.js?v=judo31";
+import { disposeObject3D } from "./viewer/systems/disposeObject3D.js?v=judo31";
+import { SIGN_TWEAK_EVENT } from "./viewer/signDebug.js?v=judo31";
 
 import Stats from "stats.js";
 
@@ -129,6 +129,7 @@ export default class PreviewRenderer extends AsyncFactory {
 	/** @type {() => void} */
 	#onSignTweaks = () => {
 		if (this.#ctx?.isDisposed()) return;
+		if (this.#overlays?.applyLiveTweaks?.()) return;
 		this.#rebuildOverlays();
 	};
 

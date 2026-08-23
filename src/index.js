@@ -35,7 +35,7 @@ import {
 	onPreviewKeydown,
 	onPreviewDblClick,
 	initInspectWindow
-} from "./ui/previewChrome.js?v=judo30";
+} from "./ui/previewChrome.js?v=judo31";
 import {
 	selectEntry,
 	loadPreview,

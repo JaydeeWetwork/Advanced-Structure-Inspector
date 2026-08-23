@@ -8,12 +8,12 @@ import {
 	extractLecternBook,
 	readRedstoneSignal
 } from "./inspectStructure.js";
-import { describeSignPlacement } from "./signPlacement.js?v=judo29";
+import { describeSignPlacement } from "./signPlacement.js?v=judo31";
 import {
 	formatSignInspectDump,
 	renderSignTweakControls,
 	setSignDebugFocus
-} from "./signDebug.js?v=judo29";
+} from "./signDebug.js?v=judo31";
 
 /**
  * @typedef {{ name: string, count: number, slot: number|null, damage: number|null }} ItemStack
