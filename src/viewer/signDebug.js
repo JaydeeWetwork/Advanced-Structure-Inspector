@@ -6,13 +6,16 @@
 import {
 	GEO_SCALE,
 	describeSignPlacement,
+	kindOfSign,
 	signPlaneInstanceVerts
 } from "./signPlacement.js";
 
 const STORAGE_KEY = "sdb.signTweaks.v1";
 const RECIPE_KEY = "sdb.signTweakRecipe.last";
 
-/** @typedef {"all"|"wall"|"standing"|"hanging"} SignTweakApplyTo */
+/** @typedef {"this"|"all"|"wall"|"standing"|"hanging"} SignTweakApplyTo */
+
+export const SIGN_TWEAK_EVENT = "sdb-sign-tweaks-changed";
 
 /**
  * @typedef {object} SignTweaks
@@ -37,7 +40,7 @@ const RECIPE_KEY = "sdb.signTweakRecipe.last";
 
 /** @type {SignTweaks} */
 export const DEFAULT_SIGN_TWEAKS = {
-	applyTo: "all",
+	applyTo: "this",
 	liftAdd: 0,
 	slideX: 0,
 	slideY: 0,
@@ -85,8 +88,34 @@ export function getSignDebugFocus() {
 
 /** @param {string} kind */
 export function tweaksAffectKind(kind, tweaks = signTweaks) {
-	const a = tweaks.applyTo || "all";
+	const a = tweaks.applyTo || "this";
+	if (a === "this") return true;
 	return a === "all" || a === kind;
+}
+
+/**
+ * @param {{ x?: number, y?: number, z?: number, states?: object }} block
+ * @param {string} name
+ * @param {SignTweaks} [tweaks]
+ */
+export function tweaksAffectSign(block, name, tweaks = signTweaks) {
+	const a = tweaks.applyTo || "this";
+	if (a === "this") {
+		if (!focus?.block) return true;
+		return Number(block?.x) === Number(focus.block.x)
+			&& Number(block?.y) === Number(focus.block.y)
+			&& Number(block?.z) === Number(focus.block.z);
+	}
+	return tweaksAffectKind(kindOfSign(name, block?.states), tweaks);
+}
+
+export function notifySignTweaksChanged() {
+	saveSignTweaks();
+	try {
+		globalThis.dispatchEvent(new CustomEvent(SIGN_TWEAK_EVENT));
+	} catch {
+		/* ignore */
+	}
 }
 
 /** @param {SignTweaks} [t] */
@@ -260,7 +289,7 @@ export function formatSignTweakRecipe(extra = {}) {
 	const t = extra.tweaks || signTweaks;
 	const lines = [
 		"---SIGN_TWEAK---",
-		"judo28",
+		"judo29",
 		`note: ${t.note || extra.note || "(none)"}`,
 		`applyTo: ${t.applyTo}`,
 		`liftAdd: ${t.liftAdd}`,
@@ -350,57 +379,230 @@ export async function emitSignTweakRecipe(opts = {}) {
 }
 
 /**
- * @param {import("lil-gui").GUI} gui
- * @param {{ rebuildOverlays?: () => void, requestRender?: () => void }} hooks
+ * Inspect-panel dump text (baseline + current recipe).
+ * @param {object} block
  */
-export function wireSignDebugGui(gui, hooks = {}) {
-	const folder = gui.addFolder("Sign text debug");
-	folder.close();
+export function formatSignInspectDump(block) {
+	const desc = describeSignPlacement(block, block.name);
+	const st = Object.entries(desc.states)
+		.map(([k, v]) => `${k}=${v}`)
+		.join(" ");
+	const f = desc.front;
+	const b = desc.back;
+	const lines = [
+		`${desc.kind} ${desc.wood}  ${desc.facing}`,
+		`cell ${desc.pos.x},${desc.pos.y},${desc.pos.z}  euler ${desc.eulerDeg.join(",")}`,
+		st ? `states ${st}` : "states (none)",
+		`board three ${desc.boardThree.join(",")}`,
+		`F side=${f.side} localZ=${f.localZ} three=${f.three.join(",")}  d=${f.dBoard.join(",")}`,
+		`B side=${b.side} localZ=${b.localZ} three=${b.three.join(",")}  d=${b.dBoard.join(",")}`
+	];
+	if (!tweaksAreIdentity(signTweaks)) {
+		const front = applySignTweaks(signPlaneInstanceVerts(block, block.name, false), signTweaks);
+		const back = applySignTweaks(signPlaneInstanceVerts(block, block.name, true), signTweaks);
+		lines.push(formatSignTweakRecipe({
+			desc,
+			tweaks: signTweaks,
+			tweakedFront: [front.placed.tx, front.placed.ty, front.placed.tz],
+			tweakedBack: [back.placed.tx, back.placed.ty, back.placed.tz],
+			basisZ: front.basis.z,
+			basisX: front.basis.x
+		}));
+	}
+	return lines.join("\n");
+}
+
+const SLIDERS = [
+	{ key: "liftAdd", label: "lift (out)", min: -8, max: 8, step: 0.05 },
+	{ key: "slideX", label: "slide X", min: -8, max: 8, step: 0.05 },
+	{ key: "slideY", label: "slide Y", min: -8, max: 8, step: 0.05 },
+	{ key: "yawDeg", label: "yaw", min: -180, max: 180, step: 0.5 },
+	{ key: "pitchDeg", label: "pitch", min: -180, max: 180, step: 0.5 },
+	{ key: "rollDeg", label: "roll", min: -180, max: 180, step: 0.5 },
+	{ key: "scale", label: "scale", min: 0.2, max: 2, step: 0.01 },
+	{ key: "worldX", label: "world X", min: -16, max: 16, step: 0.05 },
+	{ key: "worldY", label: "world Y", min: -16, max: 16, step: 0.05 },
+	{ key: "worldZ", label: "world Z", min: -16, max: 16, step: 0.05 }
+];
+
+/**
+ * Controls that live in the sign inspect panel (not lil-gui).
+ * @param {object} [block]
+ * @param {{ dumpEl?: HTMLElement|null }} [opts]
+ */
+export function renderSignTweakControls(block = null, opts = {}) {
+	if (block) setSignDebugFocus(block, block.name);
+
+	const root = document.createElement("div");
+	root.className = "sdb-sign-tweaks";
+	root.addEventListener("pointerdown", e => e.stopPropagation());
+	root.addEventListener("wheel", e => e.stopPropagation(), { passive: true });
+
+	const title = document.createElement("div");
+	title.className = "sdb-sign-tweaks-title";
+	title.textContent = "Text placement debug";
+	root.appendChild(title);
+
+	const applyRow = document.createElement("label");
+	applyRow.className = "sdb-sign-tweak-row sdb-sign-tweak-select";
+	const applyLab = document.createElement("span");
+	applyLab.className = "sdb-sign-tweak-label";
+	applyLab.textContent = "apply to";
+	const applySel = document.createElement("select");
+	for (const opt of ["this", "all", "wall", "standing", "hanging"]) {
+		const o = document.createElement("option");
+		o.value = opt;
+		o.textContent = opt === "this" ? "this sign" : opt;
+		applySel.appendChild(o);
+	}
+	applySel.value = signTweaks.applyTo;
+	applyRow.append(applyLab, applySel);
+	root.appendChild(applyRow);
+
+	/** @type {{ key: string, input: HTMLInputElement, val?: HTMLElement }[]} */
+	const widgets = [];
+
+	const grid = document.createElement("div");
+	grid.className = "sdb-sign-tweak-grid";
+	for (const spec of SLIDERS) {
+		const row = document.createElement("label");
+		row.className = "sdb-sign-tweak-row";
+		const name = document.createElement("span");
+		name.className = "sdb-sign-tweak-label";
+		name.textContent = spec.label;
+		const input = document.createElement("input");
+		input.type = "range";
+		input.min = String(spec.min);
+		input.max = String(spec.max);
+		input.step = String(spec.step);
+		input.value = String(signTweaks[spec.key]);
+		const val = document.createElement("span");
+		val.className = "sdb-sign-tweak-val";
+		val.textContent = fmtTweak(signTweaks[spec.key]);
+		row.append(name, input, val);
+		grid.appendChild(row);
+		widgets.push({ key: spec.key, input, val });
+	}
+	root.appendChild(grid);
+
+	const flags = document.createElement("div");
+	flags.className = "sdb-sign-tweak-flags";
+	for (const spec of [
+		{ key: "flipX", label: "flip X" },
+		{ key: "flipFront", label: "flip front" },
+		{ key: "markers", label: "markers" },
+		{ key: "doubleSide", label: "2-sided" },
+		{ key: "logOnChange", label: "log on change" }
+	]) {
+		const row = document.createElement("label");
+		row.className = "sdb-sign-tweak-check";
+		const input = document.createElement("input");
+		input.type = "checkbox";
+		input.checked = !!signTweaks[spec.key];
+		row.append(input, document.createTextNode(" " + spec.label));
+		flags.appendChild(row);
+		widgets.push({ key: spec.key, input });
+	}
+	root.appendChild(flags);
+
+	const noteRow = document.createElement("label");
+	noteRow.className = "sdb-sign-tweak-row sdb-sign-tweak-note";
+	const noteLab = document.createElement("span");
+	noteLab.className = "sdb-sign-tweak-label";
+	noteLab.textContent = "note";
+	const note = document.createElement("input");
+	note.type = "text";
+	note.placeholder = "what you fixed…";
+	note.value = signTweaks.note || "";
+	noteRow.append(noteLab, note);
+	root.appendChild(noteRow);
+
+	const btns = document.createElement("div");
+	btns.className = "sdb-sign-tweak-actions";
+	const logBtn = document.createElement("button");
+	logBtn.type = "button";
+	logBtn.textContent = "Log recipe";
+	const resetBtn = document.createElement("button");
+	resetBtn.type = "button";
+	resetBtn.textContent = "Reset";
+	btns.append(logBtn, resetBtn);
+	root.appendChild(btns);
+
+	const hint = document.createElement("div");
+	hint.className = "sdb-sign-tweak-hint";
+	hint.textContent = "Drag until text sits on wood, then Log recipe and paste it in chat.";
+	root.appendChild(hint);
+
 	let timer = 0;
-	const onChange = () => {
-		saveSignTweaks();
+	const fire = () => {
 		clearTimeout(timer);
 		timer = setTimeout(() => {
-			hooks.rebuildOverlays?.();
-			hooks.requestRender?.();
-			if (signTweaks.logOnChange) {
-				void emitSignTweakRecipe({ reason: "slider" });
-			}
-		}, 40);
+			notifySignTweaksChanged();
+			const dumpEl = opts.dumpEl || root.parentElement?.querySelector?.(".mc-sign-debug");
+			if (dumpEl && block) dumpEl.textContent = formatSignInspectDump(block);
+			if (signTweaks.logOnChange) void emitSignTweakRecipe({ reason: "slider" });
+		}, 30);
 	};
 
-	folder.add(signTweaks, "applyTo", ["all", "wall", "standing", "hanging"]).name("apply to").onChange(onChange);
-	folder.add(signTweaks, "liftAdd", -8, 8, 0.05).name("lift (outward)").onChange(onChange);
-	folder.add(signTweaks, "slideX", -8, 8, 0.05).name("slide X (right)").onChange(onChange);
-	folder.add(signTweaks, "slideY", -8, 8, 0.05).name("slide Y (up)").onChange(onChange);
-	folder.add(signTweaks, "yawDeg", -180, 180, 0.5).name("yaw (around up)").onChange(onChange);
-	folder.add(signTweaks, "pitchDeg", -180, 180, 0.5).name("pitch (tilt)").onChange(onChange);
-	folder.add(signTweaks, "rollDeg", -180, 180, 0.5).name("roll (spin letters)").onChange(onChange);
-	folder.add(signTweaks, "scale", 0.2, 2, 0.01).name("scale").onChange(onChange);
-	folder.add(signTweaks, "worldX", -16, 16, 0.05).name("world X").onChange(onChange);
-	folder.add(signTweaks, "worldY", -16, 16, 0.05).name("world Y").onChange(onChange);
-	folder.add(signTweaks, "worldZ", -16, 16, 0.05).name("world Z").onChange(onChange);
-	folder.add(signTweaks, "flipX").name("flip X (mirror)").onChange(onChange);
-	folder.add(signTweaks, "flipFront").name("flip front (180)").onChange(onChange);
-	folder.add(signTweaks, "markers").name("markers").onChange(onChange);
-	folder.add(signTweaks, "doubleSide").name("double side").onChange(onChange);
-	folder.add(signTweaks, "note").name("note");
-	folder.add(signTweaks, "logOnChange").name("log on change");
-
-	const actions = {
-		logRecipe() {
-			void emitSignTweakRecipe({ copy: true, reason: "button" });
-		},
-		reset() {
-			resetSignTweaks();
-			for (const c of folder.controllersRecursive?.() ?? folder.controllers ?? []) {
-				c.updateDisplay?.();
+	const readWidgets = () => {
+		signTweaks.applyTo = /** @type {SignTweakApplyTo} */ (applySel.value);
+		signTweaks.note = note.value;
+		for (const w of widgets) {
+			if (w.input.type === "checkbox") signTweaks[w.key] = w.input.checked;
+			else {
+				signTweaks[w.key] = Number(w.input.value);
+				if (w.val) w.val.textContent = fmtTweak(signTweaks[w.key]);
 			}
-			hooks.rebuildOverlays?.();
-			hooks.requestRender?.();
-			console.info("[sdb] sign tweaks reset");
 		}
 	};
-	folder.add(actions, "logRecipe").name("Log recipe (copy)");
-	folder.add(actions, "reset").name("Reset sliders");
+
+	const syncWidgets = () => {
+		applySel.value = signTweaks.applyTo;
+		note.value = signTweaks.note || "";
+		for (const w of widgets) {
+			if (w.input.type === "checkbox") w.input.checked = !!signTweaks[w.key];
+			else {
+				w.input.value = String(signTweaks[w.key]);
+				if (w.val) w.val.textContent = fmtTweak(signTweaks[w.key]);
+			}
+		}
+	};
+
+	applySel.addEventListener("change", () => {
+		readWidgets();
+		fire();
+	});
+	note.addEventListener("input", () => {
+		signTweaks.note = note.value;
+		saveSignTweaks();
+	});
+	for (const w of widgets) {
+		w.input.addEventListener("input", () => {
+			readWidgets();
+			fire();
+		});
+	}
+	logBtn.addEventListener("click", () => {
+		readWidgets();
+		void emitSignTweakRecipe({ copy: true, reason: "button" });
+		logBtn.textContent = "Copied";
+		setTimeout(() => {
+			logBtn.textContent = "Log recipe";
+		}, 1200);
+	});
+	resetBtn.addEventListener("click", () => {
+		resetSignTweaks();
+		syncWidgets();
+		notifySignTweaksChanged();
+		const dumpEl = opts.dumpEl || root.parentElement?.querySelector?.(".mc-sign-debug");
+		if (dumpEl && block) dumpEl.textContent = formatSignInspectDump(block);
+	});
+
+	return root;
+}
+
+function fmtTweak(n) {
+	const v = Number(n);
+	if (!Number.isFinite(v)) return "0";
+	return Math.abs(v) >= 10 ? v.toFixed(1) : v.toFixed(2);
 }

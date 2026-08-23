@@ -27,8 +27,9 @@ import {
 	exportGlb as exportGlbFile,
 	wirePreviewOptionsGui,
 	SpecialBlockOverlay
-} from "./viewer/systems/index.js?v=judo28";
-import { disposeObject3D } from "./viewer/systems/disposeObject3D.js?v=judo28";
+} from "./viewer/systems/index.js?v=judo29";
+import { disposeObject3D } from "./viewer/systems/disposeObject3D.js?v=judo29";
+import { SIGN_TWEAK_EVENT } from "./viewer/signDebug.js?v=judo29";
 
 import Stats from "stats.js";
 
@@ -125,6 +126,11 @@ export default class PreviewRenderer extends AsyncFactory {
 	#optionsGui;
 	/** @type {import("three").Object3D[]} */
 	#debugHelpers = [];
+	/** @type {() => void} */
+	#onSignTweaks = () => {
+		if (this.#ctx?.isDisposed()) return;
+		this.#rebuildOverlays();
+	};
 
 	/**
 	 * Sole public list accessor — storage lives on EntityAttachSystem.
@@ -434,6 +440,11 @@ export default class PreviewRenderer extends AsyncFactory {
 		this.#inspect.init();
 		this.#layers.rebuildBlockMeshes(null);
 		this.#rebuildOverlays();
+		try {
+			globalThis.addEventListener(SIGN_TWEAK_EVENT, this.#onSignTweaks);
+		} catch {
+			/* ignore */
+		}
 		if (this.#initAborted()) return;
 
 		try {
@@ -636,6 +647,11 @@ export default class PreviewRenderer extends AsyncFactory {
 		}
 		try {
 			this.#lighting?.dispose?.();
+		} catch {
+			/* ignore */
+		}
+		try {
+			globalThis.removeEventListener(SIGN_TWEAK_EVENT, this.#onSignTweaks);
 		} catch {
 			/* ignore */
 		}

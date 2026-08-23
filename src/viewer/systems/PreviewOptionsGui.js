@@ -2,8 +2,6 @@
  * lil-gui option panel for PreviewRenderer (optional).
  */
 
-import { wireSignDebugGui } from "../signDebug.js?v=judo28";
-
 /**
  * @param {object} args
  * @param {import("lil-gui").GUI} args.gui
@@ -30,8 +28,7 @@ export function wirePreviewOptionsGui({
 	requestRender,
 	setSize,
 	pool,
-	inProduction = false,
-	rebuildOverlays
+	inProduction = false
 }) {
 	const loc = (controller, key) => {
 		controller.$name.dataset.translate = key;
@@ -107,7 +104,6 @@ export function wirePreviewOptionsGui({
 				requestRender();
 			})
 			.name("Debug");
-		wireSignDebugGui(gui, { rebuildOverlays, requestRender });
 	}
 	gui.show();
 }

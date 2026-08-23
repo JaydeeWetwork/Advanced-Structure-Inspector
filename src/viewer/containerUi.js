@@ -8,13 +8,12 @@ import {
 	extractLecternBook,
 	readRedstoneSignal
 } from "./inspectStructure.js";
-import { describeSignPlacement } from "./signPlacement.js?v=judo28";
+import { describeSignPlacement } from "./signPlacement.js?v=judo29";
 import {
-	formatSignTweakRecipe,
-	setSignDebugFocus,
-	signTweaks,
-	tweaksAreIdentity
-} from "./signDebug.js?v=judo28";
+	formatSignInspectDump,
+	renderSignTweakControls,
+	setSignDebugFocus
+} from "./signDebug.js?v=judo29";
 
 /**
  * @typedef {{ name: string, count: number, slot: number|null, damage: number|null }} ItemStack
@@ -684,7 +683,9 @@ function renderSignLayout(blockEntity, block = null) {
 	}
 
 	if (block) {
-		wrap.appendChild(renderSignPlacementDump(block));
+		const dump = renderSignPlacementDump(block);
+		wrap.appendChild(renderSignTweakControls(block, { dumpEl: dump }));
+		wrap.appendChild(dump);
 	}
 
 	const addFace = (label, face) => {
@@ -729,27 +730,9 @@ function renderSignLayout(blockEntity, block = null) {
  */
 function renderSignPlacementDump(block) {
 	setSignDebugFocus(block, block.name);
-	const desc = describeSignPlacement(block, block.name);
 	const box = document.createElement("pre");
 	box.className = "mc-sign-debug";
-	const st = Object.entries(desc.states)
-		.map(([k, v]) => `${k}=${v}`)
-		.join(" ");
-	const f = desc.front;
-	const b = desc.back;
-	const lines = [
-		`${desc.kind} ${desc.wood}  ${desc.facing}`,
-		`cell ${desc.pos.x},${desc.pos.y},${desc.pos.z}  euler ${desc.eulerDeg.join(",")}`,
-		st ? `states ${st}` : "states (none)",
-		`board three ${desc.boardThree.join(",")}`,
-		`F side=${f.side} localZ=${f.localZ} three=${f.three.join(",")}  d=${f.dBoard.join(",")}`,
-		`B side=${b.side} localZ=${b.localZ} three=${b.three.join(",")}  d=${b.dBoard.join(",")}`,
-		"judo28 baked instance verts. Use Sign text debug sliders, then Log recipe."
-	];
-	if (!tweaksAreIdentity(signTweaks)) {
-		lines.push(formatSignTweakRecipe({ desc, tweaks: signTweaks }));
-	}
-	box.textContent = lines.join("\n");
+	box.textContent = formatSignInspectDump(block);
 	return box;
 }
 

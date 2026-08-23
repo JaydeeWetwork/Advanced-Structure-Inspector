@@ -4,15 +4,15 @@
  *  - lectern open-book indicator
  */
 
-import { disposeObject3D } from "./disposeObject3D.js?v=judo28";
-import { geoPointToThree } from "../previewSpace.js?v=judo28";
-import { kindOfSign, signPlaneInstanceVerts } from "../signPlacement.js?v=judo28";
+import { disposeObject3D } from "./disposeObject3D.js?v=judo29";
+import { geoPointToThree } from "../previewSpace.js?v=judo29";
+import { signPlaneInstanceVerts } from "../signPlacement.js?v=judo29";
 import {
 	applySignTweaks,
 	signTweaks,
-	tweaksAffectKind,
+	tweaksAffectSign,
 	tweaksAreIdentity
-} from "../signDebug.js?v=judo28";
+} from "../signDebug.js?v=judo29";
 import { isOnActiveLayer } from "../layerVisibility.js";
 import { extractSignText, extractLecternBook } from "../inspectStructure.js";
 
@@ -108,8 +108,7 @@ export default class SpecialBlockOverlay {
 	 */
 	#makeSignTextMesh(THREE, b, name, lines, face, isBack) {
 		let baked = signPlaneInstanceVerts(b, name, isBack);
-		const kind = baked.placed.kind || kindOfSign(name, b.states);
-		if (tweaksAffectKind(kind, signTweaks) && !tweaksAreIdentity(signTweaks)) {
+		if (tweaksAffectSign(b, name, signTweaks) && !tweaksAreIdentity(signTweaks)) {
 			baked = applySignTweaks(baked, signTweaks);
 		}
 		const glowing = !!face.glowing;

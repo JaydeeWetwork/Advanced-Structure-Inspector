@@ -34,7 +34,7 @@ import {
 	syncCamBarActive,
 	onPreviewKeydown,
 	onPreviewDblClick
-} from "./ui/previewChrome.js?v=judo28";
+} from "./ui/previewChrome.js?v=judo29";
 import {
 	selectEntry,
 	loadPreview,

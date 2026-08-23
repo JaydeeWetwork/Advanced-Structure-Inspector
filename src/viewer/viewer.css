@@ -1493,11 +1493,129 @@ body.sdb-no-selection .sdb-float-left::after {
 	pointer-events: auto;
 }
 
+.sdb-inspect-panel:has(.sdb-sign-tweaks) {
+	max-height: min(78vh, 640px);
+	max-width: min(96vw, 560px);
+}
+
 /* Sign / lectern / redstone text panels inside inspect mockup */
 .mc-inv-text-panel {
 	padding: 8px 10px 10px;
 	min-width: min(280px, 70vw);
 	max-width: min(420px, 90vw);
+}
+
+.mc-inv-sign.mc-inv-text-panel {
+	min-width: min(360px, 88vw);
+	max-width: min(520px, 94vw);
+}
+
+.sdb-sign-tweaks {
+	margin: 0 0 8px;
+	padding: 8px 8px 6px;
+	background: #1e1824;
+	border: 1px solid #4a3a55;
+	border-radius: 4px;
+	color: #f0e8f0;
+}
+
+.sdb-sign-tweaks-title {
+	font-size: 0.78rem;
+	font-weight: 700;
+	margin: 0 0 6px;
+	color: #ffe566;
+}
+
+.sdb-sign-tweak-grid {
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: 2px 8px;
+}
+
+.sdb-sign-tweak-row {
+	display: grid;
+	grid-template-columns: 5.4rem 1fr 2.6rem;
+	align-items: center;
+	gap: 6px;
+	font-size: 0.7rem;
+}
+
+.sdb-sign-tweak-row.sdb-sign-tweak-select,
+.sdb-sign-tweak-row.sdb-sign-tweak-note {
+	grid-template-columns: 5.4rem 1fr;
+	margin-bottom: 4px;
+}
+
+.sdb-sign-tweak-label {
+	color: #c8bdd0;
+	white-space: nowrap;
+}
+
+.sdb-sign-tweak-val {
+	font-variant-numeric: tabular-nums;
+	text-align: right;
+	color: #ffe566;
+}
+
+.sdb-sign-tweaks input[type="range"] {
+	width: 100%;
+	accent-color: #c9a227;
+}
+
+.sdb-sign-tweaks select,
+.sdb-sign-tweaks input[type="text"] {
+	width: 100%;
+	box-sizing: border-box;
+	background: #2a2030;
+	color: #f0e8f0;
+	border: 1px solid #4a3a55;
+	border-radius: 3px;
+	padding: 3px 6px;
+	font-size: 0.75rem;
+}
+
+.sdb-sign-tweak-flags {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px 10px;
+	margin: 6px 0 4px;
+	font-size: 0.72rem;
+}
+
+.sdb-sign-tweak-check {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	cursor: pointer;
+	user-select: none;
+}
+
+.sdb-sign-tweak-actions {
+	display: flex;
+	gap: 8px;
+	margin: 6px 0 4px;
+}
+
+.sdb-sign-tweak-actions button {
+	flex: 1;
+	padding: 5px 8px;
+	font-size: 0.75rem;
+	font-weight: 700;
+	cursor: pointer;
+	background: #3a2a48;
+	color: #ffe566;
+	border: 1px solid #6a5080;
+	border-radius: 3px;
+}
+
+.sdb-sign-tweak-actions button:hover {
+	background: #4a3858;
+}
+
+.sdb-sign-tweak-hint {
+	font-size: 0.65rem;
+	color: #a898b0;
+	line-height: 1.3;
 }
 .mc-text-face {
 	margin-bottom: 8px;
