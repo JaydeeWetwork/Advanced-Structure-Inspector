@@ -1476,26 +1476,107 @@ body.sdb-no-selection .sdb-float-left::after {
 	color: #f0e8f0;
 }
 
-.sdb-inspect-panel {
+.sdb-inspect-panel.sdb-win {
 	position: absolute;
 	left: 50%;
 	bottom: 12px;
 	transform: translateX(-50%);
-	z-index: 14;
+	z-index: 45;
 	margin: 0;
 	padding: 0;
-	max-height: min(36vh, 320px);
-	max-width: min(96vw, 640px);
-	overflow: auto;
+	display: flex;
+	flex-direction: column;
+	min-width: 240px;
+	max-width: min(96vw, 560px);
+	max-height: min(78vh, 640px);
+	overflow: hidden;
 	flex-shrink: 0;
 	background: transparent;
 	border: none;
 	pointer-events: auto;
+	box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
 }
 
-.sdb-inspect-panel:has(.sdb-sign-tweaks) {
-	max-height: min(78vh, 640px);
-	max-width: min(96vw, 560px);
+.sdb-inspect-panel.sdb-win.sdb-win-moved,
+.sdb-inspect-panel.sdb-win.sdb-win-dragging {
+	transform: none;
+	bottom: auto;
+	right: auto;
+}
+
+.sdb-win-bar {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 5px 8px;
+	background: #2a2030;
+	color: #ffe566;
+	cursor: grab;
+	border: 1px solid #5a4568;
+	border-bottom: none;
+	border-radius: 6px 6px 0 0;
+	flex-shrink: 0;
+	user-select: none;
+	touch-action: none;
+}
+
+.sdb-win-bar.is-dragging {
+	cursor: grabbing;
+}
+
+.sdb-win-collapsed .sdb-win-bar {
+	border-radius: 6px;
+	border-bottom: 1px solid #5a4568;
+}
+
+.sdb-win-title {
+	flex: 1;
+	min-width: 0;
+	font-size: 0.8rem;
+	font-weight: 700;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.sdb-win-collapse,
+.sdb-win-close {
+	flex-shrink: 0;
+	width: 22px;
+	height: 22px;
+	padding: 0;
+	border: 1px solid #6a5080;
+	border-radius: 3px;
+	background: #3a2a48;
+	color: #ffe566;
+	font-size: 0.85rem;
+	line-height: 1;
+	cursor: pointer;
+}
+
+.sdb-win-collapse:hover,
+.sdb-win-close:hover {
+	background: #4a3858;
+}
+
+.sdb-win-body {
+	overflow: auto;
+	min-height: 0;
+	flex: 1 1 auto;
+	background: transparent;
+}
+
+.sdb-win-collapsed .sdb-win-body {
+	display: none;
+}
+
+.sdb-win .mc-inv-close {
+	display: none;
+}
+
+.sdb-win .mc-inv {
+	border-top-left-radius: 0;
+	border-top-right-radius: 0;
 }
 
 /* Sign / lectern / redstone text panels inside inspect mockup */

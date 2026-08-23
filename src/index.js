@@ -33,8 +33,9 @@ import {
 	applyCameraPreset,
 	syncCamBarActive,
 	onPreviewKeydown,
-	onPreviewDblClick
-} from "./ui/previewChrome.js?v=judo29";
+	onPreviewDblClick,
+	initInspectWindow
+} from "./ui/previewChrome.js?v=judo30";
 import {
 	selectEntry,
 	loadPreview,
@@ -53,6 +54,7 @@ function openFilePicker() {
 
 function wireUi() {
 	initFloatPins();
+	initInspectWindow();
 	els.importInput?.addEventListener("change", () => {
 		handleFiles(els.importInput.files);
 	});

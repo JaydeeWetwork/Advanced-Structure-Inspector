@@ -15,7 +15,7 @@
 
 		<link rel="stylesheet" href="styles/base.css?v=judo17"/>
 		<link rel="stylesheet" href="styles/preview.css?v=judo17"/>
-		<link rel="stylesheet" href="viewer/viewer.css?v=judo29"/>
+		<link rel="stylesheet" href="viewer/viewer.css?v=judo30"/>
 		<script type="importmap">
 			{
 				"imports": {
@@ -34,7 +34,7 @@
 				}
 			}
 		</script>
-		<script src="index.js?v=judo29" type="module"></script>
+		<script src="index.js?v=judo30" type="module"></script>
 		<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
 		<meta http-equiv="Pragma" content="no-cache"/>
 	</head>
@@ -101,7 +101,14 @@
 							<span class="sdb-preview-keys" title="Keyboard controls when preview is ready">↑↓ layer · ← all · → cam · Fly: WASD Space/Shift · drag look · dbl-click inspect</span>
 						</div>
 						<div class="sdb-preview-host" id="previewHost" tabindex="0"></div>
-						<div class="sdb-inspect-panel hidden" id="inspectPanel" aria-live="polite"></div>
+						<div class="sdb-inspect-panel sdb-win hidden" id="inspectPanel" aria-live="polite">
+							<div class="sdb-win-bar" id="inspectWinBar" title="Drag to move · double-click to collapse">
+								<button type="button" class="sdb-win-collapse" id="inspectCollapseBtn" title="Collapse" aria-expanded="true">▾</button>
+								<span class="sdb-win-title" id="inspectWinTitle">Inspect</span>
+								<button type="button" class="sdb-win-close" id="inspectCloseBtn" title="Close" aria-label="Close">×</button>
+							</div>
+							<div class="sdb-win-body" id="inspectPanelBody"></div>
+						</div>
 					</section>
 				</section>
 			</main>

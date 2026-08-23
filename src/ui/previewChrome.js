@@ -4,6 +4,10 @@
 
 import { els, primaryPreview, session } from "../app/state.js";
 import { escapeHtml } from "../app/dom.js";
+import { bindFloatingWindow } from "./floatingWindow.js";
+
+/** @type {ReturnType<typeof bindFloatingWindow>|null} */
+let inspectWin = null;
 
 /** Iso cycle order (Iso button advances through these). */
 export const ISO_PRESETS = /** @type {const} */ (["iso-north", "iso-south", "iso-east", "iso-west"]);
@@ -105,10 +109,24 @@ export function updateLayerBadge(layer, maxLayer) {
 	els.layerBadge.title = `Active slice Y=${layer}`;
 }
 
+export function initInspectWindow() {
+	if (!els.inspectPanel || !els.inspectWinBar || inspectWin) return;
+	inspectWin = bindFloatingWindow({
+		win: els.inspectPanel,
+		bar: els.inspectWinBar,
+		body: els.inspectPanelBody || undefined,
+		collapseBtn: els.inspectCollapseBtn,
+		closeBtn: els.inspectCloseBtn,
+		storageKey: "sdb.inspectWin.v1",
+		onClose: () => deselectInspectAndRefresh()
+	});
+	window.addEventListener("resize", () => inspectWin?.clamp());
+}
+
 export function clearInspectPanel() {
 	if (!els.inspectPanel) return;
 	els.inspectPanel.classList.add("hidden");
-	els.inspectPanel.replaceChildren();
+	els.inspectPanelBody?.replaceChildren();
 }
 
 /**
@@ -117,13 +135,21 @@ export function clearInspectPanel() {
  */
 export function showInspectPanelNode(node) {
 	if (!els.inspectPanel) return;
+	if (!inspectWin) initInspectWindow();
 	if (!node) {
 		clearInspectPanel();
 		return;
 	}
+	const body = els.inspectPanelBody || els.inspectPanel;
+	body.replaceChildren(node);
+	const title = node.querySelector?.(".mc-inv-title")?.textContent?.trim();
+	if (els.inspectWinTitle) els.inspectWinTitle.textContent = title || "Inspect";
 	els.inspectPanel.classList.remove("hidden");
-	els.inspectPanel.replaceChildren(node);
-	// Close button inside mockup
+	inspectWin?.setCollapsed(false);
+	requestAnimationFrame(() => {
+		inspectWin?.placeDefault();
+		requestAnimationFrame(() => inspectWin?.placeDefault());
+	});
 	node.querySelector?.("[data-action=close-inspect]")?.addEventListener("click", () => {
 		clearInspectPanel();
 		primaryPreview()?.requestRedraw?.();
