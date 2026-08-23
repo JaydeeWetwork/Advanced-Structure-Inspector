@@ -11,7 +11,8 @@
 		"build": "npm run build -w pipeline",
 		"serve": "npx --yes serve src -p 5173",
 		"serve:dist": "npx --yes serve dist -p 5173",
-		"fill:sign-text": "node scripts/fill-sign-test-text.mjs"
+		"fill:sign-text": "node scripts/fill-sign-test-text.mjs",
+		"make:minecarts": "node scripts/make-minecart-test-structure.mjs"
 	},
 	"workspaces": [
 		"pipeline",

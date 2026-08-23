@@ -387,11 +387,20 @@ export async function onPreviewDblClick(e) {
 			|| blockName === "lectern";
 
 		if (hit.kind === "miss" || !isContainer) {
-			// Non-container block: still show a tiny panel with just the name (no pos/states)
+			// Non-container: tiny name panel. Empty minecarts used to miss this and
+			// look like a dead click.
 			if (hit.kind === "block" && hit.block) {
 				const wrap = document.createElement("div");
 				wrap.className = "mc-inv mc-inv-simple";
 				wrap.innerHTML = `<div class="mc-inv-header"><span class="mc-inv-title">${escapeHtml(hit.block.name)}</span><button type="button" class="mc-inv-close" data-action="close-inspect" aria-label="Close">×</button></div>`;
+				showInspectPanelNode(wrap);
+			} else if (hit.kind === "entity" && hit.entity) {
+				const wrap = document.createElement("div");
+				wrap.className = "mc-inv mc-inv-simple";
+				const label = escapeHtml(
+					hit.entity.customName || hit.entity.identifier || "entity"
+				);
+				wrap.innerHTML = `<div class="mc-inv-header"><span class="mc-inv-title">${label}</span><button type="button" class="mc-inv-close" data-action="close-inspect" aria-label="Close">×</button></div>`;
 				showInspectPanelNode(wrap);
 			} else {
 				clearInspectPanel();

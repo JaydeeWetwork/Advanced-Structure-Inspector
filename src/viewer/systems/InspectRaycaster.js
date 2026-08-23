@@ -1,9 +1,33 @@
 /**
  * Raycast pick: canvas client coords → block / entity inspect hit.
+ *
+ * Minecarts are open tubs — a ray through the basin hits the rail first.
+ * Prefer an entity hit if it is within ENTITY_PICK_SLACK of the nearest block
+ * (model units; 8 ≈ half a block). Pair with the entity pick-volume mesh.
  */
 
 import { entityStructureLayer } from "./EntityAttachSystem.js";
 import { isOnActiveLayer } from "../layerVisibility.js";
+
+/** How much closer a block may be and still lose to a cart behind it. */
+export const ENTITY_PICK_SLACK = 8;
+
+/**
+ * @param {number} entityDist
+ * @param {number} blockDist
+ * @param {number} [slack=ENTITY_PICK_SLACK]
+ * @returns {"entity"|"block"|"miss"}
+ */
+export function chooseInspectHit(entityDist, blockDist, slack = ENTITY_PICK_SLACK) {
+	const hasE = Number.isFinite(entityDist);
+	const hasB = Number.isFinite(blockDist);
+	if (hasE && hasB) {
+		return entityDist <= blockDist + slack ? "entity" : "block";
+	}
+	if (hasE) return "entity";
+	if (hasB) return "block";
+	return "miss";
+}
 
 export default class InspectRaycaster {
 	/** @type {import("three").Raycaster|null} */
@@ -51,11 +75,15 @@ export default class InspectRaycaster {
 		const hits = this.#raycaster.intersectObjects(roots, true);
 		const layerFilter = this.ctx.selectedLayer;
 
+		let bestEntity = null;
+		let bestEntityDist = Infinity;
+		let bestBlock = null;
+		let bestBlockDist = Infinity;
+
 		for (const hit of hits) {
 			if (hit.object.visible === false) continue;
-			let obj = hit.object;
 			let hidden = false;
-			let walk = obj;
+			let walk = hit.object;
 			while (walk) {
 				if (walk.visible === false) {
 					hidden = true;
@@ -65,6 +93,7 @@ export default class InspectRaycaster {
 			}
 			if (hidden) continue;
 
+			let obj = hit.object;
 			while (obj) {
 				if (obj.userData?.sdbEntity || obj.userData?.previewEntity) {
 					const ent =
@@ -75,21 +104,25 @@ export default class InspectRaycaster {
 							obj = obj.parent;
 							continue;
 						}
-						const fromIndex = this.#findInspectEntity(ent);
-						const base =
-							fromIndex ?? {
-								identifier: ent.identifier ?? "entity",
-								rawId: ent.rawId ?? ent.identifier,
-								pos: ent.pos,
-								items: ent.items ?? [],
-								customName: ent.customName ?? null,
-								raw: ent.raw ?? ent
-							};
-						if (!base.raw) base.raw = ent.raw ?? ent;
-						if ((!base.items || !base.items.length) && ent.items?.length) {
-							base.items = ent.items;
+						if (hit.distance < bestEntityDist) {
+							bestEntityDist = hit.distance;
+							const fromIndex = this.#findInspectEntity(ent);
+							const base =
+								fromIndex ?? {
+									identifier: ent.identifier ?? "entity",
+									rawId: ent.rawId ?? ent.identifier,
+									pos: ent.pos,
+									items: ent.items ?? [],
+									customName: ent.customName ?? null,
+									raw: ent.raw ?? ent
+								};
+							if (!base.raw) base.raw = ent.raw ?? ent;
+							if ((!base.items || !base.items.length) && ent.items?.length) {
+								base.items = ent.items;
+							}
+							bestEntity = { kind: "entity", entity: base };
 						}
-						return { kind: "entity", entity: base };
+						break;
 					}
 				}
 				if (obj.userData?.sdbBlock && obj.userData.sdbBlockPositions) {
@@ -106,20 +139,28 @@ export default class InspectRaycaster {
 							obj = obj.parent;
 							continue;
 						}
-						const key = `${x},${y},${z}`;
-						const block =
-							this.ctx.inspectIndex?.blocks?.get?.(key)
-							?? this.#fallbackBlockInfo(x, y, z, obj.userData.sdbPaletteI);
-						return {
-							kind: "block",
-							block,
-							structurePos: [x, y, z]
-						};
+						if (hit.distance < bestBlockDist) {
+							bestBlockDist = hit.distance;
+							const key = `${x},${y},${z}`;
+							const block =
+								this.ctx.inspectIndex?.blocks?.get?.(key)
+								?? this.#fallbackBlockInfo(x, y, z, obj.userData.sdbPaletteI);
+							bestBlock = {
+								kind: "block",
+								block,
+								structurePos: [x, y, z]
+							};
+						}
+						break;
 					}
 				}
 				obj = obj.parent;
 			}
 		}
+
+		const choice = chooseInspectHit(bestEntityDist, bestBlockDist);
+		if (choice === "entity") return bestEntity;
+		if (choice === "block") return bestBlock;
 		return { kind: "miss" };
 	}
 

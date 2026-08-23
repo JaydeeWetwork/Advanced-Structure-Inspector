@@ -7,7 +7,7 @@ import * as NBT from "nbtify-readonly-typeless";
 import BlockGeoMaker from "../BlockGeoMaker.js";
 import TextureAtlas from "../TextureAtlas.js";
 // Single PreviewRenderer (systems-based) — used by ASI and HoloPrint pack UI
-import PreviewRenderer from "../PreviewRenderer.js?v=judo34";
+import PreviewRenderer from "../PreviewRenderer.js?v=judo39";
 import ResourcePackStack from "../ResourcePackStack.js";
 import EntityGeoMaker from "../EntityGeoMaker.js";
 import LilGui from "../components/LilGui.js";
@@ -22,6 +22,7 @@ import {
 import { getCachedDataFile, getCachedFileBuild } from "./previewCache.js";
 import { extractRenderableEntities } from "./entityExtract.js";
 import { buildInspectIndex } from "./inspectStructure.js";
+import { cargoPaletteEntries } from "./entityCargo.js?v=judo37";
 
 function ensureLilGuiDefined() {
 	if (!customElements.get("lil-gui")) {
@@ -165,6 +166,11 @@ async function buildPreviewAssets(structureFile, config, resourcePackStack, sign
 	const [blocksDotJson, vanillaTerrainTexture, flipbookTextures] = await resourcesPromise;
 	throwIfAborted(signal);
 
+	const entities = config.SHOW_ENTITIES === false
+		? []
+		: extractRenderableEntities(nbt);
+	const cargoEntries = config.SHOW_ENTITIES === false ? [] : cargoPaletteEntries(entities);
+
 	progress(`Building geometry for ${mergedPalette.length} palette entries…`);
 	const entityGeoMaker = new EntityGeoMaker(resourcePackStack);
 	const blockGeoMaker = new BlockGeoMaker(
@@ -178,6 +184,15 @@ async function buildPreviewAssets(structureFile, config, resourcePackStack, sign
 	const { templates: unresolvedPolyMeshTemplatePalette, centersOfMass } =
 		await blockGeoMaker.makePolyMeshTemplates(mergedPalette);
 	throwIfAborted(signal);
+
+	let unresolvedCargoTemplates = [];
+	if (cargoEntries.length) {
+		const cargoResult = await blockGeoMaker.makePolyMeshTemplates(
+			cargoEntries.map(e => e.block)
+		);
+		unresolvedCargoTemplates = cargoResult.templates;
+		throwIfAborted(signal);
+	}
 
 	const texRefs = blockGeoMaker.textureRefs;
 	const texCount = texRefs?.size ?? texRefs?.length ?? 0;
@@ -199,9 +214,13 @@ async function buildPreviewAssets(structureFile, config, resourcePackStack, sign
 	);
 	const polyMeshTemplatePalette = blockGeoMaker.scalePolyMeshTemplates(unscaled, centersOfMass);
 
-	const entities = config.SHOW_ENTITIES === false
-		? []
-		: extractRenderableEntities(nbt);
+	/** @type {Record<string, any[]>} */
+	const cargoTemplates = {};
+	cargoEntries.forEach((entry, i) => {
+		const faces = unresolvedCargoTemplates[i];
+		if (!faces?.length) return;
+		cargoTemplates[entry.kind] = BlockGeoMaker.resolveTemplateFaceUvs(faces, textureAtlas);
+	});
 	console.info(`[sdb] structure entities: ${entities.length} renderable`,
 		entities.map(e => e.identifier));
 
@@ -222,7 +241,8 @@ async function buildPreviewAssets(structureFile, config, resourcePackStack, sign
 		fullOpacityTextureBlob,
 		entities,
 		inspectIndex,
-		resourcePackStack
+		resourcePackStack,
+		cargoTemplates
 	};
 }
 
@@ -257,7 +277,7 @@ export async function renderStructurePreview(
 	const previews = [];
 	const hostParent = previewCont.parentNode;
 	// v14: restore TGA textures (cactus etc.) + icon path maps
-	const cacheKey = `v14|scale=${config.SCALE}|ign=${config.IGNORED_BLOCKS.length}|ent=${config.SHOW_ENTITIES !== false ? 1 : 0}|ol=${config.TEXTURE_OUTLINE_WIDTH}|sky=${config.SHOW_PREVIEW_SKYBOX ? 1 : 0}`;
+	const cacheKey = `v16|scale=${config.SCALE}|ign=${config.IGNORED_BLOCKS.length}|ent=${config.SHOW_ENTITIES !== false ? 1 : 0}|ol=${config.TEXTURE_OUTLINE_WIDTH}|sky=${config.SHOW_PREVIEW_SKYBOX ? 1 : 0}`;
 
 	try {
 		for (let structureI = 0; structureI < files.length; structureI++) {
@@ -301,6 +321,7 @@ export async function renderStructurePreview(
 					entityResourcePackStack: assets.resourcePackStack,
 					// init() meshes these — do not call attachEntities from outside
 					entities: entityList,
+					cargoTemplates: assets.cargoTemplates ?? {},
 					inspectIndex: assets.inspectIndex ?? null,
 					// Abort mid-init when user switches structure
 					abortSignal: signal ?? null

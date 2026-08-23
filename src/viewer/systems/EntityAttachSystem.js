@@ -140,9 +140,10 @@ export default class EntityAttachSystem {
 
 			let createEntityObject3D;
 			let loadEntityModelKit;
+			let buildCargoKit;
 			try {
-				({ createEntityObject3D, loadEntityModelKit } = await import(
-					"../entityMeshes.js?v=judo34"
+				({ createEntityObject3D, loadEntityModelKit, buildCargoKit } = await import(
+					"../entityMeshes.js?v=judo39"
 				));
 			} catch (e) {
 				console.error("[sdb] failed to load entityMeshes module:", e);
@@ -162,6 +163,16 @@ export default class EntityAttachSystem {
 			}
 			if (gen !== this.#attachGen || this.ctx.isDisposed()) return 0;
 
+			if (buildCargoKit && options.cargoTemplates && !pool.cargoKit) {
+				try {
+					pool.cargoKit = buildCargoKit(THREE, options.cargoTemplates, pool);
+					console.info(`[sdb] cargo kit: ${pool.cargoKit?.size ?? 0} kind(s)`);
+				} catch (e) {
+					console.warn("[sdb] cargo kit failed:", e);
+				}
+			}
+			if (gen !== this.#attachGen || this.ctx.isDisposed()) return 0;
+
 			if (createEntityObject3D) {
 				for (const ent of ents) {
 					if (gen !== this.#attachGen || this.ctx.isDisposed()) return added;
@@ -171,6 +182,7 @@ export default class EntityAttachSystem {
 						const railDirection = railDirectionUnder(this.ctx, ent.pos);
 						const obj = createEntityObject3D(THREE, ent, {
 							entityKit: pool.entityModelKit,
+							cargoKit: pool.cargoKit,
 							railDirection
 						});
 						obj.userData.previewEntity = true;

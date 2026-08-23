@@ -156,7 +156,7 @@ export async function loadPreview(opts = {}) {
 	if (host) host.dataset.sdbPreviewBuilding = "1";
 
 	try {
-		const { renderStructurePreview } = await import("../viewer/structurePreview.js?v=judo34");
+		const { renderStructurePreview } = await import("../viewer/structurePreview.js?v=judo39");
 		const { default: ResourcePackStack } = await import("../ResourcePackStack.js");
 		if (signal.aborted || getSelectedId() !== buildForId) return;
 

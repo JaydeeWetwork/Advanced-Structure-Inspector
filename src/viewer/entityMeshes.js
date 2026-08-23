@@ -2,18 +2,74 @@
  * Structure-entity meshes (minecart family).
  *
  * Hull prefers official Mojang geo + PNG from bedrock-samples
- * (`loadEntityModelKit`). Cargo is still a colored stand-in until block-geo
- * cargo is wired. Fallback is the old procedural boxes if vanilla fetch fails.
+ * (`loadEntityModelKit`). Cargo prefers BlockGeoMaker cubes (same as placed
+ * chest/hopper/tnt/command_block) from the structure atlas; colored boxes
+ * remain a fallback.
  *
  * Coordinate mapping matches PreviewRenderer block placement (Z-flip).
  */
 
 import { structurePosToThree } from "./previewSpace.js";
 import { entityMeshKind } from "./entityExtract.js";
-import { loadVanillaEntityKit } from "./entityGeoThree.js";
+import { loadVanillaEntityKit } from "./entityGeoThree.js?v=judo39";
+import { buildCargoKit, placeCargoMesh } from "./entityCargo.js?v=judo39";
 
 export { structurePosToThree };
 export { loadVanillaEntityKit as loadEntityModelKit };
+export { buildCargoKit };
+
+/** Hull AABB in model units (floor y≈0.5, walls to 10.5, cargo to ~15). */
+export const MINECART_PICK_SIZE = [20, 15, 16];
+export const MINECART_PICK_CENTER = [0, 7.5, 0];
+
+/** Rail plane in blockShapeGeos (`"rail"` pos y=1). */
+export const RAIL_PLANE_Y = 1;
+/** Vanilla hull floor bottom after the 90° X cube (y=0.5..2.5). */
+export const HULL_FLOOR_BOTTOM = 0.5;
+/** Hair above the rail so the 2-unit floor doesn't z-fight the plane. */
+export const HULL_SIT_LIFT = 0.5;
+
+/**
+ * World Y so the iron floor sits on the rail, not on raw NBT Pos.
+ * Flat rails: snap to the cell's rail plane. Slopes: keep NBT Y (climb) and
+ * only drop by the hull floor offset.
+ *
+ * @param {number} ly structure-local Y
+ * @param {number|null|undefined} railDirection
+ */
+export function minecartWorldY(ly, railDirection) {
+	const y = Number(ly) || 0;
+	const d = Number(railDirection);
+	const sloped = d >= 2 && d <= 5;
+	if (sloped) {
+		return 16 * y - HULL_FLOOR_BOTTOM + HULL_SIT_LIFT;
+	}
+	const cellY = Math.floor(y);
+	return 16 * cellY + RAIL_PLANE_Y - HULL_FLOOR_BOTTOM + HULL_SIT_LIFT;
+}
+
+/**
+ * Invisible solid volume so inspect rays hit the tub interior, not the rail.
+ * `material.visible = false` skips drawing; the object stays raycastable.
+ * @param {typeof import("three")} THREE
+ * @param {import("three").Object3D} group
+ */
+export function addMinecartPickVolume(THREE, group) {
+	const mat = new THREE.MeshBasicMaterial({
+		visible: false,
+		side: THREE.DoubleSide
+	});
+	const mesh = new THREE.Mesh(
+		new THREE.BoxGeometry(MINECART_PICK_SIZE[0], MINECART_PICK_SIZE[1], MINECART_PICK_SIZE[2]),
+		mat
+	);
+	mesh.position.set(MINECART_PICK_CENTER[0], MINECART_PICK_CENTER[1], MINECART_PICK_CENTER[2]);
+	mesh.name = "sdb-pick-volume";
+	mesh.userData.sdbPickProxy = true;
+	mesh.frustumCulled = false;
+	group.add(mesh);
+	return mesh;
+}
 
 /**
  * Infer pitch (degrees, nose up positive) from Bedrock rail_direction under the cart.
@@ -93,48 +149,58 @@ function buildMinecartHull(THREE, cartMat, darkMat, wheelMat, rimMat) {
 	return g;
 }
 
+function standInMat(THREE, color) {
+	return new THREE.MeshLambertMaterial({
+		color,
+		polygonOffset: true,
+		polygonOffsetFactor: -1,
+		polygonOffsetUnits: -2
+	});
+}
+
 function buildChestCargo(THREE, wood, strap) {
 	const g = new THREE.Group();
-	g.add(box(THREE, wood, [12, 8, 12], [0, 7.5, 0]));
-	g.add(box(THREE, wood, [12.4, 2.2, 12.4], [0, 12.6, 0]));
-	g.add(box(THREE, strap, [2, 2, 1], [0, 11.2, 6.4]));
-	g.add(box(THREE, strap, [12.6, 0.8, 0.6], [0, 9.5, 6.1]));
-	g.add(box(THREE, strap, [12.6, 0.8, 0.6], [0, 9.5, -6.1]));
+	// Inset from hull inner walls (x±8, z±6, floor y=2.5) so stand-ins don't z-fight.
+	g.add(box(THREE, wood, [10, 8, 10], [0, 7.5, 0]));
+	g.add(box(THREE, wood, [10.4, 2.2, 10.4], [0, 12.4, 0]));
+	g.add(box(THREE, strap, [2, 2, 1], [0, 11.2, 5.4]));
+	g.add(box(THREE, strap, [10.6, 0.8, 0.6], [0, 9.5, 5.1]));
+	g.add(box(THREE, strap, [10.6, 0.8, 0.6], [0, 9.5, -5.1]));
 	return g;
 }
 
 function buildHopperCargo(THREE, iron) {
 	const g = new THREE.Group();
-	g.add(box(THREE, iron, [12, 2, 12], [0, 11.5, 0]));
-	g.add(box(THREE, iron, [10, 2.5, 10], [0, 9.5, 0]));
-	g.add(box(THREE, iron, [7, 2.5, 7], [0, 7.2, 0]));
-	g.add(box(THREE, iron, [4, 2.5, 4], [0, 5.2, 0]));
-	g.add(box(THREE, iron, [2.5, 1.5, 2.5], [0, 3.8, 0]));
+	g.add(box(THREE, iron, [10, 2, 10], [0, 11.2, 0]));
+	g.add(box(THREE, iron, [8, 2.4, 8], [0, 9.4, 0]));
+	g.add(box(THREE, iron, [6, 2.2, 6], [0, 7.2, 0]));
+	g.add(box(THREE, iron, [3.5, 2, 3.5], [0, 5.2, 0]));
+	g.add(box(THREE, iron, [2.2, 1.4, 2.2], [0, 4.0, 0]));
 	return g;
 }
 
 function buildTntCargo(THREE, red, white) {
 	const g = new THREE.Group();
-	g.add(box(THREE, red, [12, 12, 12], [0, 9.5, 0]));
-	g.add(box(THREE, white, [12.2, 3, 12.2], [0, 9.5, 0]));
+	g.add(box(THREE, red, [10, 10, 10], [0, 8.5, 0]));
+	g.add(box(THREE, white, [10.2, 2.6, 10.2], [0, 8.5, 0]));
 	return g;
 }
 
 function buildCommandCargo(THREE, mat) {
 	const g = new THREE.Group();
-	g.add(box(THREE, mat, [12, 12, 12], [0, 9.5, 0]));
+	g.add(box(THREE, mat, [10, 10, 10], [0, 8.5, 0]));
 	return g;
 }
 
 function addCargo(THREE, group, kind, mats = null) {
 	const k = String(kind || "").toLowerCase();
-	const accentMat = mats?.accentMat ?? new THREE.MeshLambertMaterial({ color: 0xb08d57 });
-	const chestWood = mats?.chestWood ?? new THREE.MeshLambertMaterial({ color: 0x8b5a2b });
-	const chestStrap = mats?.chestStrap ?? new THREE.MeshLambertMaterial({ color: 0xc9a227 });
-	const ironMat = mats?.ironMat ?? new THREE.MeshLambertMaterial({ color: 0x5a5a62 });
-	const tntRed = mats?.tntRed ?? new THREE.MeshLambertMaterial({ color: 0xb33a2e });
-	const tntWhite = mats?.tntWhite ?? new THREE.MeshLambertMaterial({ color: 0xe8e0d8 });
-	const cmdMat = mats?.cmdMat ?? new THREE.MeshLambertMaterial({ color: 0xc48a3a });
+	const accentMat = mats?.accentMat ?? standInMat(THREE, 0xb08d57);
+	const chestWood = mats?.chestWood ?? standInMat(THREE, 0x8b5a2b);
+	const chestStrap = mats?.chestStrap ?? standInMat(THREE, 0xc9a227);
+	const ironMat = mats?.ironMat ?? standInMat(THREE, 0x5a5a62);
+	const tntRed = mats?.tntRed ?? standInMat(THREE, 0xb33a2e);
+	const tntWhite = mats?.tntWhite ?? standInMat(THREE, 0xe8e0d8);
+	const cmdMat = mats?.cmdMat ?? standInMat(THREE, 0xc48a3a);
 	if (k === "hopper" || k === "hopper_minecart" || k === "minecart_hopper") {
 		group.add(buildHopperCargo(THREE, ironMat));
 	} else if (k === "chest" || k === "chest_minecart" || k === "minecart_chest") {
@@ -163,7 +229,8 @@ function buildSeat(THREE, seatMat) {
  */
 function applyEntityPose(group, entity, railDirection) {
 	const [lx, ly, lz] = entity.pos || [0, 0, 0];
-	const [tx, ty, tz] = structurePosToThree(Number(lx) || 0, Number(ly) || 0, Number(lz) || 0);
+	const [tx, , tz] = structurePosToThree(Number(lx) || 0, Number(ly) || 0, Number(lz) || 0);
+	const ty = minecartWorldY(Number(ly) || 0, railDirection);
 	group.position.set(tx, ty, tz);
 
 	const yawDeg = Number(entity.yawDeg) || 0;
@@ -211,7 +278,19 @@ export function createEntityObject3D(THREE, entity, materials = {}) {
 		const hull = cloneVanillaTemplate(THREE, kitEntry.template);
 		hull.userData.sdbVanillaHull = true;
 		group.add(hull);
-		addCargo(THREE, group, kitEntry.cargo || kind);
+		const cargoKind = kitEntry.cargo || "";
+		const cargoEntry = cargoKind && cargoKind !== "none"
+			? materials.cargoKit?.get?.(cargoKind)
+			: null;
+		if (cargoEntry?.geometry) {
+			const cargo = new THREE.Mesh(cargoEntry.geometry, cargoEntry.material);
+			cargo.name = `vanilla-cargo:${cargoKind}`;
+			placeCargoMesh(cargo);
+			group.add(cargo);
+		} else {
+			addCargo(THREE, group, cargoKind);
+		}
+		addMinecartPickVolume(THREE, group);
 		applyEntityPose(group, entity, materials.railDirection);
 		group.traverse(obj => {
 			if (obj.isMesh) {
@@ -242,6 +321,7 @@ export function createEntityObject3D(THREE, entity, materials = {}) {
 	addCargo(THREE, group, kind, {
 		accentMat, chestWood, chestStrap, ironMat, tntRed, tntWhite, cmdMat
 	});
+	addMinecartPickVolume(THREE, group);
 	group.scale.setScalar(s);
 	applyEntityPose(group, entity, materials.railDirection);
 

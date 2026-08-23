@@ -1,16 +1,17 @@
 /**
  * Bedrock entity geo JSON → Three.js mesh (official Mojang models).
  * Box-UV matches BlockGeoMaker entity cubes. Fetches via ResourcePackStack
- * (Mojang/bedrock-samples).
+ * (Mojang/bedrock-samples). FrontSide + per-face normals (no DoubleSide) so
+ * overlapping cart walls don't z-fight — same idea as prismarine-viewer Entity.js.
  */
 
-import { applyBlockGeoEuler } from "./previewSpace.js";
 import {
 	VANILLA_ENTITY_MODELS,
 	flattenEntityCubes,
 	pickGeometry,
-	boxUvLayout
-} from "./entityModels.js";
+	boxUvLayout,
+	transformEntityPoint
+} from "./entityModels.js?v=judo37";
 
 /**
  * @param {any} cubeUv  [u,v] box origin or per-face object
@@ -83,7 +84,8 @@ export function createGeometryMesh(THREE, geoBlock, texture) {
 		let nx = ay * bz - az * by;
 		let ny = az * bx - ax * bz;
 		let nz = ax * by - ay * bx;
-		const nl = Math.hypot(nx, ny, nz) || 1;
+		const nl = Math.hypot(nx, ny, nz);
+		if (nl < 1e-8) return;
 		nx /= nl;
 		ny /= nl;
 		nz /= nl;
@@ -99,9 +101,8 @@ export function createGeometryMesh(THREE, geoBlock, texture) {
 	for (const cube of cubes) {
 		const [x, y, z] = cube.origin;
 		const [w, h, d] = cube.size;
-		const rot = cube.rotation;
-		const pivot = cube.pivot;
-		const xf = p => applyBlockGeoEuler(p, rot, pivot);
+		if (!(w > 0 && h > 0 && d > 0)) continue;
+		const xf = p => transformEntityPoint(p, cube);
 		const c000 = xf([x, y, z]);
 		const c100 = xf([x + w, y, z]);
 		const c010 = xf([x, y + h, z]);
@@ -113,13 +114,20 @@ export function createGeometryMesh(THREE, geoBlock, texture) {
 		const faces = resolveCubeUvFaces(cube.uv, cube.size);
 		const q = (face) =>
 			pixelUvQuad(face.uv[0], face.uv[1], face.uv_size[0], face.uv_size[1], texW, texH);
+		const maybeQuad = (p0, p1, p2, p3, face) => {
+			if (!face) return;
+			const uw = Number(face.uv_size?.[0]) || 0;
+			const vh = Number(face.uv_size?.[1]) || 0;
+			if (uw === 0 || vh === 0) return;
+			pushQuad(p0, p1, p2, p3, q(face));
+		};
 		// west -X, east +X, down -Y, up +Y, north -Z, south +Z
-		pushQuad(c000, c001, c011, c010, q(faces.west));
-		pushQuad(c100, c110, c111, c101, q(faces.east));
-		pushQuad(c000, c100, c101, c001, q(faces.down));
-		pushQuad(c010, c011, c111, c110, q(faces.up));
-		pushQuad(c000, c010, c110, c100, q(faces.north));
-		pushQuad(c001, c101, c111, c011, q(faces.south));
+		maybeQuad(c000, c001, c011, c010, faces.west);
+		maybeQuad(c100, c110, c111, c101, faces.east);
+		maybeQuad(c000, c100, c101, c001, faces.down);
+		maybeQuad(c010, c011, c111, c110, faces.up);
+		maybeQuad(c000, c010, c110, c100, faces.north);
+		maybeQuad(c001, c101, c111, c011, faces.south);
 	}
 
 	const geo = new THREE.BufferGeometry();
@@ -127,13 +135,15 @@ export function createGeometryMesh(THREE, geoBlock, texture) {
 	geo.setAttribute("normal", new THREE.Float32BufferAttribute(normals, 3));
 	geo.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
 	geo.setIndex(indices);
-	geo.computeVertexNormals();
+	// Keep per-face normals (prismarine-viewer Entity.js). computeVertexNormals
+	// would average box corners and flicker lighting on overlapping cart walls.
 
 	const mat = new THREE.MeshLambertMaterial({
 		map: texture,
 		transparent: true,
-		alphaTest: 0.05,
-		side: THREE.DoubleSide
+		alphaTest: 0.1,
+		side: THREE.FrontSide,
+		depthWrite: true
 	});
 	const mesh = new THREE.Mesh(geo, mat);
 	mesh.name = geoBlock?.description?.identifier || "entity-geo";

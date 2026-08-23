@@ -18,6 +18,10 @@ export default class PreviewResourcePool {
 	minecartTexture = null;
 	/** @type {Map<string, { template: import("three").Object3D, texture: import("three").Texture, cargo: string }>|null} */
 	entityModelKit = null;
+	/** @type {Map<string, { geometry: import("three").BufferGeometry, material: import("three").Material }>|null} */
+	cargoKit = null;
+	/** @type {import("three").Material|null} */
+	cargoMat = null;
 	/** @type {Map<string, import("three").Texture|null>} */
 	itemFrameTexCache = new Map();
 	/** @type {import("three").CubeTexture|null|undefined} */
@@ -96,6 +100,11 @@ export default class PreviewResourcePool {
 				if (hit) return true;
 			}
 		}
+		if (this.cargoKit) {
+			for (const entry of this.cargoKit.values()) {
+				if (entry?.geometry === geo) return true;
+			}
+		}
 		return false;
 	}
 
@@ -103,7 +112,8 @@ export default class PreviewResourcePool {
 	isSharedMaterial(mat) {
 		if (mat === this.regularMat
 			|| mat === this.transparentMat
-			|| mat === this.solidFloorMat) return true;
+			|| mat === this.solidFloorMat
+			|| mat === this.cargoMat) return true;
 		if (this.entityModelKit) {
 			for (const entry of this.entityModelKit.values()) {
 				let hit = false;
@@ -235,6 +245,20 @@ export default class PreviewResourcePool {
 				}
 			}
 		}
+		if (this.cargoKit) {
+			for (const entry of this.cargoKit.values()) {
+				try {
+					entry?.geometry?.dispose?.();
+				} catch {
+					/* ignore */
+				}
+			}
+		}
+		try {
+			this.cargoMat?.dispose?.();
+		} catch {
+			/* ignore */
+		}
 		try {
 			this.skyboxCubemap?.dispose?.();
 		} catch {
@@ -247,6 +271,8 @@ export default class PreviewResourcePool {
 		this.atlasTexture = null;
 		this.minecartTexture = null;
 		this.entityModelKit = null;
+		this.cargoKit = null;
+		this.cargoMat = null;
 		this.skyboxCubemap = null;
 	}
 }

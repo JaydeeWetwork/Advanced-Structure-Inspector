@@ -5,7 +5,7 @@
 
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
@@ -381,6 +381,62 @@ describe("entityMeshes coordinates", async () => {
 		assert.ok(Math.abs(p[0] - (-67.34)) < 0.5, `x=${p[0]}`);
 		assert.ok(Math.abs(p[1] - 5.6) < 0.1, `y=${p[1]}`);
 		assert.ok(Math.abs(p[2] - (-88)) < 0.1, `z=${p[2]}`);
+	});
+
+	it("sits flat carts on the rail plane, not NBT Y=0.35", async () => {
+		const { minecartWorldY, RAIL_PLANE_Y, HULL_FLOOR_BOTTOM, HULL_SIT_LIFT } =
+			await import("../../src/viewer/entityMeshes.js");
+		const cellY = 1;
+		const want = 16 * cellY + RAIL_PLANE_Y - HULL_FLOOR_BOTTOM + HULL_SIT_LIFT;
+		assert.equal(minecartWorldY(1.35, 0), want);
+		assert.equal(minecartWorldY(1.35, 1), want);
+		assert.equal(want, 16 + 1);
+		const nbtY = 16 * 1.35;
+		assert.ok(want < nbtY - 4, `should drop ~5 units off NBT (${nbtY} → ${want})`);
+	});
+
+	it("keeps slope NBT Y so pitched carts follow the climb", async () => {
+		const { minecartWorldY, HULL_FLOOR_BOTTOM, HULL_SIT_LIFT } = await import(
+			"../../src/viewer/entityMeshes.js"
+		);
+		const ly = 1.55;
+		assert.equal(
+			minecartWorldY(ly, 5),
+			16 * ly - HULL_FLOOR_BOTTOM + HULL_SIT_LIFT
+		);
+	});
+
+	it("pick volume covers the hull tub including cargo", async () => {
+		const { MINECART_PICK_SIZE, MINECART_PICK_CENTER } = await import(
+			"../../src/viewer/entityMeshes.js"
+		);
+		assert.deepEqual(MINECART_PICK_SIZE, [20, 15, 16]);
+		const y0 = MINECART_PICK_CENTER[1] - MINECART_PICK_SIZE[1] / 2;
+		const y1 = MINECART_PICK_CENTER[1] + MINECART_PICK_SIZE[1] / 2;
+		assert.ok(y0 <= 0.5, `pick bottom ${y0} should include floor`);
+		assert.ok(y1 >= 14, `pick top ${y1} should include cargo`);
+	});
+});
+
+describe("inspect pick preference", async () => {
+	const { chooseInspectHit, ENTITY_PICK_SLACK } = await import(
+		"../../src/viewer/systems/InspectRaycaster.js"
+	);
+
+	it("prefers the cart when the rail is only slightly closer (tub hole)", () => {
+		assert.equal(chooseInspectHit(12, 10), "entity");
+		assert.equal(chooseInspectHit(10, 10), "entity");
+		assert.equal(chooseInspectHit(10 + ENTITY_PICK_SLACK, 10), "entity");
+	});
+
+	it("keeps the block when it is clearly in front of the cart", () => {
+		assert.equal(chooseInspectHit(30, 10), "block");
+	});
+
+	it("returns miss when nothing hit", () => {
+		assert.equal(chooseInspectHit(Infinity, Infinity), "miss");
+		assert.equal(chooseInspectHit(5, Infinity), "entity");
+		assert.equal(chooseInspectHit(Infinity, 5), "block");
 	});
 });
 
@@ -875,7 +931,9 @@ describe("vanilla entity models", async () => {
 		vanillaModelDefFor,
 		pickGeometry,
 		flattenEntityCubes,
-		boxUvLayout
+		boxUvLayout,
+		cubeRotationPivot,
+		transformEntityPoint
 	} = await import("../../src/viewer/entityModels.js");
 
 	const SAMPLE_GEO = {
@@ -922,14 +980,64 @@ describe("vanilla entity models", async () => {
 		assert.equal(g.description.identifier, "geometry.minecart.v1.8");
 	});
 
-	it("flattens bones to cubes using bone pivot when cube has no pivot", () => {
+	it("flattens bones to cubes using box center when cube has no pivot", () => {
 		const g = pickGeometry(SAMPLE_GEO, "geometry.minecart.v1.8");
 		const cubes = flattenEntityCubes(g);
 		assert.equal(cubes.length, 2);
 		assert.deepEqual(cubes[0].size, [20, 16, 2]);
-		assert.deepEqual(cubes[0].pivot, [0, 6, 0]);
+		// origin [-10,-6.5,-1] + size/2 → [0, 1.5, 0]  (NOT bone pivot [0,6,0])
+		assert.deepEqual(cubes[0].pivot, [0, 1.5, 0]);
 		assert.deepEqual(cubes[0].rotation, [90, 0, 0]);
 		assert.deepEqual(cubes[1].uv, [0, 0]);
+		assert.deepEqual(cubeRotationPivot([-10, -6.5, -1], [20, 16, 2], null), [0, 1.5, 0]);
+		assert.deepEqual(cubeRotationPivot([0, 0, 0], [2, 2, 2], [1, 0, 0]), [1, 0, 0]);
+	});
+
+	it("rotates minecart floor 90° X around box center into a 20×16 tub bottom", () => {
+		const g = pickGeometry(SAMPLE_GEO, "geometry.minecart.v1.8");
+		const floor = flattenEntityCubes(g)[0];
+		const [x, y, z] = floor.origin;
+		const [w, h, d] = floor.size;
+		const corners = [
+			[x, y, z],
+			[x + w, y, z],
+			[x, y + h, z],
+			[x + w, y + h, z],
+			[x, y, z + d],
+			[x + w, y, z + d],
+			[x, y + h, z + d],
+			[x + w, y + h, z + d]
+		].map(p => transformEntityPoint(p, floor));
+		const xs = corners.map(p => p[0]);
+		const ys = corners.map(p => p[1]);
+		const zs = corners.map(p => p[2]);
+		assert.ok(Math.min(...xs) > -10.01 && Math.max(...xs) < 10.01, `x ${Math.min(...xs)}..${Math.max(...xs)}`);
+		assert.ok(Math.min(...ys) > 0.49 && Math.max(...ys) < 2.51, `y ${Math.min(...ys)}..${Math.max(...ys)}`);
+		assert.ok(Math.min(...zs) > -8.01 && Math.max(...zs) < 8.01, `z ${Math.min(...zs)}..${Math.max(...zs)}`);
+	});
+
+	it("rotates minecart back wall 270° Y around box center onto x=-10..-8", () => {
+		const origin = [-17, 2.5, -1];
+		const size = [16, 8, 2];
+		const cube = {
+			origin,
+			size,
+			rotation: [0, 270, 0],
+			pivot: cubeRotationPivot(origin, size, null),
+			boneChain: []
+		};
+		const [x, y, z] = origin;
+		const [w, h, d] = size;
+		const corners = [
+			[x, y, z], [x + w, y, z], [x, y + h, z], [x + w, y + h, z],
+			[x, y, z + d], [x + w, y, z + d], [x, y + h, z + d], [x + w, y + h, z + d]
+		].map(p => transformEntityPoint(p, cube));
+		const xs = corners.map(p => p[0]);
+		const ys = corners.map(p => p[1]);
+		const zs = corners.map(p => p[2]);
+		assert.ok(Math.min(...xs) > -10.01 && Math.max(...xs) < -7.99, `x ${Math.min(...xs)}..${Math.max(...xs)}`);
+		assert.ok(Math.min(...ys) > 2.49 && Math.max(...ys) < 10.51, `y ${Math.min(...ys)}..${Math.max(...ys)}`);
+		assert.ok(Math.min(...zs) > -8.01 && Math.max(...zs) < 8.01, `z ${Math.min(...zs)}..${Math.max(...zs)}`);
 	});
 
 	it("box UV layout has six faces in texture pixels", () => {
@@ -937,6 +1045,62 @@ describe("vanilla entity models", async () => {
 		assert.deepEqual(uv.north.uv_size, [20, 8]);
 		assert.deepEqual(uv.up.uv_size, [20, 2]);
 		assert.ok(uv.west.uv[0] > 0);
+	});
+});
+
+describe("minecart cargo blocks", async () => {
+	const {
+		CARGO_BLOCKS,
+		CARGO_SCALE,
+		CARGO_FLOOR_Y,
+		cargoKindsNeeded,
+		cargoPaletteEntries,
+		placeCargoMesh,
+		polyMeshTemplateToGeometry
+	} = await import("../../src/viewer/entityCargo.js");
+
+	it("maps subtypes to official palette blocks", () => {
+		assert.equal(CARGO_BLOCKS.chest.name, "chest");
+		assert.equal(CARGO_BLOCKS.hopper.name, "hopper");
+		assert.equal(CARGO_BLOCKS.hopper.states.facing_direction, 0);
+		assert.equal(CARGO_BLOCKS.tnt.name, "tnt");
+		assert.equal(CARGO_BLOCKS.command.name, "command_block");
+		assert.equal(CARGO_SCALE, 0.75);
+		for (const b of Object.values(CARGO_BLOCKS)) {
+			assert.equal(b.name.includes(":"), false, `${b.name} must be un-namespaced for blocks.json`);
+		}
+	});
+
+	it("collects cargo kinds from entity identifiers", () => {
+		const kinds = cargoKindsNeeded([
+			{ identifier: "minecart" },
+			{ identifier: "minecraft:hopper_minecart" },
+			{ identifier: "chest_minecart" },
+			{ identifier: "armor_stand" }
+		]);
+		assert.deepEqual([...kinds].sort(), ["chest", "hopper"]);
+		const entries = cargoPaletteEntries([{ identifier: "tnt_minecart" }]);
+		assert.equal(entries.length, 1);
+		assert.equal(entries[0].kind, "tnt");
+		assert.equal(entries[0].block.name, "tnt");
+	});
+
+	it("sits cargo on the hull floor at 0.75 scale", () => {
+		const mesh = {
+			scale: { setScalar(s) { this._s = s; } },
+			position: { set(x, y, z) { this._p = [x, y, z]; } },
+			frustumCulled: true
+		};
+		placeCargoMesh(mesh);
+		assert.equal(mesh.scale._s, CARGO_SCALE);
+		assert.equal(mesh.position._p[1], CARGO_FLOOR_Y);
+		assert.equal(mesh.position._p[0], -8 * CARGO_SCALE);
+		assert.equal(mesh.frustumCulled, false);
+	});
+
+	it("polyMeshTemplateToGeometry returns null without faces", () => {
+		assert.equal(polyMeshTemplateToGeometry({}, []), null);
+		assert.equal(polyMeshTemplateToGeometry({}, null), null);
 	});
 });
 
@@ -1335,6 +1499,58 @@ describe("entityExtract", async () => {
 		assert.equal(ent.identifier, "hopper_minecart");
 		assert.deepEqual(ent.pos.map(n => +n.toFixed(2)), [1.5, 0.5, 2.5]);
 		assert.equal(ent.yawDeg, 45);
+	});
+
+	it("finds all subtypes on NSEW + sloped rails in minecarts.mcstructure", async (t) => {
+		let NBT;
+		try {
+			NBT = await import("nbtify-readonly-typeless");
+		} catch {
+			t.skip("nbtify not available");
+			return;
+		}
+		const p = join(root, "tests/sampleStructures/minecarts.mcstructure");
+		if (!existsSync(p)) {
+			t.skip("minecarts.mcstructure not generated");
+			return;
+		}
+		const buf = readFileSync(p);
+		const ab = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
+		const data = (await NBT.read(ab, { endian: "little", strict: false })).data;
+		const carts = extractRenderableEntities(data);
+		const byKind = {};
+		for (const c of carts) {
+			byKind[c.identifier] = (byKind[c.identifier] || 0) + 1;
+		}
+		for (const kind of [
+			"minecart",
+			"chest_minecart",
+			"hopper_minecart",
+			"tnt_minecart",
+			"command_block_minecart"
+		]) {
+			assert.ok((byKind[kind] || 0) >= 2, `need ≥2 ${kind}, got ${byKind[kind] || 0}`);
+		}
+		const yaws = new Set(carts.map(c => ((c.yawDeg % 360) + 360) % 360));
+		assert.ok(yaws.has(0), "south yaw 0");
+		assert.ok(yaws.has(90), "west yaw 90");
+		assert.ok(yaws.has(180), "north yaw 180");
+		assert.ok(yaws.has(270), "east yaw -90 → 270");
+
+		const pal = data.structure.palette.default.block_palette;
+		const dirs = new Set();
+		for (const b of pal) {
+			const n = String(b.name || "").replace(/^minecraft:/, "");
+			if (!n.includes("rail")) continue;
+			const d = b.states?.rail_direction;
+			if (d != null) dirs.add(Number(d));
+		}
+		for (let d = 0; d <= 5; d++) {
+			assert.ok(dirs.has(d), `missing rail_direction ${d}`);
+		}
+
+		const hopper = carts.find(c => c.identifier === "hopper_minecart" && (c.items?.length || 0) > 0);
+		assert.ok(hopper, "hopper minecart should carry items for inspect");
 	});
 
 	it("finds minecarts in rails.mcstructure sample", async (t) => {
