@@ -4,9 +4,15 @@
  *  - lectern open-book indicator
  */
 
-import { disposeObject3D } from "./disposeObject3D.js?v=judo27";
-import { geoPointToThree } from "../previewSpace.js?v=judo27";
-import { signPlaneInstanceVerts } from "../signPlacement.js?v=judo27";
+import { disposeObject3D } from "./disposeObject3D.js?v=judo28";
+import { geoPointToThree } from "../previewSpace.js?v=judo28";
+import { kindOfSign, signPlaneInstanceVerts } from "../signPlacement.js?v=judo28";
+import {
+	applySignTweaks,
+	signTweaks,
+	tweaksAffectKind,
+	tweaksAreIdentity
+} from "../signDebug.js?v=judo28";
 import { isOnActiveLayer } from "../layerVisibility.js";
 import { extractSignText, extractLecternBook } from "../inspectStructure.js";
 
@@ -101,7 +107,11 @@ export default class SpecialBlockOverlay {
 	 * @param {boolean} isBack
 	 */
 	#makeSignTextMesh(THREE, b, name, lines, face, isBack) {
-		const baked = signPlaneInstanceVerts(b, name, isBack);
+		let baked = signPlaneInstanceVerts(b, name, isBack);
+		const kind = baked.placed.kind || kindOfSign(name, b.states);
+		if (tweaksAffectKind(kind, signTweaks) && !tweaksAreIdentity(signTweaks)) {
+			baked = applySignTweaks(baked, signTweaks);
+		}
 		const glowing = !!face.glowing;
 		const tex = this.#makeTextTexture(THREE, lines, face.color, {
 			glowing,
@@ -110,7 +120,7 @@ export default class SpecialBlockOverlay {
 		const mat = new THREE.MeshBasicMaterial({
 			map: tex,
 			transparent: true,
-			side: THREE.FrontSide,
+			side: signTweaks.doubleSide ? THREE.DoubleSide : THREE.FrontSide,
 			depthWrite: true,
 			alphaTest: 0.08,
 			polygonOffset: true,
@@ -133,8 +143,44 @@ export default class SpecialBlockOverlay {
 		mesh.position.set(baked.origin[0], baked.origin[1], baked.origin[2]);
 		mesh.renderOrder = 8;
 		mesh.userData.sdbSpecialOverlay = true;
+		mesh.userData.sdbSignBaked = baked;
 		mesh.frustumCulled = false;
-		return mesh;
+
+		if (!signTweaks.markers) return mesh;
+
+		const g = new THREE.Group();
+		g.userData.sdbSpecialOverlay = true;
+		g.add(mesh);
+		g.add(this.#makeSignMarkers(THREE, baked, isBack));
+		return g;
+	}
+
+	/**
+	 * Board dot + outward arrow so slider results are visible.
+	 * @param {typeof import("three")} THREE
+	 * @param {ReturnType<typeof signPlaneInstanceVerts>} baked
+	 * @param {boolean} isBack
+	 */
+	#makeSignMarkers(THREE, baked, isBack) {
+		const g = new THREE.Group();
+		g.userData.sdbSpecialOverlay = true;
+		const board = baked.boardPos;
+		const dot = new THREE.Mesh(
+			new THREE.BoxGeometry(0.7, 0.7, 0.7),
+			new THREE.MeshBasicMaterial({ color: 0xff00ff, wireframe: true, depthTest: false })
+		);
+		dot.position.set(board.x, board.y, board.z);
+		dot.renderOrder = 20;
+		g.add(dot);
+
+		const origin = new THREE.Vector3(baked.placed.tx, baked.placed.ty, baked.placed.tz);
+		const dir = new THREE.Vector3(baked.basis.z[0], baked.basis.z[1], baked.basis.z[2]);
+		if (dir.lengthSq() < 1e-8) dir.set(0, 0, 1);
+		else dir.normalize();
+		const arrow = new THREE.ArrowHelper(dir, origin, 5, isBack ? 0xff8800 : 0x00e8ff, 1.2, 0.7);
+		arrow.renderOrder = 20;
+		g.add(arrow);
+		return g;
 	}
 
 	/**

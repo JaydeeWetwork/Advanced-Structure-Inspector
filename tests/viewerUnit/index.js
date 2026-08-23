@@ -803,6 +803,35 @@ describe("signPlacement", async () => {
 		assert.ok(Math.abs(baked.placed.tz - unflippedZ) > 8, "must not use unflipped instance Z");
 	});
 
+	it("sign tweaks lift along outward and yaw spins basis", async () => {
+		const { signPlaneInstanceVerts } = await import("../../src/viewer/signPlacement.js");
+		const {
+			applySignTweaks,
+			DEFAULT_SIGN_TWEAKS,
+			formatSignTweakRecipe,
+			tweaksAreIdentity
+		} = await import("../../src/viewer/signDebug.js");
+		const block = { x: 0, y: 0, z: 0, states: { ground_sign_direction: 0 } };
+		const base = signPlaneInstanceVerts(block, "standing_sign", false);
+		assert.equal(tweaksAreIdentity(DEFAULT_SIGN_TWEAKS), true);
+		const lifted = applySignTweaks(base, { ...DEFAULT_SIGN_TWEAKS, liftAdd: 2 });
+		const dx = lifted.placed.tx - base.placed.tx;
+		const dy = lifted.placed.ty - base.placed.ty;
+		const dz = lifted.placed.tz - base.placed.tz;
+		const dot = dx * base.basis.z[0] + dy * base.basis.z[1] + dz * base.basis.z[2];
+		assert.ok(Math.abs(dot - 2) < 1e-6, `lift should move along +Z, dot=${dot}`);
+		const yawed = applySignTweaks(base, { ...DEFAULT_SIGN_TWEAKS, yawDeg: 90 });
+		const z = yawed.basis.z;
+		assert.ok(Math.abs(z[1]) < 1e-6, "yaw keeps Z horizontal");
+		assert.ok(Math.abs(Math.hypot(z[0], z[2]) - 1) < 1e-6);
+		const recipe = formatSignTweakRecipe({
+			tweaks: { ...DEFAULT_SIGN_TWEAKS, yawDeg: -45, note: "test" }
+		});
+		assert.match(recipe, /---SIGN_TWEAK---/);
+		assert.match(recipe, /yawDeg: -45/);
+		assert.match(recipe, /note: test/);
+	});
+
 	it("F minus B is along baked board +Z for gsd=15", async () => {
 		const { placeSignFace, boardCenterThree, signBoardAxes, eulerOfSign } =
 			await import("../../src/viewer/signPlacement.js");

@@ -27,8 +27,8 @@ import {
 	exportGlb as exportGlbFile,
 	wirePreviewOptionsGui,
 	SpecialBlockOverlay
-} from "./viewer/systems/index.js?v=judo27";
-import { disposeObject3D } from "./viewer/systems/disposeObject3D.js?v=judo27";
+} from "./viewer/systems/index.js?v=judo28";
+import { disposeObject3D } from "./viewer/systems/disposeObject3D.js?v=judo28";
 
 import Stats from "stats.js";
 
@@ -413,7 +413,8 @@ export default class PreviewRenderer extends AsyncFactory {
 				requestRender: () => this.#viewport.requestRender(),
 				setSize: () => this.#viewport.setInitialSize(),
 				pool: this.#pool,
-				inProduction: IN_PRODUCTION
+				inProduction: IN_PRODUCTION,
+				rebuildOverlays: () => this.#rebuildOverlays()
 			});
 		}
 

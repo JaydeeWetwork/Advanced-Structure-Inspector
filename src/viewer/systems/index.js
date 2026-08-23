@@ -33,5 +33,5 @@ export {
 	DEFAULT_FOV
 } from "./orbitBootstrap.js?v=judo17";
 export { downloadScreenshot, exportGlb } from "./PreviewExport.js?v=judo17";
-export { wirePreviewOptionsGui } from "./PreviewOptionsGui.js?v=judo17";
-export { default as SpecialBlockOverlay } from "./SpecialBlockOverlay.js?v=judo27";
+export { wirePreviewOptionsGui } from "./PreviewOptionsGui.js?v=judo28";
+export { default as SpecialBlockOverlay } from "./SpecialBlockOverlay.js?v=judo28";
