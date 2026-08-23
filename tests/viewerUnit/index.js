@@ -712,15 +712,16 @@ describe("signPlacement", async () => {
 	});
 
 	it("standing face offsets sit outside plaque thickness", async () => {
-		const { SIGN_BOARD, signFaceLocalOffset, TEXT_LIFT } = await import("../../src/viewer/signPlacement.js");
+		const { SIGN_BOARD, signFaceLocalOffset, signFaceLift } = await import("../../src/viewer/signPlacement.js");
 		const board = SIGN_BOARD.standing;
 		const f = signFaceLocalOffset(board, false);
 		const bk = signFaceLocalOffset(board, true);
-		assert.ok(Math.abs(f.z) > board.halfT, `front |z| ${f.z} should exceed halfT ${board.halfT}`);
-		assert.ok(Math.abs(bk.z) > board.halfT, `back |z| ${bk.z}`);
+		const lift = signFaceLift(board);
+		assert.ok(lift > board.halfT * 0.9, `lift ${lift} should clear scaled plaque`);
+		assert.ok(Math.abs(f.z) > board.halfT * 0.9, `front |z| ${f.z}`);
+		assert.ok(Math.abs(bk.z) > board.halfT * 0.9, `back |z| ${bk.z}`);
 		assert.equal(Math.sign(f.z), 1);
 		assert.equal(Math.sign(bk.z), -1);
-		assert.ok(TEXT_LIFT > 0.3);
 	});
 
 	it("at 45° three.js outward is not Ry(+45) +Z (Z-flip)", async () => {
@@ -745,10 +746,12 @@ describe("signPlacement", async () => {
 			"oak_standing_sign"
 		);
 		assert.deepEqual(d.boardThree, [-136, 12.125, -8]);
-		assert.deepEqual(d.front.three, [-135.081, 12.125, -8.919]);
-		assert.deepEqual(d.back.three, [-136.919, 12.125, -7.081]);
-		assert.deepEqual(d.front.dBoard, [0.919, 0, -0.919]);
-		assert.deepEqual(d.back.dBoard, [-0.919, 0, 0.919]);
+		const [fdx, , fdz] = d.front.dBoard;
+		const [bdx, , bdz] = d.back.dBoard;
+		assert.ok(Math.abs(fdx + fdz) < 0.05, `F d should be (a,0,-a), got ${d.front.dBoard}`);
+		assert.ok(Math.abs(bdx + bdz) < 0.05, `B d should be (-a,0,a), got ${d.back.dBoard}`);
+		assert.ok(fdx > 0 && fdz < 0, `F d ${d.front.dBoard}`);
+		assert.ok(bdx < 0 && bdz > 0, `B d ${d.back.dBoard}`);
 		const f = signFaceBasis(
 			{ tx: d.front.three[0], ty: d.front.three[1], tz: d.front.three[2] },
 			{ x: d.boardThree[0], y: d.boardThree[1], z: d.boardThree[2] }
@@ -762,6 +765,42 @@ describe("signPlacement", async () => {
 		assert.ok(Math.abs(f.y[1] - 1) < 0.05, `standing text up should be +Y, y=${f.y}`);
 		const ryDot = f.z[0] * Math.sin(Math.PI / 4) + f.z[2] * Math.cos(Math.PI / 4);
 		assert.ok(Math.abs(ryDot) < 0.2, `plane +Z must not be Ry(45)+Z, dot=${ryDot}`);
+	});
+
+	it("bakes 45° plane verts onto instance origin (not mesh quaternion)", async () => {
+		const { signPlaneInstanceVerts, instanceOriginThree } = await import("../../src/viewer/signPlacement.js");
+		const block = { x: 8, y: 0, z: 0, states: { ground_sign_direction: 2 } };
+		const baked = signPlaneInstanceVerts(block, "oak_standing_sign", false);
+		assert.deepEqual(baked.origin, instanceOriginThree(8, 0, 0));
+		const [o0, o1, o2] = baked.origin;
+		const world = baked.verts.map(v => [v[0] + o0, v[1] + o1, v[2] + o2]);
+		const cx = (world[0][0] + world[1][0] + world[2][0] + world[3][0]) / 4;
+		const cy = (world[0][1] + world[1][1] + world[2][1] + world[3][1]) / 4;
+		const cz = (world[0][2] + world[1][2] + world[2][2] + world[3][2]) / 4;
+		assert.ok(Math.abs(cx - baked.placed.tx) < 1e-6, `center x ${cx} vs ${baked.placed.tx}`);
+		assert.ok(Math.abs(cy - baked.placed.ty) < 1e-6, `center y ${cy}`);
+		assert.ok(Math.abs(cz - baked.placed.tz) < 1e-6, `center z ${cz}`);
+		// width edges must follow 45° Z-flip (not world +X)
+		const e0x = world[1][0] - world[0][0];
+		const e0z = world[1][2] - world[0][2];
+		const elen = Math.hypot(e0x, e0z);
+		const ex = e0x / elen, ez = e0z / elen;
+		assert.ok(Math.abs(Math.abs(ex) - Math.abs(ez)) < 0.05, `45° width along diagonal, edge=${ex},${ez}`);
+		assert.ok(Math.abs(ex) > 0.5, "width must not be axis-aligned");
+	});
+
+	it("wall fd=2 instance verts sit on the Z-flipped plate, not 1 block out", async () => {
+		const { signPlaneInstanceVerts, boardCenterThree } = await import("../../src/viewer/signPlacement.js");
+		const block = { x: 11, y: 0, z: 5, states: { facing_direction: 2 } };
+		const baked = signPlaneInstanceVerts(block, "warped_wall_sign", false);
+		const mid = boardCenterThree(block, "warped_wall_sign");
+		const [o0, o1, o2] = baked.origin;
+		const cz = baked.verts.reduce((s, v) => s + v[2], 0) / 4 + o2;
+		assert.ok(Math.abs(cz - baked.placed.tz) < 1e-6);
+		assert.ok(Math.abs(baked.placed.tz - mid.z) < 2, `F should be ~1 geo from board, Δz=${baked.placed.tz - mid.z}`);
+		assert.ok(baked.placed.tz > mid.z, "wall F is toward room (+Z after flip)");
+		const unflippedZ = -16 * 5 - 16 + baked.placed.localZ;
+		assert.ok(Math.abs(baked.placed.tz - unflippedZ) > 8, "must not use unflipped instance Z");
 	});
 
 	it("F minus B is along baked board +Z for gsd=15", async () => {

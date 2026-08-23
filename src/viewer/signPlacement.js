@@ -25,7 +25,30 @@ export const SIGN_BOARD = {
 };
 
 /** Push text off the wood face (geo units). */
-export const TEXT_LIFT = 0.55;
+export const TEXT_LIFT = 0.18;
+
+/** Matches structurePreview defaultPreviewConfig.SCALE (faces shrink toward CoM). */
+export const GEO_SCALE = 0.95;
+
+/**
+ * Instance mesh origin — same as LayerMeshSystem:
+ * `[-16x-16, 16y, -16z-16]`.
+ * @param {number} x
+ * @param {number} y
+ * @param {number} z
+ * @returns {[number, number, number]}
+ */
+export function instanceOriginThree(x, y, z) {
+	return [-16 * x - 16, 16 * y, -16 * z - 16];
+}
+
+/**
+ * Outward offset from plaque center along local Z, after hologram scale.
+ * @param {{ halfT: number }} board
+ */
+export function signFaceLift(board) {
+	return board.halfT * GEO_SCALE + TEXT_LIFT;
+}
 
 /** facing_direction 2–5 (wall_sign / hopper,hanging_sign). */
 const CARDINAL_EULER = {
@@ -156,7 +179,7 @@ export function signFaceLocalOffset(board, isBack) {
 	return {
 		x: board.cx - 8,
 		y: board.cy - 8,
-		z: board.cz - 8 + side * (board.halfT + TEXT_LIFT),
+		z: board.cz - 8 + side * signFaceLift(board),
 		side
 	};
 }
@@ -171,7 +194,7 @@ export function placeSignFace(block, name, isBack) {
 	const board = SIGN_BOARD[kind];
 	const eulerDeg = eulerOfSign(kind, block.states);
 	const side = faceSide(kind, isBack);
-	const localZ = board.cz + side * (board.halfT + TEXT_LIFT);
+	const localZ = board.cz + side * signFaceLift(board);
 	const [gx, gy, gz] = applyBlockGeoEuler([board.cx, board.cy, localZ], eulerDeg);
 	// Match BlockGeoSystem vertex Z-flip (16 - z) via geoPointToThree
 	const [tx, ty, tz] = geoPointToThree(block.x, block.y, block.z, gx, gy, gz);
@@ -331,6 +354,42 @@ export function signFaceOrientation(THREE, textPos, boardPos) {
 		new THREE.Matrix4().makeBasis(x, y, z)
 	);
 	return { quaternion: q, scaleX: 1 };
+}
+
+/**
+ * Four PlaneGeometry verts in instance space (origin + verts = world).
+ * Rotation is baked into the vertices the same way BlockGeoSystem bakes
+ * euler then `z' = 16 - z` — no mesh quaternion (that was ignored / Ry-only
+ * at 45° and left text unaligned).
+ *
+ * Vertex order matches THREE.PlaneGeometry(1,1):
+ * (-x,+y), (+x,+y), (-x,-y), (+x,-y).
+ *
+ * @param {{ x: number, y: number, z: number, states?: Record<string, unknown> }} block
+ * @param {string} name
+ * @param {boolean} isBack
+ */
+export function signPlaneInstanceVerts(block, name, isBack) {
+	const placed = placeSignFace(block, name, isBack);
+	const boardPos = boardCenterThree(block, name);
+	const basis = signFaceBasis(placed, boardPos);
+	const origin = instanceOriginThree(block.x, block.y, block.z);
+	const hw = placed.board.w * GEO_SCALE / 2;
+	const hh = placed.board.h * GEO_SCALE / 2;
+	/** @param {number} sx @param {number} sy */
+	const corner = (sx, sy) => {
+		const wx = placed.tx + basis.x[0] * sx * hw + basis.y[0] * sy * hh;
+		const wy = placed.ty + basis.x[1] * sx * hw + basis.y[1] * sy * hh;
+		const wz = placed.tz + basis.x[2] * sx * hw + basis.y[2] * sy * hh;
+		return [wx - origin[0], wy - origin[1], wz - origin[2]];
+	};
+	return {
+		origin,
+		verts: [corner(-1, 1), corner(1, 1), corner(-1, -1), corner(1, -1)],
+		placed,
+		basis,
+		boardPos
+	};
 }
 
 /**

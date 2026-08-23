@@ -8,7 +8,7 @@ import {
 	extractLecternBook,
 	readRedstoneSignal
 } from "./inspectStructure.js";
-import { describeSignPlacement } from "./signPlacement.js?v=judo26";
+import { describeSignPlacement } from "./signPlacement.js?v=judo27";
 
 /**
  * @typedef {{ name: string, count: number, slot: number|null, damage: number|null }} ItemStack
@@ -737,7 +737,7 @@ function renderSignPlacementDump(block) {
 		`board three ${desc.boardThree.join(",")}`,
 		`F side=${f.side} localZ=${f.localZ} three=${f.three.join(",")}  d=${f.dBoard.join(",")}`,
 		`B side=${b.side} localZ=${b.localZ} three=${b.three.join(",")}  d=${b.dBoard.join(",")}`,
-		"judo26 plane +Z = d (text−board, Z-flipped). F/B must be opposite."
+		"judo27 verts baked in instance space (euler + Z-flip). F/B opposite."
 	].join("\n");
 	return box;
 }

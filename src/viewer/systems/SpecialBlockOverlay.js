@@ -4,13 +4,9 @@
  *  - lectern open-book indicator
  */
 
-import { disposeObject3D } from "./disposeObject3D.js?v=judo26";
-import { geoPointToThree } from "../previewSpace.js?v=judo26";
-import {
-	boardCenterThree,
-	placeSignFace,
-	signFaceOrientation
-} from "../signPlacement.js?v=judo26";
+import { disposeObject3D } from "./disposeObject3D.js?v=judo27";
+import { geoPointToThree } from "../previewSpace.js?v=judo27";
+import { signPlaneInstanceVerts } from "../signPlacement.js?v=judo27";
 import { isOnActiveLayer } from "../layerVisibility.js";
 import { extractSignText, extractLecternBook } from "../inspectStructure.js";
 
@@ -105,7 +101,7 @@ export default class SpecialBlockOverlay {
 	 * @param {boolean} isBack
 	 */
 	#makeSignTextMesh(THREE, b, name, lines, face, isBack) {
-		const placed = placeSignFace(b, name, isBack);
+		const baked = signPlaneInstanceVerts(b, name, isBack);
 		const glowing = !!face.glowing;
 		const tex = this.#makeTextTexture(THREE, lines, face.color, {
 			glowing,
@@ -115,22 +111,26 @@ export default class SpecialBlockOverlay {
 			map: tex,
 			transparent: true,
 			side: THREE.FrontSide,
-			depthWrite: false,
+			depthWrite: true,
+			alphaTest: 0.08,
 			polygonOffset: true,
-			polygonOffsetFactor: -4,
-			polygonOffsetUnits: -4
+			polygonOffsetFactor: -2,
+			polygonOffsetUnits: -2
 		});
 		if (glowing) mat.color?.setHex?.(0xffffee);
 
-		const mesh = new THREE.Mesh(
-			new THREE.PlaneGeometry(placed.board.w, placed.board.h),
-			mat
-		);
-		mesh.position.set(placed.tx, placed.ty, placed.tz);
-		const board = boardCenterThree(b, name);
-		const { quaternion, scaleX } = signFaceOrientation(THREE, placed, board);
-		mesh.quaternion.copy(quaternion);
-		mesh.scale.x = scaleX;
+		const geo = new THREE.PlaneGeometry(1, 1);
+		const pos = geo.attributes.position;
+		for (let i = 0; i < 4; i++) {
+			pos.setXYZ(i, baked.verts[i][0], baked.verts[i][1], baked.verts[i][2]);
+		}
+		pos.needsUpdate = true;
+		geo.computeVertexNormals();
+		geo.computeBoundingBox();
+		geo.computeBoundingSphere();
+
+		const mesh = new THREE.Mesh(geo, mat);
+		mesh.position.set(baked.origin[0], baked.origin[1], baked.origin[2]);
 		mesh.renderOrder = 8;
 		mesh.userData.sdbSpecialOverlay = true;
 		mesh.frustumCulled = false;
