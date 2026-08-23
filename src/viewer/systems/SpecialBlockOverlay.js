@@ -4,12 +4,13 @@
  *  - lectern open-book indicator
  */
 
-import { disposeObject3D } from "./disposeObject3D.js?v=judo25";
-import { geoPointToThree } from "../previewSpace.js?v=judo25";
+import { disposeObject3D } from "./disposeObject3D.js?v=judo26";
+import { geoPointToThree } from "../previewSpace.js?v=judo26";
 import {
+	boardCenterThree,
 	placeSignFace,
 	signFaceOrientation
-} from "../signPlacement.js?v=judo25";
+} from "../signPlacement.js?v=judo26";
 import { isOnActiveLayer } from "../layerVisibility.js";
 import { extractSignText, extractLecternBook } from "../inspectStructure.js";
 
@@ -126,7 +127,8 @@ export default class SpecialBlockOverlay {
 			mat
 		);
 		mesh.position.set(placed.tx, placed.ty, placed.tz);
-		const { quaternion, scaleX } = signFaceOrientation(THREE, placed.eulerDeg, placed.side);
+		const board = boardCenterThree(b, name);
+		const { quaternion, scaleX } = signFaceOrientation(THREE, placed, board);
 		mesh.quaternion.copy(quaternion);
 		mesh.scale.x = scaleX;
 		mesh.renderOrder = 8;

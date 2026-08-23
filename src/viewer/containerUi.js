@@ -8,7 +8,7 @@ import {
 	extractLecternBook,
 	readRedstoneSignal
 } from "./inspectStructure.js";
-import { describeSignPlacement } from "./signPlacement.js";
+import { describeSignPlacement } from "./signPlacement.js?v=judo26";
 
 /**
  * @typedef {{ name: string, count: number, slot: number|null, damage: number|null }} ItemStack
@@ -735,9 +735,9 @@ function renderSignPlacementDump(block) {
 		`cell ${desc.pos.x},${desc.pos.y},${desc.pos.z}  euler ${desc.eulerDeg.join(",")}`,
 		st ? `states ${st}` : "states (none)",
 		`board three ${desc.boardThree.join(",")}`,
-		`F side=${f.side} localZ=${f.localZ} three=${f.three.join(",")}`,
-		`B side=${b.side} localZ=${b.localZ} three=${b.three.join(",")}`,
-		"Planes are parented to the board; F/B offsets are along board +Z."
+		`F side=${f.side} localZ=${f.localZ} three=${f.three.join(",")}  d=${f.dBoard.join(",")}`,
+		`B side=${b.side} localZ=${b.localZ} three=${b.three.join(",")}  d=${b.dBoard.join(",")}`,
+		"judo26 plane +Z = d (text−board, Z-flipped). F/B must be opposite."
 	].join("\n");
 	return box;
 }

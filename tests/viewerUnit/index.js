@@ -723,6 +723,47 @@ describe("signPlacement", async () => {
 		assert.ok(TEXT_LIFT > 0.3);
 	});
 
+	it("at 45° three.js outward is not Ry(+45) +Z (Z-flip)", async () => {
+		const { placeSignFace, boardCenterThree } = await import("../../src/viewer/signPlacement.js");
+		const block = { x: 0, y: 0, z: 0, states: { ground_sign_direction: 2 } };
+		const f = placeSignFace(block, "standing_sign", false);
+		const mid = boardCenterThree(block, "standing_sign");
+		const ox = f.tx - mid.x, oy = f.ty - mid.y, oz = f.tz - mid.z;
+		const len = Math.hypot(ox, oy, oz);
+		const nx = ox / len, nz = oz / len;
+		const ryZx = Math.sin(45 * Math.PI / 180);
+		const ryZz = Math.cos(45 * Math.PI / 180);
+		const dot = nx * ryZx + nz * ryZz;
+		assert.ok(Math.abs(dot) < 0.2, `outward should not match Ry(45)+Z, dot=${dot}`);
+		assert.ok(Math.abs(nx + nz) < 0.05, `45° Z-flip outward ~ (a,0,-a), got ${nx},${nz}`);
+	});
+
+	it("gsd=2 cell 8,0,0 dump uses Z-flipped F/B (not plaque-plane sandwich)", async () => {
+		const { describeSignPlacement, signFaceBasis } = await import("../../src/viewer/signPlacement.js");
+		const d = describeSignPlacement(
+			{ x: 8, y: 0, z: 0, states: { ground_sign_direction: 2 } },
+			"oak_standing_sign"
+		);
+		assert.deepEqual(d.boardThree, [-136, 12.125, -8]);
+		assert.deepEqual(d.front.three, [-135.081, 12.125, -8.919]);
+		assert.deepEqual(d.back.three, [-136.919, 12.125, -7.081]);
+		assert.deepEqual(d.front.dBoard, [0.919, 0, -0.919]);
+		assert.deepEqual(d.back.dBoard, [-0.919, 0, 0.919]);
+		const f = signFaceBasis(
+			{ tx: d.front.three[0], ty: d.front.three[1], tz: d.front.three[2] },
+			{ x: d.boardThree[0], y: d.boardThree[1], z: d.boardThree[2] }
+		);
+		const b = signFaceBasis(
+			{ tx: d.back.three[0], ty: d.back.three[1], tz: d.back.three[2] },
+			{ x: d.boardThree[0], y: d.boardThree[1], z: d.boardThree[2] }
+		);
+		const sandwich = f.z[0] * b.z[0] + f.z[1] * b.z[1] + f.z[2] * b.z[2];
+		assert.ok(sandwich < -0.99, `F/B +Z must be opposite, dot=${sandwich}`);
+		assert.ok(Math.abs(f.y[1] - 1) < 0.05, `standing text up should be +Y, y=${f.y}`);
+		const ryDot = f.z[0] * Math.sin(Math.PI / 4) + f.z[2] * Math.cos(Math.PI / 4);
+		assert.ok(Math.abs(ryDot) < 0.2, `plane +Z must not be Ry(45)+Z, dot=${ryDot}`);
+	});
+
 	it("F minus B is along baked board +Z for gsd=15", async () => {
 		const { placeSignFace, boardCenterThree, signBoardAxes, eulerOfSign } =
 			await import("../../src/viewer/signPlacement.js");

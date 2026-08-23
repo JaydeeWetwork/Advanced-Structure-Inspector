@@ -5,7 +5,6 @@
 
 import {
 	applyBlockGeoEuler,
-	blockGeoEulerToThree,
 	geoPointToThree
 } from "./previewSpace.js";
 
@@ -215,8 +214,8 @@ export function describeSignPlacement(block, name) {
 		eulerDeg: front.eulerDeg,
 		pos: { x: block.x, y: block.y, z: block.z },
 		boardThree: [round3(board.x), round3(board.y), round3(board.z)],
-		front: summarizeFace(front),
-		back: summarizeFace(back)
+		front: summarizeFace(front, board),
+		back: summarizeFace(back, board)
 	};
 }
 
@@ -232,12 +231,18 @@ export function signDebugFooter(desc, isBack) {
 
 /**
  * @param {{ side: number, localZ: number, tx: number, ty: number, tz: number }} placed
+ * @param {{ x: number, y: number, z: number }} board
  */
-function summarizeFace(placed) {
+function summarizeFace(placed, board) {
 	return {
 		side: placed.side,
 		localZ: round3(placed.localZ),
-		three: [round3(placed.tx), round3(placed.ty), round3(placed.tz)]
+		three: [round3(placed.tx), round3(placed.ty), round3(placed.tz)],
+		dBoard: [
+			round3(placed.tx - board.x),
+			round3(placed.ty - board.y),
+			round3(placed.tz - board.z)
+		]
 	};
 }
 
@@ -264,21 +269,68 @@ export function signBoardAxes(eulerDeg) {
 }
 
 /**
- * Plane axes = baked board axes. Back = 180° around board Y (flip X and Z)
- * so F and B face outward on opposite plaque faces with LTR text.
+ * Plane +X/+Y/+Z in three.js: +Z = text − board (outward after geo Z-flip),
+ * +Y from world up, +X = up × +Z (reader's right).
  *
- * @param {typeof import("three")} THREE
- * @param {[number, number, number]} eulerDeg
- * @param {number} side
+ * Ry(+yaw) matches that offset only at 90°/270°. At 45° it is perpendicular,
+ * so F/B lie in the plaque (sandwich + clip through the wood).
+ *
+ * @param {{ tx: number, ty: number, tz: number }} textPos
+ * @param {{ x: number, y: number, z: number }} boardPos
+ * @returns {{ x: [number, number, number], y: [number, number, number], z: [number, number, number] }}
  */
-export function signFaceOrientation(THREE, eulerDeg, side) {
-	const q = new THREE.Quaternion().setFromEuler(
-		blockGeoEulerToThree(eulerDeg[0], eulerDeg[1], eulerDeg[2], THREE)
-	);
-	if (side < 0) {
-		q.multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI));
+export function signFaceBasis(textPos, boardPos) {
+	let zx = textPos.tx - boardPos.x;
+	let zy = textPos.ty - boardPos.y;
+	let zz = textPos.tz - boardPos.z;
+	let zLen = Math.hypot(zx, zy, zz);
+	if (zLen < 1e-10) {
+		zx = 0;
+		zy = 0;
+		zz = 1;
+		zLen = 1;
 	}
-	return { quaternion: q, scaleX: side < 0 ? -1 : 1 };
+	zx /= zLen;
+	zy /= zLen;
+	zz /= zLen;
+	// x = world-up × z
+	let xx = zz;
+	let xy = 0;
+	let xz = -zx;
+	let xLen = Math.hypot(xx, xy, xz);
+	if (xLen < 1e-10) {
+		xx = 1;
+		xy = 0;
+		xz = 0;
+		xLen = 1;
+	}
+	xx /= xLen;
+	xy /= xLen;
+	xz /= xLen;
+	const yx = zy * xz - zz * xy;
+	const yy = zz * xx - zx * xz;
+	const yz = zx * xy - zy * xx;
+	return {
+		x: [xx, xy, xz],
+		y: [yx, yy, yz],
+		z: [zx, zy, zz]
+	};
+}
+
+/**
+ * @param {typeof import("three")} THREE
+ * @param {{ tx: number, ty: number, tz: number }} textPos
+ * @param {{ x: number, y: number, z: number }} boardPos
+ */
+export function signFaceOrientation(THREE, textPos, boardPos) {
+	const b = signFaceBasis(textPos, boardPos);
+	const x = new THREE.Vector3(b.x[0], b.x[1], b.x[2]);
+	const y = new THREE.Vector3(b.y[0], b.y[1], b.y[2]);
+	const z = new THREE.Vector3(b.z[0], b.z[1], b.z[2]);
+	const q = new THREE.Quaternion().setFromRotationMatrix(
+		new THREE.Matrix4().makeBasis(x, y, z)
+	);
+	return { quaternion: q, scaleX: 1 };
 }
 
 /**
