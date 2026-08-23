@@ -27,9 +27,9 @@ import {
 	exportGlb as exportGlbFile,
 	wirePreviewOptionsGui,
 	SpecialBlockOverlay
-} from "./viewer/systems/index.js?v=judo33";
-import { disposeObject3D } from "./viewer/systems/disposeObject3D.js?v=judo33";
-import { SIGN_TWEAK_EVENT } from "./viewer/signDebug.js?v=judo33";
+} from "./viewer/systems/index.js?v=judo34";
+import { disposeObject3D } from "./viewer/systems/disposeObject3D.js?v=judo34";
+import { SIGN_TWEAK_EVENT } from "./viewer/signDebug.js?v=judo34";
 
 import Stats from "stats.js";
 

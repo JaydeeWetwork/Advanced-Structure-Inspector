@@ -5,12 +5,12 @@
 
 export { disposeObject3D, clearChildren } from "./disposeObject3D.js?v=judo17";
 export { default as PreviewContext } from "./PreviewContext.js?v=judo17";
-export { default as PreviewResourcePool } from "./PreviewResourcePool.js?v=judo17";
+export { default as PreviewResourcePool } from "./PreviewResourcePool.js?v=judo34";
 export { default as LayerMeshSystem } from "./LayerMeshSystem.js?v=judo17";
 export {
 	default as EntityAttachSystem,
 	entityStructureLayer
-} from "./EntityAttachSystem.js?v=judo18";
+} from "./EntityAttachSystem.js?v=judo34";
 export { default as CameraController } from "./CameraController.js?v=judo17";
 export { default as FlyController } from "./FlyController.js?v=judo17";
 export { default as InspectRaycaster } from "./InspectRaycaster.js?v=judo17";

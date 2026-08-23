@@ -16,6 +16,8 @@ export default class PreviewResourcePool {
 	geoByPalette = new Map();
 	/** @type {import("three").Texture|null} */
 	minecartTexture = null;
+	/** @type {Map<string, { template: import("three").Object3D, texture: import("three").Texture, cargo: string }>|null} */
+	entityModelKit = null;
 	/** @type {Map<string, import("three").Texture|null>} */
 	itemFrameTexCache = new Map();
 	/** @type {import("three").CubeTexture|null|undefined} */
@@ -85,14 +87,33 @@ export default class PreviewResourcePool {
 		for (const g of this.geoByPalette.values()) {
 			if (g === geo) return true;
 		}
+		if (this.entityModelKit) {
+			for (const entry of this.entityModelKit.values()) {
+				let hit = false;
+				entry?.template?.traverse?.(o => {
+					if (o.isMesh && o.geometry === geo) hit = true;
+				});
+				if (hit) return true;
+			}
+		}
 		return false;
 	}
 
 	/** @param {import("three").Material} mat */
 	isSharedMaterial(mat) {
-		return mat === this.regularMat
+		if (mat === this.regularMat
 			|| mat === this.transparentMat
-			|| mat === this.solidFloorMat;
+			|| mat === this.solidFloorMat) return true;
+		if (this.entityModelKit) {
+			for (const entry of this.entityModelKit.values()) {
+				let hit = false;
+				entry?.template?.traverse?.(o => {
+					if (o.isMesh && o.material === mat) hit = true;
+				});
+				if (hit) return true;
+			}
+		}
+		return false;
 	}
 
 	/** @param {import("three").Texture} map */
@@ -100,6 +121,11 @@ export default class PreviewResourcePool {
 		if (!map) return false;
 		if (map === this.atlasTexture) return true;
 		if (map === this.minecartTexture) return true;
+		if (this.entityModelKit) {
+			for (const entry of this.entityModelKit.values()) {
+				if (entry?.texture === map) return true;
+			}
+		}
 		for (const t of this.itemFrameTexCache.values()) {
 			if (t === map) return true;
 		}
@@ -175,6 +201,40 @@ export default class PreviewResourcePool {
 		} catch {
 			/* ignore */
 		}
+		if (this.entityModelKit) {
+			const seenGeo = new Set();
+			const seenMat = new Set();
+			const seenTex = new Set();
+			for (const entry of this.entityModelKit.values()) {
+				entry?.template?.traverse?.(o => {
+					if (!o.isMesh) return;
+					if (o.geometry && !seenGeo.has(o.geometry)) {
+						seenGeo.add(o.geometry);
+						try {
+							o.geometry.dispose?.();
+						} catch {
+							/* ignore */
+						}
+					}
+					if (o.material && !seenMat.has(o.material)) {
+						seenMat.add(o.material);
+						try {
+							o.material.dispose?.();
+						} catch {
+							/* ignore */
+						}
+					}
+				});
+				if (entry?.texture && !seenTex.has(entry.texture)) {
+					seenTex.add(entry.texture);
+					try {
+						entry.texture.dispose?.();
+					} catch {
+						/* ignore */
+					}
+				}
+			}
+		}
 		try {
 			this.skyboxCubemap?.dispose?.();
 		} catch {
@@ -186,6 +246,7 @@ export default class PreviewResourcePool {
 		this.solidFloorMat = null;
 		this.atlasTexture = null;
 		this.minecartTexture = null;
+		this.entityModelKit = null;
 		this.skyboxCubemap = null;
 	}
 }

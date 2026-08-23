@@ -35,13 +35,13 @@ import {
 	onPreviewKeydown,
 	onPreviewDblClick,
 	initInspectWindow
-} from "./ui/previewChrome.js?v=judo33";
+} from "./ui/previewChrome.js?v=judo34";
 import {
 	selectEntry,
 	loadPreview,
 	downloadSelected,
 	removeSelected
-} from "./app/previewLifecycle.js?v=judo33";
+} from "./app/previewLifecycle.js?v=judo34";
 import { handleFiles } from "./app/importExport.js";
 
 setEls(createEls());

@@ -869,6 +869,77 @@ describe("signPlacement", async () => {
 	});
 });
 
+describe("vanilla entity models", async () => {
+	const {
+		VANILLA_ENTITY_MODELS,
+		vanillaModelDefFor,
+		pickGeometry,
+		flattenEntityCubes,
+		boxUvLayout
+	} = await import("../../src/viewer/entityModels.js");
+
+	const SAMPLE_GEO = {
+		"minecraft:geometry": [
+			{
+				description: { identifier: "geometry.minecart.v1.8", texture_width: 64, texture_height: 32 },
+				bones: [
+					{
+						name: "bottom",
+						pivot: [0, 6, 0],
+						cubes: [{ origin: [-10, -6.5, -1], size: [20, 16, 2], rotation: [90, 0, 0], uv: [0, 10] }]
+					},
+					{
+						name: "left",
+						parent: "bottom",
+						pivot: [0, 0, 0],
+						cubes: [{ origin: [-8, 2.5, 6], size: [16, 8, 2], uv: [0, 0] }]
+					}
+				]
+			}
+		]
+	};
+
+	it("maps all minecart kinds to Mojang resource_pack paths", () => {
+		for (const kind of [
+			"minecart",
+			"hopper_minecart",
+			"chest_minecart",
+			"tnt_minecart",
+			"command_block_minecart"
+		]) {
+			const d = VANILLA_ENTITY_MODELS[kind];
+			assert.ok(d, kind);
+			assert.match(d.entityFile, /^entity\/.*minecart/);
+			assert.equal(d.geoFile, "models/entity/minecart.geo.json");
+			assert.equal(d.texture, "textures/entity/minecart");
+		}
+		assert.equal(vanillaModelDefFor("minecraft:hopper_minecart")?.cargo, "hopper");
+		assert.equal(vanillaModelDefFor("armor_stand"), null);
+	});
+
+	it("picks geometry.minecart.v1.8 when client asks for geometry.minecart", () => {
+		const g = pickGeometry(SAMPLE_GEO, ["geometry.minecart", "geometry.minecart.v1.8"]);
+		assert.equal(g.description.identifier, "geometry.minecart.v1.8");
+	});
+
+	it("flattens bones to cubes using bone pivot when cube has no pivot", () => {
+		const g = pickGeometry(SAMPLE_GEO, "geometry.minecart.v1.8");
+		const cubes = flattenEntityCubes(g);
+		assert.equal(cubes.length, 2);
+		assert.deepEqual(cubes[0].size, [20, 16, 2]);
+		assert.deepEqual(cubes[0].pivot, [0, 6, 0]);
+		assert.deepEqual(cubes[0].rotation, [90, 0, 0]);
+		assert.deepEqual(cubes[1].uv, [0, 0]);
+	});
+
+	it("box UV layout has six faces in texture pixels", () => {
+		const uv = boxUvLayout([20, 8, 2], true);
+		assert.deepEqual(uv.north.uv_size, [20, 8]);
+		assert.deepEqual(uv.up.uv_size, [20, 2]);
+		assert.ok(uv.west.uv[0] > 0);
+	});
+});
+
 describe("itemFrameItems", async () => {
 	const {
 		extractItemFramePlacements,

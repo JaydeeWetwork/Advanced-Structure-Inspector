@@ -1,16 +1,19 @@
 /**
- * Procedural Three.js meshes for structure entities (minecart family).
+ * Structure-entity meshes (minecart family).
  *
- * Minecart entity skins (minecart.png) are UV layouts for geo models — NOT
- * tileable materials. Mapping that atlas onto box faces looks like a black/grey
- * mess, so we use flat materials only. Cargo (chest/hopper/TNT) uses solid colors
- * that read clearly at structure scale.
+ * Hull prefers official Mojang geo + PNG from bedrock-samples
+ * (`loadEntityModelKit`). Cargo is still a colored stand-in until block-geo
+ * cargo is wired. Fallback is the old procedural boxes if vanilla fetch fails.
  *
  * Coordinate mapping matches PreviewRenderer block placement (Z-flip).
  */
 
 import { structurePosToThree } from "./previewSpace.js";
+import { entityMeshKind } from "./entityExtract.js";
+import { loadVanillaEntityKit } from "./entityGeoThree.js";
+
 export { structurePosToThree };
+export { loadVanillaEntityKit as loadEntityModelKit };
 
 /**
  * Infer pitch (degrees, nose up positive) from Bedrock rail_direction under the cart.
@@ -123,6 +126,30 @@ function buildCommandCargo(THREE, mat) {
 	return g;
 }
 
+function addCargo(THREE, group, kind, mats = null) {
+	const k = String(kind || "").toLowerCase();
+	const accentMat = mats?.accentMat ?? new THREE.MeshLambertMaterial({ color: 0xb08d57 });
+	const chestWood = mats?.chestWood ?? new THREE.MeshLambertMaterial({ color: 0x8b5a2b });
+	const chestStrap = mats?.chestStrap ?? new THREE.MeshLambertMaterial({ color: 0xc9a227 });
+	const ironMat = mats?.ironMat ?? new THREE.MeshLambertMaterial({ color: 0x5a5a62 });
+	const tntRed = mats?.tntRed ?? new THREE.MeshLambertMaterial({ color: 0xb33a2e });
+	const tntWhite = mats?.tntWhite ?? new THREE.MeshLambertMaterial({ color: 0xe8e0d8 });
+	const cmdMat = mats?.cmdMat ?? new THREE.MeshLambertMaterial({ color: 0xc48a3a });
+	if (k === "hopper" || k === "hopper_minecart" || k === "minecart_hopper") {
+		group.add(buildHopperCargo(THREE, ironMat));
+	} else if (k === "chest" || k === "chest_minecart" || k === "minecart_chest") {
+		group.add(buildChestCargo(THREE, chestWood, chestStrap));
+	} else if (k === "tnt" || k === "tnt_minecart") {
+		group.add(buildTntCargo(THREE, tntRed, tntWhite));
+	} else if (k === "command" || k === "command_block_minecart") {
+		group.add(buildCommandCargo(THREE, cmdMat));
+	} else if (!mats) {
+		/* vanilla hull already reads as empty cart */
+	} else {
+		group.add(buildSeat(THREE, accentMat));
+	}
+}
+
 function buildSeat(THREE, seatMat) {
 	const g = new THREE.Group();
 	g.add(box(THREE, seatMat, [10, 1.2, 10], [0, 3.8, 0]));
@@ -130,25 +157,75 @@ function buildSeat(THREE, seatMat) {
 }
 
 /**
- * @param {typeof import("three")} THREE
+ * @param {import("three").Object3D} group
  * @param {import("./entityExtract.js").PreviewEntity} entity
- * @param {{
- *   minecartTexture?: import("three").Texture|null,
- *   scale?: number,
- *   railDirection?: number|null
- * }} [materials]
- * @returns {import("three").Object3D}
+ * @param {number|null|undefined} railDirection
  */
+function applyEntityPose(group, entity, railDirection) {
+	const [lx, ly, lz] = entity.pos || [0, 0, 0];
+	const [tx, ty, tz] = structurePosToThree(Number(lx) || 0, Number(ly) || 0, Number(lz) || 0);
+	group.position.set(tx, ty, tz);
+
+	const yawDeg = Number(entity.yawDeg) || 0;
+	group.rotation.y = -(yawDeg * (Math.PI / 180));
+
+	let pitchDeg = Number(entity.pitchDeg) || 0;
+	if (Math.abs(pitchDeg) < 0.5 && railDirection != null) {
+		pitchDeg = pitchFromRailDirection(railDirection, yawDeg);
+	}
+	if (Math.abs(pitchDeg) > 0.5) {
+		group.rotation.order = "YXZ";
+		group.rotation.x = pitchDeg * (Math.PI / 180);
+	}
+}
+
+/**
+ * Clone a kit template while sharing BufferGeometry + Material (vanilla PNG).
+ * @param {typeof import("three")} THREE
+ * @param {import("three").Object3D} template
+ */
+function cloneVanillaTemplate(THREE, template) {
+	const g = new THREE.Group();
+	g.name = template.name;
+	template.traverse(obj => {
+		if (!obj.isMesh || obj === template) return;
+		const m = new THREE.Mesh(obj.geometry, obj.material);
+		m.name = obj.name;
+		m.frustumCulled = false;
+		g.add(m);
+	});
+	return g;
+}
+
 export function createEntityObject3D(THREE, entity, materials = {}) {
-	const kind = String(entity.identifier || entity.meshKind || "").replace(/^minecraft:/, "");
+	const kind = entityMeshKind(entity.identifier || entity.meshKind || "")
+		|| String(entity.identifier || "").replace(/^minecraft:/, "");
 	const group = new THREE.Group();
 	group.name = `entity:${entity.rawId || kind}`;
 	group.userData.previewEntity = true;
 	group.userData.sdbEntity = entity;
+	group.userData.sdbMeshKind = kind;
+
+	const kitEntry = materials.entityKit?.get?.(kind);
+	if (kitEntry?.template) {
+		const hull = cloneVanillaTemplate(THREE, kitEntry.template);
+		hull.userData.sdbVanillaHull = true;
+		group.add(hull);
+		addCargo(THREE, group, kitEntry.cargo || kind);
+		applyEntityPose(group, entity, materials.railDirection);
+		group.traverse(obj => {
+			if (obj.isMesh) {
+				obj.castShadow = false;
+				obj.receiveShadow = false;
+				obj.frustumCulled = false;
+			}
+		});
+		return group;
+	}
 
 	const s = materials.scale ?? 0.72;
 
-	// Flat materials only — entity skin atlas is not valid on arbitrary boxes
+	// Fallback: flat boxes if vanilla geo/PNG did not load
 	const cartMat = new THREE.MeshLambertMaterial({ color: 0x6a6e75 });
 	const darkMat = new THREE.MeshLambertMaterial({ color: 0x2c2e33 });
 	const wheelMat = new THREE.MeshLambertMaterial({ color: 0x141518 });
@@ -162,41 +239,11 @@ export function createEntityObject3D(THREE, entity, materials = {}) {
 	const cmdMat = new THREE.MeshLambertMaterial({ color: 0xc48a3a });
 
 	group.add(buildMinecartHull(THREE, cartMat, darkMat, wheelMat, rimMat));
-
-	const k = kind.toLowerCase();
-	if (k === "hopper_minecart" || k === "minecart_hopper") {
-		group.add(buildHopperCargo(THREE, ironMat));
-	} else if (k === "chest_minecart" || k === "minecart_chest") {
-		group.add(buildChestCargo(THREE, chestWood, chestStrap));
-	} else if (k === "tnt_minecart") {
-		group.add(buildTntCargo(THREE, tntRed, tntWhite));
-	} else if (k === "command_block_minecart") {
-		group.add(buildCommandCargo(THREE, cmdMat));
-	} else {
-		group.add(buildSeat(THREE, accentMat));
-	}
-
+	addCargo(THREE, group, kind, {
+		accentMat, chestWood, chestStrap, ironMat, tntRed, tntWhite, cmdMat
+	});
 	group.scale.setScalar(s);
-
-	const [lx, ly, lz] = entity.pos || [0, 0, 0];
-	const [tx, ty, tz] = structurePosToThree(Number(lx) || 0, Number(ly) || 0, Number(lz) || 0);
-	group.position.set(tx, ty, tz);
-
-	// Yaw: Bedrock Rotation[0]; negate for preview Z-flip
-	const yawDeg = Number(entity.yawDeg) || 0;
-	const yaw = yawDeg * (Math.PI / 180);
-	group.rotation.y = -yaw;
-
-	// Pitch: prefer entity Rotation[1], else rail under cart
-	let pitchDeg = Number(entity.pitchDeg) || 0;
-	if (Math.abs(pitchDeg) < 0.5 && materials.railDirection != null) {
-		pitchDeg = pitchFromRailDirection(materials.railDirection, yawDeg);
-	}
-	// Pitch around local X after yaw (nose up/down along track)
-	if (Math.abs(pitchDeg) > 0.5) {
-		group.rotation.order = "YXZ";
-		group.rotation.x = pitchDeg * (Math.PI / 180);
-	}
+	applyEntityPose(group, entity, materials.railDirection);
 
 	group.traverse(obj => {
 		if (obj.isMesh) {

@@ -139,10 +139,10 @@ export default class EntityAttachSystem {
 			);
 
 			let createEntityObject3D;
-			let loadMinecartTexture;
+			let loadEntityModelKit;
 			try {
-				({ createEntityObject3D, loadMinecartTexture } = await import(
-					"../entityMeshes.js?v=judo18"
+				({ createEntityObject3D, loadEntityModelKit } = await import(
+					"../entityMeshes.js?v=judo34"
 				));
 			} catch (e) {
 				console.error("[sdb] failed to load entityMeshes module:", e);
@@ -150,20 +150,14 @@ export default class EntityAttachSystem {
 			if (gen !== this.#attachGen || this.ctx.isDisposed()) return 0;
 
 			const rps = resourcePackStack ?? options.entityResourcePackStack;
-			if (rps && !pool.minecartTexture && loadMinecartTexture) {
+			if (rps && !pool.entityModelKit && loadEntityModelKit) {
 				try {
-					const tex = await loadMinecartTexture(THREE, rps);
-					if (gen !== this.#attachGen || this.ctx.isDisposed()) {
-						try {
-							tex?.dispose?.();
-						} catch {
-							/* ignore */
-						}
-						return 0;
-					}
-					if (tex) pool.minecartTexture = tex;
+					const kit = await loadEntityModelKit(THREE, rps);
+					if (gen !== this.#attachGen || this.ctx.isDisposed()) return 0;
+					if (kit?.size) pool.entityModelKit = kit;
+					console.info(`[sdb] vanilla entity kit: ${kit?.size ?? 0} kind(s)`);
 				} catch (e) {
-					console.warn("[sdb] minecart texture load failed:", e);
+					console.warn("[sdb] vanilla entity kit load failed:", e);
 				}
 			}
 			if (gen !== this.#attachGen || this.ctx.isDisposed()) return 0;
@@ -176,8 +170,7 @@ export default class EntityAttachSystem {
 						if (!isOnActiveLayer(ly, layerFilter)) continue;
 						const railDirection = railDirectionUnder(this.ctx, ent.pos);
 						const obj = createEntityObject3D(THREE, ent, {
-							// Do not apply minecart.png as a box material (UV mess)
-							minecartTexture: null,
+							entityKit: pool.entityModelKit,
 							railDirection
 						});
 						obj.userData.previewEntity = true;
