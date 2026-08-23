@@ -4,13 +4,12 @@
  *  - lectern open-book indicator
  */
 
-import { disposeObject3D } from "./disposeObject3D.js?v=judo24";
-import { blockVertexToThree } from "../previewSpace.js?v=judo24";
+import { disposeObject3D } from "./disposeObject3D.js?v=judo25";
+import { geoPointToThree } from "../previewSpace.js?v=judo25";
 import {
-	signFaceLocalOffset,
-	signFaceOrientation,
-	signGroupPose
-} from "../signPlacement.js?v=judo24";
+	placeSignFace,
+	signFaceOrientation
+} from "../signPlacement.js?v=judo25";
 import { isOnActiveLayer } from "../layerVisibility.js";
 import { extractSignText, extractLecternBook } from "../inspectStructure.js";
 
@@ -84,12 +83,6 @@ export default class SpecialBlockOverlay {
 			if (!isOnActiveLayer(b.y, layerFilter)) continue;
 			const sign = extractSignText(b.blockEntity);
 			if (!sign) continue;
-			const pose = signGroupPose(b, name);
-			const group = new THREE.Group();
-			group.name = `sdb-sign:${name}@${b.x},${b.y},${b.z}`;
-			group.position.set(pose.origin[0], pose.origin[1], pose.origin[2]);
-			group.quaternion.copy(signFaceOrientation(THREE, pose.eulerDeg, 1).quaternion);
-			group.userData.sdbSpecialOverlay = true;
 
 			for (const { face, isBack } of [
 				{ face: sign.front, isBack: false },
@@ -97,21 +90,21 @@ export default class SpecialBlockOverlay {
 			]) {
 				const lines = face?.lines;
 				if (!lines?.some(l => String(l).trim())) continue;
-				group.add(this.#makeSignFaceMesh(THREE, pose.board, lines, face, isBack));
+				root.add(this.#makeSignTextMesh(THREE, b, name, lines, face, isBack));
 			}
-			if (group.children.length) root.add(group);
 		}
 	}
 
 	/**
 	 * @param {typeof import("three")} THREE
-	 * @param {typeof import("../signPlacement.js").SIGN_BOARD[import("../signPlacement.js").SignKind]} board
+	 * @param {{ x: number, y: number, z: number, states?: Record<string, unknown> }} b
+	 * @param {string} name
 	 * @param {string[]} lines
 	 * @param {{ color?: number|null, glowing?: boolean }} face
 	 * @param {boolean} isBack
 	 */
-	#makeSignFaceMesh(THREE, board, lines, face, isBack) {
-		const off = signFaceLocalOffset(board, isBack);
+	#makeSignTextMesh(THREE, b, name, lines, face, isBack) {
+		const placed = placeSignFace(b, name, isBack);
 		const glowing = !!face.glowing;
 		const tex = this.#makeTextTexture(THREE, lines, face.color, {
 			glowing,
@@ -129,13 +122,13 @@ export default class SpecialBlockOverlay {
 		if (glowing) mat.color?.setHex?.(0xffffee);
 
 		const mesh = new THREE.Mesh(
-			new THREE.PlaneGeometry(board.w, board.h),
+			new THREE.PlaneGeometry(placed.board.w, placed.board.h),
 			mat
 		);
-		mesh.position.set(off.x, off.y, off.z);
-		// Face -Z in board space (wall fronts, standing backs). isBack is the
-		// NBT face, not the geo normal — wall F is side=-1 but isBack=false.
-		if (off.side < 0) mesh.rotation.y = Math.PI;
+		mesh.position.set(placed.tx, placed.ty, placed.tz);
+		const { quaternion, scaleX } = signFaceOrientation(THREE, placed.eulerDeg, placed.side);
+		mesh.quaternion.copy(quaternion);
+		mesh.scale.x = scaleX;
 		mesh.renderOrder = 8;
 		mesh.userData.sdbSpecialOverlay = true;
 		mesh.frustumCulled = false;
@@ -160,7 +153,7 @@ export default class SpecialBlockOverlay {
 			if (!lec?.hasBook) continue;
 
 			const g = new THREE.Group();
-			const [tx, ty, tz] = blockVertexToThree(b.x, b.y, b.z, 8, 14, 8);
+			const [tx, ty, tz] = geoPointToThree(b.x, b.y, b.z, 8, 14, 8);
 			g.position.set(tx, ty, tz);
 
 			const left = new THREE.Mesh(new THREE.BoxGeometry(5, 0.4, 7), pageMat);

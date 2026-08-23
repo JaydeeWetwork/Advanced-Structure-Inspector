@@ -34,9 +34,9 @@ export function geoPointToThree(bx, by, bz, gx, gy, gz) {
 }
 
 /**
- * Block-local 0–16 vertex → three.js, matching LayerMeshSystem instances
- * (`[-16x-16, 16y, -16z-16]` + local vertex). Use this for overlays that must
- * sit on baked block geo. Do not use geoPointToThree for that — it flips Z.
+ * Block-local 0–16 vertex as stored in the instance buffer *before* the
+ * Z-flip in BlockGeoSystem (`16 - pos[2]`). Prefer geoPointToThree for
+ * overlays that must sit on baked block geo.
  *
  * @param {number} bx
  * @param {number} by

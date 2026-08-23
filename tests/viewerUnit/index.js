@@ -687,18 +687,18 @@ describe("signPlacement", async () => {
 		assert.ok(oz > Math.min(fz, bz) && oz < Math.max(fz, bz), `board z ${oz} not between ${fz} ${bz}`);
 	});
 
-	it("sign vertices use block instance space not Z-flipped geoPointToThree", async () => {
-		const { blockVertexToThree, geoPointToThree } = await import("../../src/viewer/previewSpace.js");
+	it("sign text matches Z-flipped block geo (16 - z)", async () => {
+		const { geoPointToThree, blockVertexToThree } = await import("../../src/viewer/previewSpace.js");
 		const { placeSignFace } = await import("../../src/viewer/signPlacement.js");
 		const p = placeSignFace(
-			{ x: 0, y: 0, z: 0, states: { ground_sign_direction: 0 } },
-			"standing_sign",
+			{ x: 0, y: 0, z: 0, states: { facing_direction: 2 } },
+			"oak_wall_sign",
 			false
 		);
-		const inst = blockVertexToThree(0, 0, 0, 8, 12.125, p.localZ);
-		const flipped = geoPointToThree(0, 0, 0, 8, 12.125, p.localZ);
-		assert.deepEqual([p.tx, p.ty, p.tz], inst);
-		assert.notEqual(p.tz, flipped[2]);
+		const flipped = geoPointToThree(0, 0, 0, 8, 8.125, p.localZ);
+		const unflipped = blockVertexToThree(0, 0, 0, 8, 8.125, p.localZ);
+		assert.deepEqual([p.tx, p.ty, p.tz], flipped);
+		assert.notEqual(p.tz, unflipped[2]);
 	});
 
 	it("wall front is geo -Z (side -1) not isBack", async () => {
@@ -733,9 +733,10 @@ describe("signPlacement", async () => {
 		const dx = f.tx - mid.x, dy = f.ty - mid.y, dz = f.tz - mid.z;
 		const len = Math.hypot(dx, dy, dz);
 		const nx = dx / len, ny = dy / len, nz = dz / len;
+		// Block geo buffer uses z' = 16 - z, so world direction Z is negated
 		assert.ok(Math.abs(nx - axes.z[0]) < 1e-6, `nx ${nx} vs ${axes.z[0]}`);
 		assert.ok(Math.abs(ny - axes.z[1]) < 1e-6, `ny ${ny}`);
-		assert.ok(Math.abs(nz - axes.z[2]) < 1e-6, `nz ${nz} vs ${axes.z[2]}`);
+		assert.ok(Math.abs(nz - -axes.z[2]) < 1e-6, `nz ${nz} vs ${-axes.z[2]}`);
 	});
 });
 

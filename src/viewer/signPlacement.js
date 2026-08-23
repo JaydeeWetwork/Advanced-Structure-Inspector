@@ -5,7 +5,8 @@
 
 import {
 	applyBlockGeoEuler,
-	blockVertexToThree
+	blockGeoEulerToThree,
+	geoPointToThree
 } from "./previewSpace.js";
 
 /** @typedef {"wall"|"standing"|"hanging"} SignKind */
@@ -173,7 +174,8 @@ export function placeSignFace(block, name, isBack) {
 	const side = faceSide(kind, isBack);
 	const localZ = board.cz + side * (board.halfT + TEXT_LIFT);
 	const [gx, gy, gz] = applyBlockGeoEuler([board.cx, board.cy, localZ], eulerDeg);
-	const [tx, ty, tz] = blockVertexToThree(block.x, block.y, block.z, gx, gy, gz);
+	// Match BlockGeoSystem vertex Z-flip (16 - z) via geoPointToThree
+	const [tx, ty, tz] = geoPointToThree(block.x, block.y, block.z, gx, gy, gz);
 	return { kind, board, eulerDeg, side, localZ, tx, ty, tz };
 }
 
@@ -187,7 +189,7 @@ export function boardCenterThree(block, name) {
 	const board = SIGN_BOARD[kind];
 	const eulerDeg = eulerOfSign(kind, block.states);
 	const [gx, gy, gz] = applyBlockGeoEuler([board.cx, board.cy, board.cz], eulerDeg);
-	const [x, y, z] = blockVertexToThree(block.x, block.y, block.z, gx, gy, gz);
+	const [x, y, z] = geoPointToThree(block.x, block.y, block.z, gx, gy, gz);
 	return { x, y, z, kind, board, eulerDeg };
 }
 
@@ -270,18 +272,13 @@ export function signBoardAxes(eulerDeg) {
  * @param {number} side
  */
 export function signFaceOrientation(THREE, eulerDeg, side) {
-	const axes = signBoardAxes(eulerDeg);
-	const x = new THREE.Vector3(axes.x[0], axes.x[1], axes.x[2]);
-	const y = new THREE.Vector3(axes.y[0], axes.y[1], axes.y[2]);
-	const z = new THREE.Vector3(axes.z[0], axes.z[1], axes.z[2]);
-	if (side < 0) {
-		x.multiplyScalar(-1);
-		z.multiplyScalar(-1);
-	}
-	const q = new THREE.Quaternion().setFromRotationMatrix(
-		new THREE.Matrix4().makeBasis(x, y, z)
+	const q = new THREE.Quaternion().setFromEuler(
+		blockGeoEulerToThree(eulerDeg[0], eulerDeg[1], eulerDeg[2], THREE)
 	);
-	return { quaternion: q, scaleX: 1 };
+	if (side < 0) {
+		q.multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI));
+	}
+	return { quaternion: q, scaleX: side < 0 ? -1 : 1 };
 }
 
 /**
