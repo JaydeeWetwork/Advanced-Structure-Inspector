@@ -365,7 +365,7 @@ export async function onPreviewDblClick(e) {
 	const hit = p.pickAtClient(e.clientX, e.clientY);
 	// Only open UI for containers / entities with inventory layouts; still show mockup for any block as generic if it has items or is known container
 	try {
-		const { renderContainerUi, resolveContainerKind } = await import("../viewer/containerUi.js?v=judo32");
+		const { renderContainerUi, resolveContainerKind } = await import("../viewer/containerUi.js?v=judo33");
 		const src =
 			hit.kind === "block" && hit.block
 				? { name: hit.block.name, blockEntityId: hit.block.blockEntityId }

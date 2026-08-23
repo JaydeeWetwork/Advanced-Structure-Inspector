@@ -4,16 +4,16 @@
  *  - lectern open-book indicator
  */
 
-import { disposeObject3D } from "./disposeObject3D.js?v=judo32";
-import { geoPointToThree } from "../previewSpace.js?v=judo32";
-import { signPlaneInstanceVerts } from "../signPlacement.js?v=judo32";
+import { disposeObject3D } from "./disposeObject3D.js?v=judo33";
+import { geoPointToThree } from "../previewSpace.js?v=judo33";
+import { signPlaneInstanceVerts } from "../signPlacement.js?v=judo33";
 import {
 	applySignTweaks,
 	signTweaks,
 	subscribeSignTweaks,
 	tweaksAffectSign,
 	tweaksAreIdentity
-} from "../signDebug.js?v=judo32";
+} from "../signDebug.js?v=judo33";
 import { isOnActiveLayer } from "../layerVisibility.js";
 import { extractSignText, extractLecternBook } from "../inspectStructure.js";
 
@@ -92,15 +92,12 @@ export default class SpecialBlockOverlay {
 			if (obj.isMesh && obj.userData?.sdbSignBaseline) meshes.push(obj);
 		});
 		if (!meshes.length) return false;
-		let targets = meshes.filter(m =>
-			tweaksAffectSign(m.userData.sdbSignBlock, m.userData.sdbSignName, signTweaks)
-		);
-		if (!targets.length) targets = meshes;
-		for (const obj of targets) {
+		for (const obj of meshes) {
 			const baseline = obj.userData.sdbSignBaseline;
-			const baked = tweaksAreIdentity(signTweaks)
-				? baseline
-				: applySignTweaks(baseline, signTweaks);
+			const useTweak =
+				!tweaksAreIdentity(signTweaks)
+				&& tweaksAffectSign(obj.userData.sdbSignBlock, obj.userData.sdbSignName, signTweaks);
+			const baked = useTweak ? applySignTweaks(baseline, signTweaks) : baseline;
 			writeSignPlaneVerts(obj, baked);
 			if (obj.material) {
 				obj.material.side = signTweaks.doubleSide ? THREE.DoubleSide : THREE.FrontSide;

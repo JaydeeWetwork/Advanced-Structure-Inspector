@@ -833,6 +833,8 @@ describe("signPlacement", async () => {
 		const { tweaksAffectSign, setSignDebugFocus } = await import("../../src/viewer/signDebug.js");
 		const wall = { x: 1, y: 0, z: 2, states: { facing_direction: 2 } };
 		const oak = { x: 8, y: 0, z: 0, states: { ground_sign_direction: 2 } };
+		setSignDebugFocus(null);
+		assert.equal(tweaksAffectSign(oak, "oak_standing_sign", { ...DEFAULT_SIGN_TWEAKS, applyTo: "this" }), false);
 		setSignDebugFocus(oak, "oak_standing_sign");
 		assert.equal(tweaksAffectSign(oak, "oak_standing_sign", { ...DEFAULT_SIGN_TWEAKS, applyTo: "this" }), true);
 		assert.equal(tweaksAffectSign(wall, "warped_wall_sign", { ...DEFAULT_SIGN_TWEAKS, applyTo: "this" }), false);

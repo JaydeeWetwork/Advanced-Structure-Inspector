@@ -7,7 +7,7 @@ import * as NBT from "nbtify-readonly-typeless";
 import BlockGeoMaker from "../BlockGeoMaker.js";
 import TextureAtlas from "../TextureAtlas.js";
 // Single PreviewRenderer (systems-based) — used by ASI and HoloPrint pack UI
-import PreviewRenderer from "../PreviewRenderer.js?v=judo32";
+import PreviewRenderer from "../PreviewRenderer.js?v=judo33";
 import ResourcePackStack from "../ResourcePackStack.js";
 import EntityGeoMaker from "../EntityGeoMaker.js";
 import LilGui from "../components/LilGui.js";

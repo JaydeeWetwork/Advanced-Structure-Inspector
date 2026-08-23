@@ -25,9 +25,9 @@ export const SIGN_BOARD = {
 };
 
 /** Push text off the wood face (geo units). */
-export const TEXT_LIFT = 0.18;
+export const TEXT_LIFT = 0.55;
 
-/** Matches structurePreview defaultPreviewConfig.SCALE (faces shrink toward CoM). */
+/** Hologram block shrink (preview config). Overlay text does not use this. */
 export const GEO_SCALE = 0.95;
 
 /**
@@ -47,7 +47,7 @@ export function instanceOriginThree(x, y, z) {
  * @param {{ halfT: number }} board
  */
 export function signFaceLift(board) {
-	return board.halfT * GEO_SCALE + TEXT_LIFT;
+	return board.halfT + TEXT_LIFT;
 }
 
 /** facing_direction 2–5 (wall_sign / hopper,hanging_sign). */
@@ -374,8 +374,8 @@ export function signPlaneInstanceVerts(block, name, isBack) {
 	const boardPos = boardCenterThree(block, name);
 	const basis = signFaceBasis(placed, boardPos);
 	const origin = instanceOriginThree(block.x, block.y, block.z);
-	const hw = placed.board.w * GEO_SCALE / 2;
-	const hh = placed.board.h * GEO_SCALE / 2;
+	const hw = placed.board.w / 2;
+	const hh = placed.board.h / 2;
 	/** @param {number} sx @param {number} sy */
 	const corner = (sx, sy) => {
 		const wx = placed.tx + basis.x[0] * sx * hw + basis.y[0] * sy * hh;

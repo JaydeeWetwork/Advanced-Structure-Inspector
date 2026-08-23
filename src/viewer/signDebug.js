@@ -4,7 +4,6 @@
  */
 
 import {
-	GEO_SCALE,
 	describeSignPlacement,
 	kindOfSign,
 	signPlaneInstanceVerts
@@ -53,7 +52,7 @@ function signDebugStore() {
 
 /** @type {SignTweaks} */
 export const DEFAULT_SIGN_TWEAKS = {
-	applyTo: "all",
+	applyTo: "this",
 	liftAdd: 0,
 	slideX: 0,
 	slideY: 0,
@@ -75,7 +74,14 @@ export const DEFAULT_SIGN_TWEAKS = {
 /** Live object — one instance even if this module is loaded twice. */
 export const signTweaks = signDebugStore().tweaks;
 
-loadSignTweaks();
+// Do not restore slider localStorage into the overlay — leftover values
+// were painting every sign. Debugging starts from identity each load.
+try {
+	localStorage.removeItem(STORAGE_KEY);
+} catch {
+	/* ignore */
+}
+Object.assign(signTweaks, DEFAULT_SIGN_TWEAKS);
 
 /**
  * @param {object} block
@@ -110,7 +116,7 @@ export function subscribeSignTweaks(fn) {
 /** @param {string} kind */
 export function tweaksAffectKind(kind, tweaks = signTweaks) {
 	const a = tweaks.applyTo || "this";
-	if (a === "this") return true;
+	if (a === "this") return false;
 	return a === "all" || a === kind;
 }
 
@@ -123,7 +129,7 @@ export function tweaksAffectSign(block, name, tweaks = signTweaks) {
 	const a = tweaks.applyTo || "this";
 	if (a === "this") {
 		const focus = signDebugStore().focus;
-		if (!focus?.block) return true;
+		if (!focus?.block) return false;
 		return Number(block?.x) === Number(focus.block.x)
 			&& Number(block?.y) === Number(focus.block.y)
 			&& Number(block?.z) === Number(focus.block.z);
@@ -267,8 +273,8 @@ export function applySignTweaks(baked, tweaks = signTweaks) {
 	const basis = tweakSignBasis(baked.basis, tweaks);
 	const scale = Number(tweaks.scale);
 	const s = Number.isFinite(scale) && scale > 0 ? scale : 1;
-	const hw = baked.placed.board.w * GEO_SCALE / 2 * s;
-	const hh = baked.placed.board.h * GEO_SCALE / 2 * s;
+	const hw = baked.placed.board.w / 2 * s;
+	const hh = baked.placed.board.h / 2 * s;
 	const origin = baked.origin;
 	const tx = baked.placed.tx
 		+ basis.x[0] * tweaks.slideX
@@ -319,7 +325,7 @@ export function formatSignTweakRecipe(extra = {}) {
 	const t = extra.tweaks || signTweaks;
 	const lines = [
 		"---SIGN_TWEAK---",
-		"judo32",
+		"judo33",
 		`note: ${t.note || extra.note || "(none)"}`,
 		`applyTo: ${t.applyTo}`,
 		`liftAdd: ${t.liftAdd}`,
