@@ -18,14 +18,14 @@
 }
 
 /* Structure Inspector: fill panel, natural aspect (no forced square stretch) */
-.sdb-app .sdb-preview-host .previewCont {
+.basi-app .basi-preview-host .previewCont {
 	width: 100%;
 	height: 100%;
 	margin: 0;
 	text-align: left;
 }
-.sdb-app .sdb-preview-host .previewCont > canvas,
-.sdb-app .sdb-preview-host .previewCont > .previewMessage {
+.basi-app .basi-preview-host .previewCont > canvas,
+.basi-app .basi-preview-host .previewCont > .previewMessage {
 	width: auto;
 	height: auto;
 	aspect-ratio: auto;
@@ -53,7 +53,7 @@
 }
 
 /* Structure Inspector: force lil-gui bottom-right even when cont is full-bleed */
-.sdb-app .sdb-preview-host .previewCont lil-gui {
+.basi-app .basi-preview-host .previewCont lil-gui {
 	position: absolute !important;
 	right: 10px !important;
 	bottom: 10px !important;

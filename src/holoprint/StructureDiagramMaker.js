@@ -1,4 +1,4 @@
-import { areArraysEqual, average, ceil, fnv1a, getOffscreenCanvasContext, getStructureIndexFromCoordinates, HashMap, sqrt, stringToImageData, toBlob, tuple, vec2 } from "./utils.js";
+import { areArraysEqual, average, ceil, fnv1a, getOffscreenCanvasContext, getStructureIndexFromCoordinates, HashMap, sqrt, stringToImageData, toBlob, tuple, vec2 } from "../utils.js";
 
 /** Padding in pixels to be added around the edges of isometric diagrams. */
 const ISOMETRIC_DIAGRAM_PADDING = 8;
@@ -305,4 +305,5 @@ export default class StructureDiagramMaker {
 	}
 }
 
-/** @import { HoloPrintConfig, I32Vec3, PolyMeshTemplateFaceWithUvs, PolyMeshTemplateVertexWithUv } from "./HoloPrint.js" */
+/** @import { I32Vec3, PolyMeshTemplateFaceWithUvs, PolyMeshTemplateVertexWithUv } from "../types.js" */
+/** @import { HoloPrintConfig } from "./packTypes.js" */

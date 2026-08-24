@@ -1,4 +1,4 @@
-import { dispatchInputEvents, flattenObject, html, onEvent, reduceProperties, selectEl, selectEls } from "../utils.js";
+import { dispatchInputEvents, flattenObject, html, onEvent, reduceProperties, selectEl, selectEls } from "../../utils.js";
 
 /** A custom input with three number inputs which must be assigned to the x, y, and z slots. */
 export default class Vec3Input extends HTMLElement {
@@ -129,4 +129,4 @@ export default class Vec3Input extends HTMLElement {
 	}
 }
 
-/** @import { I32Vec3, Vec3 } from "../HoloPrint.js" */
+/** @import { I32Vec3, Vec3 } from "../types.js" */

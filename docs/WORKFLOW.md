@@ -20,6 +20,12 @@ Local-only repo: no `origin` / HoloPrint `upstream` required. Branches: **dev** 
 - Growing surface today: `icons`, `inventory`, `catalog`, `previewSession`, `build`, `ingest`.
 - Map of APIs, classes, and data structures: [API.md](./API.md).
 - Future appearance work: see [APPEARANCE_ARCHITECTURE.md](./APPEARANCE_ARCHITECTURE.md) — implement under `viewer/api` + `viewer/appearance` when started.
+- Old palette → current ids: [pmmp schema vs BlockUpdater](./pmmp-schema-vs-blockupdater.md) (research).
+- Independent renderer (all versions, never-fail draw): [renderer-engine.md](./renderer-engine.md).
+- Official vs community sources: [sources-official-vs-community.md](./sources-official-vs-community.md).
+- HoloPrint leftover deps: [holoprint-deps.md](./holoprint-deps.md).
+- Decide next: [NEXT.md](./NEXT.md). Index: [README.md](./README.md). MCT NBT spike: [spike-mct-nbt.md](./spike-mct-nbt.md).
+- Authoring core (editors + official-shaped documents): [AUTHORING_CORE.md](./AUTHORING_CORE.md). File-type vs jargon vs `.brarchive`: [BEDROCK_ARCHIVES.md](./BEDROCK_ARCHIVES.md). nbtify gates: [NBT_VALIDATION.md](./NBT_VALIDATION.md). Findings / plan: [sec_nbt_findings.md](./sec_nbt_findings.md), [sec_nbt_plan.md](./sec_nbt_plan.md).
 
 ## 4. Cache-bust browser modules
 

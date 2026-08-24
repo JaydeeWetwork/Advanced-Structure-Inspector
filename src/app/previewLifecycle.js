@@ -57,8 +57,8 @@ export function selectEntry(id, opts = {}) {
 	clearInspectPanel();
 
 	// Body classes drive floating dock visibility (left open when empty)
-	document.body.classList.toggle("sdb-has-selection", !!entry);
-	document.body.classList.toggle("sdb-no-selection", !entry);
+	document.body.classList.toggle("basi-has-selection", !!entry);
+	document.body.classList.toggle("basi-no-selection", !entry);
 
 	if (!entry) {
 		els.emptyState?.classList.remove("hidden");
@@ -153,10 +153,10 @@ export async function loadPreview(opts = {}) {
 	setStatus(`Loading “${entry.name}”…`, "");
 
 	const host = els.previewHost;
-	if (host) host.dataset.sdbPreviewBuilding = "1";
+	if (host) host.dataset.basiPreviewBuilding = "1";
 
 	try {
-		const { renderStructurePreview } = await import("../viewer/structurePreview.js?v=judo39");
+		const { renderStructurePreview } = await import("../viewer/structurePreview.js");
 		const { default: ResourcePackStack } = await import("../ResourcePackStack.js");
 		if (signal.aborted || getSelectedId() !== buildForId) return;
 
@@ -166,7 +166,7 @@ export async function loadPreview(opts = {}) {
 		host?.replaceChildren(previewCont);
 		// Loading label lives *inside* cont so progress updates cannot wipe the preview
 		const loadingLabel = document.createElement("p");
-		loadingLabel.className = "meta sdb-preview-loading-msg";
+		loadingLabel.className = "meta basi-preview-loading-msg";
 		loadingLabel.style.cssText = "padding:12px;color:#ccc;margin:0";
 		loadingLabel.textContent = "Building geometry & textures…";
 		previewCont.appendChild(loadingLabel);
@@ -210,7 +210,7 @@ export async function loadPreview(opts = {}) {
 		const canvasInHost = host?.querySelector("canvas");
 		if (!canvasInHost) {
 			console.error(
-				"[sdb] Preview finished but no canvas in #previewHost — "
+				"[basi] Preview finished but no canvas in #previewHost — "
 				+ "DOM was cleared mid-build (would show as a blank preview with no earlier error)."
 			);
 			setStatus("Preview built but view was cleared — try loading again.", "error");
@@ -248,11 +248,11 @@ export async function loadPreview(opts = {}) {
 			if (getSelectedId() === buildForId) setStatus("Preview cancelled.", "");
 			return;
 		}
-		console.error("[sdb] preview failed", e);
+		console.error("[basi] preview failed", e);
 		showPreviewPlaceholder(`Preview failed: ${e?.message || e}`, { force: true });
 		setStatus(String(e?.message ?? e), "error");
 	} finally {
-		if (host) delete host.dataset.sdbPreviewBuilding;
+		if (host) delete host.dataset.basiPreviewBuilding;
 		if (!signal.aborted && els.previewBtn) els.previewBtn.disabled = !getSelectedId();
 	}
 }

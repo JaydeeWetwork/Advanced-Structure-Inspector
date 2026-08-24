@@ -9,12 +9,12 @@ import {
 	signPlaneInstanceVerts
 } from "./signPlacement.js";
 
-const STORAGE_KEY = "sdb.signTweaks.v1";
-const RECIPE_KEY = "sdb.signTweakRecipe.last";
+const STORAGE_KEY = "basi.signTweaks.v1";
+const RECIPE_KEY = "basi.signTweakRecipe.last";
 
 /** @typedef {"this"|"all"|"wall"|"standing"|"hanging"} SignTweakApplyTo */
 
-export const SIGN_TWEAK_EVENT = "sdb-sign-tweaks-changed";
+export const SIGN_TWEAK_EVENT = "basi-sign-tweaks-changed";
 
 /** Shared across duplicate ESM copies (?v= cache splits). */
 function signDebugStore() {
@@ -144,7 +144,7 @@ export function notifySignTweaksChanged() {
 		try {
 			fn(tweaks);
 		} catch (e) {
-			console.warn("[sdb] sign tweak listener failed", e);
+			console.warn("[basi] sign tweak listener failed", e);
 		}
 	}
 	try {
@@ -372,7 +372,7 @@ export function logSignTweakRecipe(extra = {}) {
 	} catch {
 		/* ignore */
 	}
-	console.info("[sdb] sign tweak recipe (paste this):\n" + text);
+	console.info("[basi] sign tweak recipe (paste this):\n" + text);
 	return text;
 }
 
@@ -383,11 +383,11 @@ export async function copySignTweakRecipe(text) {
 	try {
 		if (navigator.clipboard?.writeText) {
 			await navigator.clipboard.writeText(text);
-			console.info("[sdb] sign tweak recipe copied to clipboard");
+			console.info("[basi] sign tweak recipe copied to clipboard");
 			return true;
 		}
 	} catch (e) {
-		console.warn("[sdb] clipboard copy failed", e);
+		console.warn("[basi] clipboard copy failed", e);
 	}
 	return false;
 }
@@ -471,19 +471,19 @@ export function renderSignTweakControls(block = null, opts = {}) {
 	if (block) setSignDebugFocus(block, block.name);
 
 	const root = document.createElement("div");
-	root.className = "sdb-sign-tweaks";
+	root.className = "basi-sign-tweaks";
 	root.addEventListener("pointerdown", e => e.stopPropagation());
 	root.addEventListener("wheel", e => e.stopPropagation(), { passive: true });
 
 	const title = document.createElement("div");
-	title.className = "sdb-sign-tweaks-title";
+	title.className = "basi-sign-tweaks-title";
 	title.textContent = "Text placement debug";
 	root.appendChild(title);
 
 	const applyRow = document.createElement("label");
-	applyRow.className = "sdb-sign-tweak-row sdb-sign-tweak-select";
+	applyRow.className = "basi-sign-tweak-row basi-sign-tweak-select";
 	const applyLab = document.createElement("span");
-	applyLab.className = "sdb-sign-tweak-label";
+	applyLab.className = "basi-sign-tweak-label";
 	applyLab.textContent = "apply to";
 	const applySel = document.createElement("select");
 	for (const opt of ["this", "all", "wall", "standing", "hanging"]) {
@@ -500,12 +500,12 @@ export function renderSignTweakControls(block = null, opts = {}) {
 	const widgets = [];
 
 	const grid = document.createElement("div");
-	grid.className = "sdb-sign-tweak-grid";
+	grid.className = "basi-sign-tweak-grid";
 	for (const spec of SLIDERS) {
 		const row = document.createElement("label");
-		row.className = "sdb-sign-tweak-row";
+		row.className = "basi-sign-tweak-row";
 		const name = document.createElement("span");
-		name.className = "sdb-sign-tweak-label";
+		name.className = "basi-sign-tweak-label";
 		name.textContent = spec.label;
 		const input = document.createElement("input");
 		input.type = "range";
@@ -514,7 +514,7 @@ export function renderSignTweakControls(block = null, opts = {}) {
 		input.step = String(spec.step);
 		input.value = String(signTweaks[spec.key]);
 		const val = document.createElement("span");
-		val.className = "sdb-sign-tweak-val";
+		val.className = "basi-sign-tweak-val";
 		val.textContent = fmtTweak(signTweaks[spec.key]);
 		row.append(name, input, val);
 		grid.appendChild(row);
@@ -523,7 +523,7 @@ export function renderSignTweakControls(block = null, opts = {}) {
 	root.appendChild(grid);
 
 	const flags = document.createElement("div");
-	flags.className = "sdb-sign-tweak-flags";
+	flags.className = "basi-sign-tweak-flags";
 	for (const spec of [
 		{ key: "flipX", label: "flip X" },
 		{ key: "flipFront", label: "flip front" },
@@ -532,7 +532,7 @@ export function renderSignTweakControls(block = null, opts = {}) {
 		{ key: "logOnChange", label: "log on change" }
 	]) {
 		const row = document.createElement("label");
-		row.className = "sdb-sign-tweak-check";
+		row.className = "basi-sign-tweak-check";
 		const input = document.createElement("input");
 		input.type = "checkbox";
 		input.checked = !!signTweaks[spec.key];
@@ -543,9 +543,9 @@ export function renderSignTweakControls(block = null, opts = {}) {
 	root.appendChild(flags);
 
 	const noteRow = document.createElement("label");
-	noteRow.className = "sdb-sign-tweak-row sdb-sign-tweak-note";
+	noteRow.className = "basi-sign-tweak-row basi-sign-tweak-note";
 	const noteLab = document.createElement("span");
-	noteLab.className = "sdb-sign-tweak-label";
+	noteLab.className = "basi-sign-tweak-label";
 	noteLab.textContent = "note";
 	const note = document.createElement("input");
 	note.type = "text";
@@ -555,7 +555,7 @@ export function renderSignTweakControls(block = null, opts = {}) {
 	root.appendChild(noteRow);
 
 	const btns = document.createElement("div");
-	btns.className = "sdb-sign-tweak-actions";
+	btns.className = "basi-sign-tweak-actions";
 	const logBtn = document.createElement("button");
 	logBtn.type = "button";
 	logBtn.textContent = "Log recipe";
@@ -566,7 +566,7 @@ export function renderSignTweakControls(block = null, opts = {}) {
 	root.appendChild(btns);
 
 	const hint = document.createElement("div");
-	hint.className = "sdb-sign-tweak-hint";
+	hint.className = "basi-sign-tweak-hint";
 	hint.textContent = "Drag until text sits on wood, then Log recipe and paste it in chat.";
 	root.appendChild(hint);
 

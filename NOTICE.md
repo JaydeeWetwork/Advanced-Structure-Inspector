@@ -12,11 +12,11 @@ This project is **Adapted Material** based on **HoloPrint**:
 
 Relative to upstream HoloPrint, this fork:
 
-- Repositions the product as a **structure database viewer** (browse / search / preview)
+- Repositions the product as **Bedrock ASI** (browse / search / preview `.mcstructure`)
 - Adds a viewer shell under `src/viewer/` and a new primary `src/index.html` / `src/index.js`
-- Preserves the original pack-generation UI as `src/holoprintPack.html` + `src/holoprintPack.js`
+- Isolates the original pack-generation UI under `src/holoprint/`
 - Disables upstream Supabase analytics from the viewer entry (viewer does not call Supabase)
-- Retains HoloPrint core modules (NBT parse, world/pack extract, geometry, preview, materials)
+- Shared geo (`BlockGeoMaker`, `TextureAtlas`, …) stays in `src/` for ASI preview; pack-only modules live in `src/holoprint/`
 
 ## License obligations
 

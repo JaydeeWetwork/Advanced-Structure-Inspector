@@ -9,8 +9,10 @@
  *  5. Heuristic path guesses (planks_oak, log_oak, chest_front, …)
  */
 
+import { VANILLA_SAMPLES_TAG } from "../data/packPins.js";
+
 // Match main preview pack tag (fetchers.js vanilla samples).
-const VANILLA_TAG = "v1.26.40.26-preview";
+const VANILLA_TAG = VANILLA_SAMPLES_TAG;
 const VANILLA_RP =
 	`https://cdn.jsdelivr.net/gh/Mojang/bedrock-samples@${VANILLA_TAG}/resource_pack/`;
 // Older tag still has some PNG-only assets
@@ -66,7 +68,7 @@ async function tgaBlobToObjectUrl(blob) {
 		if (!pngBlob) return null;
 		return URL.createObjectURL(pngBlob);
 	} catch (e) {
-		console.debug("[sdb] TGA icon decode failed", e);
+		console.debug("[basi] TGA icon decode failed", e);
 		return null;
 	}
 }
@@ -135,22 +137,22 @@ export async function ensureItemIconLoader() {
 			const icons = await fetchJson(new URL("data/itemIcons.json", location.href).href);
 			buildIconMaps(icons);
 		} catch (e) {
-			console.warn("[sdb] itemIcons.json:", e);
+			console.warn("[basi] itemIcons.json:", e);
 			buildIconMaps({});
 		}
 
 		// Parallel vanilla pack JSONs
 		const [itemTex, terrainTex, blocks] = await Promise.all([
 			fetchJson(`${VANILLA_RP}textures/item_texture.json`).catch(e => {
-				console.warn("[sdb] item_texture.json failed", e);
+				console.warn("[basi] item_texture.json failed", e);
 				return {};
 			}),
 			fetchJson(`${VANILLA_RP}textures/terrain_texture.json`).catch(e => {
-				console.warn("[sdb] terrain_texture.json failed", e);
+				console.warn("[basi] terrain_texture.json failed", e);
 				return {};
 			}),
 			fetchJson(`${VANILLA_RP}blocks.json`).catch(e => {
-				console.warn("[sdb] blocks.json failed", e);
+				console.warn("[basi] blocks.json failed", e);
 				return {};
 			})
 		]);
@@ -161,13 +163,13 @@ export async function ensureItemIconLoader() {
 		blocksDotJson = blocks || {};
 
 		console.info(
-			`[sdb] item icons ready: items=${Object.keys(itemTextureData).length} ` +
+			`[basi] item icons ready: items=${Object.keys(itemTextureData).length} ` +
 			`terrain=${Object.keys(terrainTextureData).length} ` +
 			`blocks=${Object.keys(blocksDotJson).length} maps=${exactIconMap.size}`
 		);
 	})().catch(e => {
 		initPromise = null;
-		console.warn("[sdb] item icon init failed", e);
+		console.warn("[basi] item icon init failed", e);
 		throw e;
 	});
 	return initPromise;
@@ -630,7 +632,7 @@ export async function getItemIconUrl(itemName) {
 			}
 		}
 
-		console.debug("[sdb] no icon for", bare, "tried", packPaths.slice(0, 8));
+		console.debug("[basi] no icon for", bare, "tried", packPaths.slice(0, 8));
 		failedIds.add(bare);
 		return null;
 	})();
@@ -673,7 +675,7 @@ export async function hydrateInventoryIcons(root) {
 	try {
 		await ensureItemIconLoader();
 	} catch (e) {
-		console.warn("[sdb] hydrate init failed", e);
+		console.warn("[basi] hydrate init failed", e);
 		return 0;
 	}
 
@@ -714,6 +716,6 @@ export async function hydrateInventoryIcons(root) {
 			loaded++;
 		})
 	);
-	console.info(`[sdb] item icons: ${loaded}/${imgs.length} loaded`);
+	console.info(`[basi] item icons: ${loaded}/${imgs.length} loaded`);
 	return loaded;
 }

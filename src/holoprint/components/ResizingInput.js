@@ -1,4 +1,4 @@
-import { measureText, onEventAndNow } from "../utils.js";
+import { measureText, onEventAndNow } from "../../utils.js";
 
 /** `<input/>` but automatically resizing to fit the width of the content. Must be written as `<input is="resizing-input"/>`. */
 export default class ResizingInput extends HTMLInputElement {

@@ -4,7 +4,7 @@
 
 import { els } from "./state.js";
 
-const PIN_LS_KEY = "sdb.floatPins.v1";
+const PIN_LS_KEY = "basi.floatPins.v1";
 const _floatFlashTimers = new Map();
 
 /**
@@ -62,7 +62,7 @@ export function escapeHtml(s) {
  * @param {string|number} value
  */
 export function stat(label, value) {
-	return `<div class="sdb-stat"><span class="label">${label}</span><span class="value">${escapeHtml(value)}</span></div>`;
+	return `<div class="basi-stat"><span class="label">${label}</span><span class="value">${escapeHtml(value)}</span></div>`;
 }
 
 /**
@@ -96,7 +96,7 @@ export function saveFloatPins(pins) {
  * @param {boolean} pinned
  */
 export function applyFloatPin(floatEl, btn, pinned) {
-	if (floatEl) floatEl.classList.toggle("sdb-float-pinned", pinned);
+	if (floatEl) floatEl.classList.toggle("basi-float-pinned", pinned);
 	if (btn) {
 		btn.setAttribute("aria-pressed", pinned ? "true" : "false");
 		btn.title = pinned ? "Unpin menu (auto-hide when not hovered)" : "Pin menu open";
@@ -139,24 +139,24 @@ export function initFloatPins() {
 export function flashFloatDock(floatId, ms = 1500) {
 	const el = document.getElementById(floatId);
 	if (!el) return;
-	if (el.classList.contains("sdb-float-pinned")) return;
-	el.classList.add("sdb-float-open");
+	if (el.classList.contains("basi-float-pinned")) return;
+	el.classList.add("basi-float-open");
 	const prev = _floatFlashTimers.get(floatId);
 	if (prev) clearTimeout(prev);
 	_floatFlashTimers.set(
 		floatId,
 		setTimeout(() => {
-			if (el.classList.contains("sdb-float-pinned")) {
-				el.classList.remove("sdb-float-open");
+			if (el.classList.contains("basi-float-pinned")) {
+				el.classList.remove("basi-float-open");
 				_floatFlashTimers.delete(floatId);
 				return;
 			}
 			if (!el.matches(":hover") && !el.contains(document.activeElement)) {
-				el.classList.remove("sdb-float-open");
+				el.classList.remove("basi-float-open");
 			} else {
 				const onLeave = () => {
-					if (!el.classList.contains("sdb-float-pinned")) {
-						el.classList.remove("sdb-float-open");
+					if (!el.classList.contains("basi-float-pinned")) {
+						el.classList.remove("basi-float-open");
 					}
 					el.removeEventListener("pointerleave", onLeave);
 				};

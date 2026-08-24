@@ -1,4 +1,4 @@
-import { exp, max } from "./utils.js";
+import { exp, max } from "../utils.js";
 
 export default class SpawnAnimationMaker {
 	config;
@@ -125,4 +125,5 @@ export default class SpawnAnimationMaker {
 	}
 }
 
-/** @import { HoloPrintConfig, Vec3, I32Vec3, SpawnAnimationBone, MinecraftAnimation } from "./HoloPrint.js" */
+/** @import { Vec3, I32Vec3 } from "../types.js" */
+/** @import { HoloPrintConfig, SpawnAnimationBone, MinecraftAnimation } from "./packTypes.js" */

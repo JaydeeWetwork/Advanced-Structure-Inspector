@@ -4,7 +4,7 @@
  * Java AbstractMinecartRenderer uses 0.75 scale; we match that in 16-unit space.
  */
 
-import { vanillaModelDefFor } from "./entityModels.js?v=judo37";
+import { vanillaModelDefFor } from "./entityModels.js";
 
 /** Vanilla in-cart scale (Java 0.75F). */
 export const CARGO_SCALE = 0.75;
@@ -116,7 +116,7 @@ export function buildCargoKit(THREE, templates, pool) {
 	if (!pool.cargoMat) {
 		pool.cargoMat = new THREE.MeshLambertMaterial({
 			map: pool.atlasTexture,
-			side: THREE.FrontSide,
+			side: THREE.DoubleSide,
 			alphaTest: 0.05,
 			polygonOffset: true,
 			polygonOffsetFactor: -1,

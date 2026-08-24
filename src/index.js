@@ -1,5 +1,5 @@
 /**
- * Advanced Structure Inspector — boot + wire only.
+ * Bedrock ASI — boot + wire only.
  */
 
 import {
@@ -35,13 +35,13 @@ import {
 	onPreviewKeydown,
 	onPreviewDblClick,
 	initInspectWindow
-} from "./ui/previewChrome.js?v=judo39";
+} from "./ui/previewChrome.js";
 import {
 	selectEntry,
 	loadPreview,
 	downloadSelected,
 	removeSelected
-} from "./app/previewLifecycle.js?v=judo39";
+} from "./app/previewLifecycle.js";
 import { handleFiles } from "./app/importExport.js";
 
 setEls(createEls());
@@ -170,7 +170,7 @@ function wireUi() {
 		}
 	});
 
-	document.addEventListener("sdb-camera-preset", e => {
+	document.addEventListener("basi-camera-preset", e => {
 		const detail = /** @type {CustomEvent} */ (e).detail || {};
 		const preset = detail.preset;
 		if (detail.tilt != null && Number.isFinite(detail.tilt)) {
@@ -186,7 +186,7 @@ function wireUi() {
 	const camTiltVal = document.getElementById("camTiltVal");
 	if (camTilt) camTilt.value = "67";
 	if (camTiltVal) camTiltVal.textContent = "67°";
-	document.querySelector(".sdb-cam-tilt")?.classList.add("hidden");
+	document.querySelector(".basi-cam-tilt")?.classList.add("hidden");
 
 	camTilt?.addEventListener("input", () => {
 		const deg = +camTilt.value;
@@ -222,11 +222,11 @@ async function boot() {
 		els.bootBadge.textContent = "Ready";
 		els.bootBadge.classList.add("ok");
 	}
-	console.info("[sdb] Advanced Structure Inspector ready");
+	console.info("[basi] Bedrock ASI ready");
 }
 
 boot().catch(e => {
-	console.error("[sdb] boot failed", e);
+	console.error("[basi] boot failed", e);
 	setStatus(`App failed to start: ${e?.message ?? e}`, "error");
 	if (els.bootBadge) {
 		els.bootBadge.textContent = "Error";

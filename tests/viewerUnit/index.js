@@ -1,5 +1,5 @@
 /**
- * Unit tests for Structure Inspector improvements (Node --test).
+ * Unit tests for Bedrock ASI (Node --test).
  * Pure logic + lightweight mocks — no browser / WebGL required.
  */
 
@@ -418,25 +418,26 @@ describe("entityMeshes coordinates", async () => {
 	});
 });
 
-describe("inspect pick preference", async () => {
-	const { chooseInspectHit, ENTITY_PICK_SLACK } = await import(
-		"../../src/viewer/systems/InspectRaycaster.js"
-	);
+describe("inspect pick (first classified hit)", async () => {
+	const inspectMod = await import("../../src/viewer/systems/InspectRaycaster.js");
+	const InspectRaycaster = inspectMod.default;
 
-	it("prefers the cart when the rail is only slightly closer (tub hole)", () => {
-		assert.equal(chooseInspectHit(12, 10), "entity");
-		assert.equal(chooseInspectHit(10, 10), "entity");
-		assert.equal(chooseInspectHit(10 + ENTITY_PICK_SLACK, 10), "entity");
+	it("does not export slack / chooseInspectHit", () => {
+		assert.equal(inspectMod.chooseInspectHit, undefined);
+		assert.equal(inspectMod.ENTITY_PICK_SLACK, undefined);
 	});
 
-	it("keeps the block when it is clearly in front of the cart", () => {
-		assert.equal(chooseInspectHit(30, 10), "block");
-	});
-
-	it("returns miss when nothing hit", () => {
-		assert.equal(chooseInspectHit(Infinity, Infinity), "miss");
-		assert.equal(chooseInspectHit(5, Infinity), "entity");
-		assert.equal(chooseInspectHit(Infinity, 5), "block");
+	it("returns miss when the raycaster is not initialized", () => {
+		const picker = new InspectRaycaster({
+			canvas: null,
+			camera: null,
+			scene: null,
+			layers: null,
+			selectedLayer: null,
+			inspectIndex: null,
+			blockPalette: null
+		});
+		assert.deepEqual(picker.pickAtClient(0, 0), { kind: "miss" });
 	});
 });
 
@@ -1725,6 +1726,115 @@ describe("materialList grouping", async () => {
 		assert.equal(list[0].stackSize, 64);
 		assert.equal(list[0].partition, "5");
 		assert.equal(formatMaterialLabel("redstone_torch"), "Redstone Torch");
+	});
+});
+
+describe("appearance fallback", async () => {
+	const { resolveBlockShapeName } = await import("../../src/viewer/appearanceFallback.js");
+
+	it("uses table hits and unit-cube fallback", () => {
+		const individual = { chest: "chest" };
+		const patterns = [[/_stairs$/, "stairs"]];
+		assert.deepEqual(resolveBlockShapeName("chest", individual, patterns), {
+			shape: "chest",
+			fallback: false
+		});
+		assert.deepEqual(resolveBlockShapeName("oak_stairs", individual, patterns), {
+			shape: "stairs",
+			fallback: false
+		});
+		assert.deepEqual(resolveBlockShapeName("completely_unknown_mod_block", individual, patterns), {
+			shape: "block",
+			fallback: true
+		});
+	});
+});
+
+describe("block upgrade apply (flatten + forgot-to-bump)", async () => {
+	const {
+		applyBlockUpdateSchema,
+		applyFlattenedProperty,
+		packedSchemaVersion,
+		schemaFilenamesToApply
+	} = await import("../../src/viewer/blockUpgradeApply.js");
+
+	it("flattens concrete color into a new id", () => {
+		const schema = {
+			maxVersionMajor: 1,
+			maxVersionMinor: 20,
+			maxVersionPatch: 0,
+			maxVersionRevision: 33,
+			flattenedProperties: {
+				"minecraft:concrete": {
+					prefix: "minecraft:",
+					flattenedProperty: "color",
+					suffix: "_concrete"
+				}
+			}
+		};
+		const block = {
+			name: "minecraft:concrete",
+			states: { color: "black" },
+			version: 1
+		};
+		assert.equal(applyBlockUpdateSchema(schema, block), true);
+		assert.equal(block.name, "minecraft:black_concrete");
+		assert.equal(block.states.color, undefined);
+		assert.equal(block.version, packedSchemaVersion(schema));
+	});
+
+	it("applyFlattenedProperty is a no-op without the state", () => {
+		const block = { name: "minecraft:concrete", states: {} };
+		assert.equal(
+			applyFlattenedProperty(
+				{ prefix: "minecraft:", flattenedProperty: "color", suffix: "_concrete" },
+				block
+			),
+			false
+		);
+		assert.equal(block.name, "minecraft:concrete");
+	});
+
+	it("applies every schema when several share the same packed version", () => {
+		const packed = packedSchemaVersion({
+			maxVersionMajor: 1,
+			maxVersionMinor: 21,
+			maxVersionPatch: 60,
+			maxVersionRevision: 33
+		});
+		assert.equal(packed, 18168865);
+		const both = schemaFilenamesToApply(
+			{ [packed]: [{ filename: "0321.json" }, { filename: "0331.json" }] },
+			packed
+		);
+		assert.deepEqual(both, ["0321.json", "0331.json"]);
+		const single = schemaFilenamesToApply(
+			{ [packed]: [{ filename: "only.json" }] },
+			packed
+		);
+		assert.deepEqual(single, []);
+	});
+});
+
+describe("item upgrade schemas", async () => {
+	const { applyItemUpgradeSchemas, upgradeItemStack } = await import(
+		"../../src/viewer/itemUpgrade.js"
+	);
+
+	it("renames ids then remaps meta", () => {
+		const schemas = [
+			{ renamedIds: { "minecraft:nametag": "minecraft:name_tag" } },
+			{
+				remappedMetas: {
+					"minecraft:dye": { "15": "minecraft:bone_meal" }
+				}
+			}
+		];
+		assert.equal(applyItemUpgradeSchemas("nametag", null, schemas).name, "name_tag");
+		assert.equal(applyItemUpgradeSchemas("minecraft:dye", 15, schemas).name, "bone_meal");
+		const stack = upgradeItemStack({ name: "dye", count: 8, slot: 0, damage: 15, raw: {} }, schemas);
+		assert.equal(stack.name, "bone_meal");
+		assert.equal(stack.count, 8);
 	});
 });
 

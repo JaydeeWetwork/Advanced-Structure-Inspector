@@ -64,7 +64,7 @@ export function primaryPreview() {
  */
 function $(id) {
 	const el = document.getElementById(id);
-	if (!el) console.warn(`[sdb] missing #${id}`);
+	if (!el) console.warn(`[basi] missing #${id}`);
 	return el;
 }
 

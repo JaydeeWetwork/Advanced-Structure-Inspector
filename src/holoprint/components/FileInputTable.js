@@ -1,4 +1,4 @@
-import { clamp, createSymbolicEnum, dispatchInputEvents, downloadFile, fileArrayToFileList, html, isTouchInElementVerticalBounds, max, min, onEvent, onEvents, removeFileExtension, selectEl, selectEls, sleep } from "../utils.js";
+import { clamp, createSymbolicEnum, dispatchInputEvents, downloadFile, fileArrayToFileList, html, isTouchInElementVerticalBounds, max, min, onEvent, onEvents, removeFileExtension, selectEl, selectEls, sleep } from "../../utils.js";
 
 export default class FileInputTable extends HTMLElement {
 	/** If files in the file input have this flag, the download button will be visible. */

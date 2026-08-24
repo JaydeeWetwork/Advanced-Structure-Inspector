@@ -11,7 +11,21 @@ import {
 	pickGeometry,
 	boxUvLayout,
 	transformEntityPoint
-} from "./entityModels.js?v=judo37";
+} from "./entityModels.js";
+import {
+	VANILLA_SAMPLES_TAG,
+	VANILLA_SAMPLES_FALLBACK_TAGS
+} from "../data/packPins.js";
+
+async function readPackJson(res) {
+	const text = await res.text();
+	try {
+		return JSON.parse(text);
+	} catch {
+		const stripped = text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+		return JSON.parse(stripped);
+	}
+}
 
 /**
  * @param {any} cubeUv  [u,v] box origin or per-face object
@@ -139,9 +153,10 @@ export function createGeometryMesh(THREE, geoBlock, texture) {
 	// would average box corners and flicker lighting on overlapping cart walls.
 
 	const mat = new THREE.MeshLambertMaterial({
-		map: texture,
-		transparent: true,
-		alphaTest: 0.1,
+		map: texture || null,
+		color: texture ? 0xffffff : 0x6a6e75,
+		transparent: !!texture,
+		alphaTest: texture ? 0.1 : 0,
 		side: THREE.FrontSide,
 		depthWrite: true
 	});
@@ -157,16 +172,28 @@ export function createGeometryMesh(THREE, geoBlock, texture) {
  * @returns {Promise<Blob|null>}
  */
 export async function fetchVanillaTextureBlob(rps, pathNoExt) {
-	if (!rps?.fetchResource) return null;
 	for (const ext of [".png", ".tga"]) {
-		try {
-			const res = await rps.fetchResource(pathNoExt + ext);
-			if (res?.ok) {
-				const blob = await res.blob();
-				if (blob && blob.size > 0) return blob;
+		if (rps?.fetchResource) {
+			try {
+				const res = await rps.fetchResource(pathNoExt + ext);
+				if (res?.ok) {
+					const blob = await res.blob();
+					if (blob && blob.size > 8) return blob;
+				}
+			} catch {
+				/* try CDN tags */
 			}
-		} catch {
-			/* try next */
+		}
+		for (const tag of [VANILLA_SAMPLES_TAG, ...VANILLA_SAMPLES_FALLBACK_TAGS]) {
+			try {
+				const url = `https://cdn.jsdelivr.net/gh/Mojang/bedrock-samples@${tag}/resource_pack/${pathNoExt}${ext}`;
+				const res = await fetch(url);
+				if (!res.ok) continue;
+				const blob = await res.blob();
+				if (blob && blob.size > 8) return blob;
+			} catch {
+				/* next tag */
+			}
 		}
 	}
 	return null;
@@ -214,7 +241,7 @@ export async function loadVanillaEntityKit(THREE, rps) {
 		if (!geoCache.has(path)) {
 			geoCache.set(path, rps.fetchResource(path).then(async res => {
 				if (!res?.ok) throw new Error(`geo ${path} ${res?.status}`);
-				return res.json();
+				return readPackJson(res);
 			}));
 		}
 		return geoCache.get(path);
@@ -239,7 +266,7 @@ export async function loadVanillaEntityKit(THREE, rps) {
 			try {
 				const entRes = await rps.fetchResource(def.entityFile);
 				if (entRes?.ok) {
-					const entJson = await entRes.json();
+					const entJson = await readPackJson(entRes);
 					const desc = entJson?.["minecraft:client_entity"]?.description;
 					const gid = desc?.geometry?.default;
 					if (typeof gid === "string") {
@@ -254,7 +281,9 @@ export async function loadVanillaEntityKit(THREE, rps) {
 			const geoBlock = pickGeometry(geoFile, wantedIds);
 			if (!geoBlock) continue;
 			const texture = await loadTex(def.texture);
-			if (!texture) continue;
+			if (!texture) {
+				console.warn("[basi] minecart PNG missing for", kind, "— still meshing untextured hull");
+			}
 
 			const hullKey = `${def.geoFile}|${geoBlock.description?.identifier}|${def.texture}`;
 			let hull = hullByKey.get(hullKey);
@@ -271,7 +300,7 @@ export async function loadVanillaEntityKit(THREE, rps) {
 			template.add(hullInst);
 			kit.set(kind, { template, texture, cargo: def.cargo });
 		} catch (e) {
-			console.warn("[sdb] vanilla entity kit failed:", kind, e);
+			console.warn("[basi] vanilla entity kit failed:", kind, e);
 		}
 	}
 	return kit;

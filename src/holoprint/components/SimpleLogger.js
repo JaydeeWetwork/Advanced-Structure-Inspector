@@ -1,5 +1,5 @@
 // Simple logger.
-import { ceil, downloadFile, getStackTrace, html, onEvent, selectEl } from "../utils.js";
+import { ceil, downloadFile, getStackTrace, html, onEvent, selectEl } from "../../utils.js";
 
 export default class SimpleLogger extends HTMLElement {
 	#originTime;

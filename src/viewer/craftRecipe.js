@@ -4,8 +4,10 @@
  * plus a built-in common set for instant offline-ish matches.
  */
 
+import { VANILLA_SAMPLES_TAG } from "../data/packPins.js";
+
 // Match preview pack tag (fetchers.js)
-const VANILLA_TAG = "v1.26.40.26-preview";
+const VANILLA_TAG = VANILLA_SAMPLES_TAG;
 const RECIPES_BASE =
 	`https://cdn.jsdelivr.net/gh/Mojang/bedrock-samples@${VANILLA_TAG}/behavior_pack/recipes/`;
 
@@ -706,11 +708,11 @@ export async function ensureCdnRecipes() {
 			for (const p of parts) if (p) loaded.push(p);
 		}
 		cdnRecipes = loaded;
-		console.info(`[sdb] crafting recipes: ${loaded.length} CDN + ${BUILTIN.length} builtin`);
+		console.info(`[basi] crafting recipes: ${loaded.length} CDN + ${BUILTIN.length} builtin`);
 	})().catch(e => {
 		cdnLoadPromise = null;
 		cdnRecipes = [];
-		console.warn("[sdb] CDN recipes failed", e);
+		console.warn("[basi] CDN recipes failed", e);
 	});
 	return cdnLoadPromise;
 }

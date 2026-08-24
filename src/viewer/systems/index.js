@@ -1,41 +1,37 @@
 /**
  * Preview systems used by PreviewRenderer.
- * ?v=judo18 busts stale browser caches.
+ * Cache-bust only at src/index.html (script + CSS query), not per-module.
  */
 
-export { disposeObject3D, clearChildren } from "./disposeObject3D.js?v=judo17";
-export { default as PreviewContext } from "./PreviewContext.js?v=judo17";
-export { default as PreviewResourcePool } from "./PreviewResourcePool.js?v=judo37";
-export { default as LayerMeshSystem } from "./LayerMeshSystem.js?v=judo17";
+export { disposeObject3D, clearChildren } from "./disposeObject3D.js";
+export { default as PreviewContext } from "./PreviewContext.js";
+export { default as PreviewResourcePool } from "./PreviewResourcePool.js";
+export { default as LayerMeshSystem } from "./LayerMeshSystem.js";
 export {
 	default as EntityAttachSystem,
 	entityStructureLayer
-} from "./EntityAttachSystem.js?v=judo39";
-export { default as CameraController } from "./CameraController.js?v=judo17";
-export { default as FlyController } from "./FlyController.js?v=judo17";
-export {
-	default as InspectRaycaster,
-	chooseInspectHit,
-	ENTITY_PICK_SLACK
-} from "./InspectRaycaster.js?v=judo38";
+} from "./EntityAttachSystem.js";
+export { default as CameraController } from "./CameraController.js";
+export { default as FlyController } from "./FlyController.js";
+export { default as InspectRaycaster } from "./InspectRaycaster.js";
 export {
 	default as BlockGeoSystem,
 	scanStructureBlocks,
 	defaultMatchBlock
-} from "./BlockGeoSystem.js?v=judo17";
+} from "./BlockGeoSystem.js";
 export {
 	default as LightingSystem,
 	POINT_LIGHT_DEFS,
 	POINT_LIGHT_DEFAULT_INTENSITY,
 	DIRECTIONAL_LIGHT_STRENGTH
-} from "./LightingSystem.js?v=judo17";
-export { default as ViewportSystem } from "./ViewportSystem.js?v=judo17";
+} from "./LightingSystem.js";
+export { default as ViewportSystem } from "./ViewportSystem.js";
 export {
 	createOrbitCameraAndControls,
 	bindOrbitInteraction,
 	isWeakGpu,
 	DEFAULT_FOV
-} from "./orbitBootstrap.js?v=judo17";
-export { downloadScreenshot, exportGlb } from "./PreviewExport.js?v=judo17";
-export { wirePreviewOptionsGui } from "./PreviewOptionsGui.js?v=judo29";
-export { default as SpecialBlockOverlay } from "./SpecialBlockOverlay.js?v=judo33";
+} from "./orbitBootstrap.js";
+export { downloadScreenshot, exportGlb } from "./PreviewExport.js";
+export { wirePreviewOptionsGui } from "./PreviewOptionsGui.js";
+export { default as SpecialBlockOverlay } from "./SpecialBlockOverlay.js";

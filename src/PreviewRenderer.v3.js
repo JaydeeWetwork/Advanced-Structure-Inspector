@@ -1,5 +1,5 @@
 /**
  * @deprecated Import `./PreviewRenderer.js` instead.
- * Kept as a re-export so any old ?v= cache entries resolve to the single renderer.
+ * Kept as a re-export so leftover PreviewRenderer.v3 imports still resolve.
  */
-export { default } from "./PreviewRenderer.js?v=judo39";
+export { default } from "./PreviewRenderer.js";

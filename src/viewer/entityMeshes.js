@@ -11,8 +11,8 @@
 
 import { structurePosToThree } from "./previewSpace.js";
 import { entityMeshKind } from "./entityExtract.js";
-import { loadVanillaEntityKit } from "./entityGeoThree.js?v=judo39";
-import { buildCargoKit, placeCargoMesh } from "./entityCargo.js?v=judo39";
+import { loadVanillaEntityKit } from "./entityGeoThree.js";
+import { buildCargoKit, placeCargoMesh } from "./entityCargo.js";
 
 export { structurePosToThree };
 export { loadVanillaEntityKit as loadEntityModelKit };
@@ -64,8 +64,8 @@ export function addMinecartPickVolume(THREE, group) {
 		mat
 	);
 	mesh.position.set(MINECART_PICK_CENTER[0], MINECART_PICK_CENTER[1], MINECART_PICK_CENTER[2]);
-	mesh.name = "sdb-pick-volume";
-	mesh.userData.sdbPickProxy = true;
+	mesh.name = "basi-pick-volume";
+	mesh.userData.basiPickProxy = true;
 	mesh.frustumCulled = false;
 	group.add(mesh);
 	return mesh;
@@ -270,13 +270,13 @@ export function createEntityObject3D(THREE, entity, materials = {}) {
 	const group = new THREE.Group();
 	group.name = `entity:${entity.rawId || kind}`;
 	group.userData.previewEntity = true;
-	group.userData.sdbEntity = entity;
-	group.userData.sdbMeshKind = kind;
+	group.userData.basiEntity = entity;
+	group.userData.basiMeshKind = kind;
 
 	const kitEntry = materials.entityKit?.get?.(kind);
 	if (kitEntry?.template) {
 		const hull = cloneVanillaTemplate(THREE, kitEntry.template);
-		hull.userData.sdbVanillaHull = true;
+		hull.userData.basiVanillaHull = true;
 		group.add(hull);
 		const cargoKind = kitEntry.cargo || "";
 		const cargoEntry = cargoKind && cargoKind !== "none"

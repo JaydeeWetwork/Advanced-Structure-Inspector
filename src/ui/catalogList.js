@@ -77,21 +77,21 @@ export async function onDeleteCategory(categoryId) {
  */
 export function createStructureRow(entry) {
 	const li = document.createElement("li");
-	li.className = "sdb-list-row" + (entry.id === getSelectedId() ? " selected" : "");
+	li.className = "basi-list-row" + (entry.id === getSelectedId() ? " selected" : "");
 	li.tabIndex = 0;
 	li.setAttribute("role", "option");
 	li.setAttribute("aria-selected", entry.id === getSelectedId() ? "true" : "false");
 	li.dataset.id = entry.id;
 
 	const main = document.createElement("div");
-	main.className = "sdb-list-row-main";
+	main.className = "basi-list-row-main";
 
 	const title = document.createElement("div");
-	title.className = "sdb-list-title";
+	title.className = "basi-list-title";
 	title.textContent = entry.name;
 
 	const meta = document.createElement("div");
-	meta.className = "sdb-list-meta-line";
+	meta.className = "basi-list-meta-line";
 	const err = entry.parseError;
 	const ent = entry.entityCount ? ` · ${entry.entityCount} ent` : "";
 	meta.textContent = err
@@ -101,7 +101,7 @@ export function createStructureRow(entry) {
 	main.append(title, meta);
 
 	const move = document.createElement("select");
-	move.className = "sdb-list-move";
+	move.className = "basi-list-move";
 	move.title = "Move to category";
 	move.setAttribute("aria-label", `Move ${entry.name} to category`);
 	const optUncat = document.createElement("option");
@@ -147,37 +147,37 @@ export function createStructureRow(entry) {
  */
 export function createCategoryGroup(group, catIndex, userCatCount) {
 	const wrap = document.createElement("li");
-	wrap.className = "sdb-cat-group" + (group.collapsed ? " is-collapsed" : "");
+	wrap.className = "basi-cat-group" + (group.collapsed ? " is-collapsed" : "");
 	wrap.dataset.categoryId = group.categoryId ?? "uncategorized";
 
 	const header = document.createElement("div");
-	header.className = "sdb-cat-header";
+	header.className = "basi-cat-header";
 	header.setAttribute("role", "button");
 	header.tabIndex = 0;
 	header.setAttribute("aria-expanded", group.collapsed ? "false" : "true");
 
 	const toggle = document.createElement("span");
-	toggle.className = "sdb-cat-toggle";
+	toggle.className = "basi-cat-toggle";
 	toggle.textContent = group.collapsed ? "▸" : "▾";
 	toggle.setAttribute("aria-hidden", "true");
 
 	const label = document.createElement("span");
-	label.className = "sdb-cat-name";
+	label.className = "basi-cat-name";
 	label.textContent = group.name;
 
 	const count = document.createElement("span");
-	count.className = "sdb-cat-count";
+	count.className = "basi-cat-count";
 	count.textContent = String(group.entries.length);
 
 	const actions = document.createElement("div");
-	actions.className = "sdb-cat-actions";
+	actions.className = "basi-cat-actions";
 
 	const stop = e => e.stopPropagation();
 
 	if (!group.isUncategorized) {
 		const up = document.createElement("button");
 		up.type = "button";
-		up.className = "sdb-cat-btn";
+		up.className = "basi-cat-btn";
 		up.title = "Move category up";
 		up.textContent = "↑";
 		up.disabled = catIndex <= 0;
@@ -188,7 +188,7 @@ export function createCategoryGroup(group, catIndex, userCatCount) {
 
 		const down = document.createElement("button");
 		down.type = "button";
-		down.className = "sdb-cat-btn";
+		down.className = "basi-cat-btn";
 		down.title = "Move category down";
 		down.textContent = "↓";
 		down.disabled = catIndex >= userCatCount - 1;
@@ -199,7 +199,7 @@ export function createCategoryGroup(group, catIndex, userCatCount) {
 
 		const rename = document.createElement("button");
 		rename.type = "button";
-		rename.className = "sdb-cat-btn";
+		rename.className = "basi-cat-btn";
 		rename.title = "Rename category";
 		rename.textContent = "✎";
 		rename.addEventListener("click", e => {
@@ -209,7 +209,7 @@ export function createCategoryGroup(group, catIndex, userCatCount) {
 
 		const del = document.createElement("button");
 		del.type = "button";
-		del.className = "sdb-cat-btn sdb-cat-btn-danger";
+		del.className = "basi-cat-btn basi-cat-btn-danger";
 		del.title = "Delete category";
 		del.textContent = "×";
 		del.addEventListener("click", e => {
@@ -233,7 +233,7 @@ export function createCategoryGroup(group, catIndex, userCatCount) {
 			.then(() => renderList());
 	};
 	header.addEventListener("click", e => {
-		if (e.target instanceof Element && e.target.closest(".sdb-cat-actions")) return;
+		if (e.target instanceof Element && e.target.closest(".basi-cat-actions")) return;
 		toggleCollapse();
 	});
 	header.addEventListener("keydown", e => {
@@ -247,10 +247,10 @@ export function createCategoryGroup(group, catIndex, userCatCount) {
 
 	if (!group.collapsed) {
 		const body = document.createElement("ul");
-		body.className = "sdb-cat-body";
+		body.className = "basi-cat-body";
 		if (!group.entries.length) {
 			const empty = document.createElement("li");
-			empty.className = "sdb-list-empty sdb-cat-empty";
+			empty.className = "basi-list-empty basi-cat-empty";
 			empty.textContent = group.isUncategorized
 				? "No uncategorized structures"
 				: "Empty — move structures here";
@@ -289,7 +289,7 @@ export function renderList() {
 
 	if (total === 0) {
 		const empty = document.createElement("li");
-		empty.className = "sdb-list-empty";
+		empty.className = "basi-list-empty";
 		empty.textContent = "No structures yet — import files above";
 		els.catalogList.appendChild(empty);
 		// Still show category headers so users can create/organize
@@ -297,7 +297,7 @@ export function renderList() {
 
 	if (q && matchCount === 0 && total > 0) {
 		const empty = document.createElement("li");
-		empty.className = "sdb-list-empty";
+		empty.className = "basi-list-empty";
 		empty.textContent = "No matches";
 		els.catalogList.appendChild(empty);
 		return;

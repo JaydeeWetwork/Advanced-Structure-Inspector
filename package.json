@@ -1,8 +1,8 @@
 {
-	"name": "structure-inspector",
+	"name": "bedrock-asi",
 	"version": "0.1.0",
 	"private": true,
-	"description": "Advanced Structure Inspector — web-based Minecraft Bedrock .mcstructure browser and 3D inspector (local or static host). Setup: see README.md and docs/SETUP.md. Adapted from HoloPrint.",
+	"description": "Bedrock ASI — Minecraft Bedrock .mcstructure browser and 3D inspector (local or static host). Setup: see README.md and docs/SETUP.md. HoloPrint pack generator is isolated under src/holoprint/.",
 	"type": "module",
 	"scripts": {
 		"lint": "tsc 2>&1 | grep -Ev 'TS2307|TS2694'",
@@ -21,7 +21,7 @@
 	"license": "CC-BY-NC-SA-4.0",
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/YOUR_USER/structure-inspector.git"
+		"url": "https://github.com/YOUR_USER/bedrock-asi.git"
 	},
 	"devDependencies": {
 		"nbtify": "^2.2.0",

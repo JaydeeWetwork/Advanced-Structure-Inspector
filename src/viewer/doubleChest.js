@@ -40,7 +40,7 @@ export function chestFacing(states) {
 
 /**
  * Which local +X should point to the pair after block rotation is applied.
- * BlockGeoMaker rotates by cardinal; we encode extra yaw in sdb_pair_yaw.
+ * BlockGeoMaker rotates by cardinal; we encode extra yaw in basi_pair_yaw.
  *
  * @param {"north"|"south"|"east"|"west"} facing
  * @param {number} dx pairx - x
@@ -173,12 +173,12 @@ export function applyDoubleChestPalette(nbt, palette, indices) {
 				states: {
 					...(block.states || {}),
 					// Synthetic states consumed by block shape / rotation
-					sdb_chest_half: cls.half,
-					sdb_chest_latch: cls.latch,
-					sdb_pair_yaw: cls.yawExtra
+					basi_chest_half: cls.half,
+					basi_chest_latch: cls.latch,
+					basi_pair_yaw: cls.yawExtra
 				},
 				// Hint for BlockGeoMaker shape override
-				sdb_block_shape: `chest_half<${texPath}>`
+				basi_block_shape: `chest_half<${texPath}>`
 			});
 		}
 		layer0[flat] = newPi;
@@ -187,7 +187,7 @@ export function applyDoubleChestPalette(nbt, palette, indices) {
 
 	if (pairedCount) {
 		console.info(
-			`[sdb] double-chest: ${pairedCount} halves → ${halfPalette.size} unique geo variants`
+			`[basi] double-chest: ${pairedCount} halves → ${halfPalette.size} unique geo variants`
 		);
 	}
 

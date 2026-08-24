@@ -62,7 +62,7 @@ export function showPreviewPlaceholder(msg, opts = {}) {
 	if (!els.previewHost) return;
 
 	const host = els.previewHost;
-	const locked = host.dataset.sdbPreviewBuilding === "1";
+	const locked = host.dataset.basiPreviewBuilding === "1";
 	const hasLive =
 		!!host.querySelector("canvas")
 		|| !!host.querySelector(".previewCont");
@@ -70,12 +70,12 @@ export function showPreviewPlaceholder(msg, opts = {}) {
 	// Progress updates must never wipe a building/live preview — that was a silent blank screen
 	if (!opts.force && (locked || hasLive)) {
 		console.warn(
-			"[sdb] showPreviewPlaceholder refused to clear host "
+			"[basi] showPreviewPlaceholder refused to clear host "
 			+ `(building=${locked}, live=${hasLive}): "${msg}". `
 			+ "Use force:true only when intentionally replacing a preview."
 		);
 		// Still surface the message without destroying the view
-		const existing = host.querySelector(".sdb-preview-loading-msg, .meta");
+		const existing = host.querySelector(".basi-preview-loading-msg, .meta");
 		if (existing && !host.querySelector("canvas")) {
 			existing.textContent = msg;
 		}
@@ -117,7 +117,7 @@ export function initInspectWindow() {
 		body: els.inspectPanelBody || undefined,
 		collapseBtn: els.inspectCollapseBtn,
 		closeBtn: els.inspectCloseBtn,
-		storageKey: "sdb.inspectWin.v1",
+		storageKey: "basi.inspectWin.v1",
 		onClose: () => deselectInspectAndRefresh()
 	});
 	window.addEventListener("resize", () => inspectWin?.clamp());
@@ -214,7 +214,7 @@ export function syncCamBarActive(preset) {
 	}
 	const inLayer = p?.getSelectedLayer?.() != null && Number.isFinite(p.getSelectedLayer());
 	const showTilt = inLayer && isNsewPreset(id);
-	const tiltWrap = document.querySelector(".sdb-cam-tilt");
+	const tiltWrap = document.querySelector(".basi-cam-tilt");
 	if (tiltWrap) {
 		tiltWrap.classList.toggle("hidden", !showTilt);
 	}
@@ -236,7 +236,7 @@ export function syncCamBarActive(preset) {
 export function applyCameraPreset(preset, opts = {}) {
 	const p = primaryPreview();
 	if (!p?.setCameraPreset) {
-		console.warn("[sdb] applyCameraPreset: no active preview");
+		console.warn("[basi] applyCameraPreset: no active preview");
 		return false;
 	}
 	let next = preset;
@@ -261,7 +261,7 @@ export function applyCameraPreset(preset, opts = {}) {
 	try {
 		p.setCameraPreset(next);
 	} catch (err) {
-		console.error("[sdb] setCameraPreset failed", next, err);
+		console.error("[basi] setCameraPreset failed", next, err);
 		return false;
 	}
 	syncCamBarActive(next);
@@ -365,7 +365,7 @@ export async function onPreviewDblClick(e) {
 	const hit = p.pickAtClient(e.clientX, e.clientY);
 	// Only open UI for containers / entities with inventory layouts; still show mockup for any block as generic if it has items or is known container
 	try {
-		const { renderContainerUi, resolveContainerKind } = await import("../viewer/containerUi.js?v=judo33");
+		const { renderContainerUi, resolveContainerKind } = await import("../viewer/containerUi.js");
 		const src =
 			hit.kind === "block" && hit.block
 				? { name: hit.block.name, blockEntityId: hit.block.blockEntityId }
@@ -412,7 +412,7 @@ export async function onPreviewDblClick(e) {
 		const node = renderContainerUi(hit);
 		showInspectPanelNode(node);
 		// Load Bedrock item icons into slots (vanilla samples via CDN)
-		void import("../viewer/itemIconLoader.js?v=judo17")
+		void import("../viewer/itemIconLoader.js")
 			.then(async ({ hydrateInventoryIcons }) => {
 				const wanted = node.querySelectorAll?.("img[data-item-icon]")?.length ?? 0;
 				// Empty inventories have no icon imgs — not an error
@@ -420,15 +420,15 @@ export async function onPreviewDblClick(e) {
 				const n = await hydrateInventoryIcons(node);
 				if (!n) {
 					console.warn(
-						`[sdb] item icons: 0/${wanted} loaded (CDN 404s or unknown ids). Slot text labels still show.`
+						`[basi] item icons: 0/${wanted} loaded (CDN 404s or unknown ids). Slot text labels still show.`
 					);
 				}
 			})
-			.catch(err => console.warn("[sdb] item icons failed", err));
+			.catch(err => console.warn("[basi] item icons failed", err));
 		// Keep camera + layer when opening inventory mockup
 		p.requestRedraw?.({ keepCamera: true });
 	} catch (err) {
-		console.warn("[sdb] container UI failed", err);
+		console.warn("[basi] container UI failed", err);
 		clearInspectPanel();
 	}
 }

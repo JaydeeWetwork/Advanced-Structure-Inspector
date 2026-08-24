@@ -3,7 +3,7 @@
  * Generation counter drops stale concurrent attaches (layer changes / re-init).
  */
 
-import { disposeObject3D } from "./disposeObject3D.js?v=judo14";
+import { disposeObject3D } from "./disposeObject3D.js";
 import { isOnActiveLayer } from "../layerVisibility.js";
 
 /**
@@ -105,7 +105,7 @@ export default class EntityAttachSystem {
 		const pool = this.ctx.pool;
 
 		if (this.ctx.isDisposed() || !scene || !THREE) {
-			console.warn("[sdb] EntityAttachSystem: renderer not ready", {
+			console.warn("[basi] EntityAttachSystem: renderer not ready", {
 				disposed: this.ctx.isDisposed(),
 				hasScene: !!scene,
 				hasTHREE: !!THREE
@@ -132,7 +132,7 @@ export default class EntityAttachSystem {
 		const options = this.ctx.options;
 		if (options.showEntities !== false && ents.length) {
 			console.info(
-				`[sdb] EntityAttachSystem: meshing ${ents.length}`,
+				`[basi] EntityAttachSystem: meshing ${ents.length}`,
 				ents.slice(0, 5).map(e =>
 					`${e.identifier}@${(e.pos || []).map(n => Number(n).toFixed(2)).join(",")}`
 				)
@@ -143,10 +143,10 @@ export default class EntityAttachSystem {
 			let buildCargoKit;
 			try {
 				({ createEntityObject3D, loadEntityModelKit, buildCargoKit } = await import(
-					"../entityMeshes.js?v=judo39"
+					"../entityMeshes.js"
 				));
 			} catch (e) {
-				console.error("[sdb] failed to load entityMeshes module:", e);
+				console.error("[basi] failed to load entityMeshes module:", e);
 			}
 			if (gen !== this.#attachGen || this.ctx.isDisposed()) return 0;
 
@@ -156,9 +156,9 @@ export default class EntityAttachSystem {
 					const kit = await loadEntityModelKit(THREE, rps);
 					if (gen !== this.#attachGen || this.ctx.isDisposed()) return 0;
 					if (kit?.size) pool.entityModelKit = kit;
-					console.info(`[sdb] vanilla entity kit: ${kit?.size ?? 0} kind(s)`);
+					console.info(`[basi] vanilla entity kit: ${kit?.size ?? 0} kind(s)`);
 				} catch (e) {
-					console.warn("[sdb] vanilla entity kit load failed:", e);
+					console.warn("[basi] vanilla entity kit load failed:", e);
 				}
 			}
 			if (gen !== this.#attachGen || this.ctx.isDisposed()) return 0;
@@ -166,9 +166,9 @@ export default class EntityAttachSystem {
 			if (buildCargoKit && options.cargoTemplates && !pool.cargoKit) {
 				try {
 					pool.cargoKit = buildCargoKit(THREE, options.cargoTemplates, pool);
-					console.info(`[sdb] cargo kit: ${pool.cargoKit?.size ?? 0} kind(s)`);
+					console.info(`[basi] cargo kit: ${pool.cargoKit?.size ?? 0} kind(s)`);
 				} catch (e) {
-					console.warn("[sdb] cargo kit failed:", e);
+					console.warn("[basi] cargo kit failed:", e);
 				}
 			}
 			if (gen !== this.#attachGen || this.ctx.isDisposed()) return 0;
@@ -186,12 +186,12 @@ export default class EntityAttachSystem {
 							railDirection
 						});
 						obj.userData.previewEntity = true;
-						obj.userData.sdbEntity = ent;
+						obj.userData.basiEntity = ent;
 						obj.userData.layerY = ly;
 						this.ctx.getLayerGroup(ly).add(obj);
 						added++;
 					} catch (e) {
-						console.error("[sdb] failed to mesh entity", ent, e);
+						console.error("[basi] failed to mesh entity", ent, e);
 					}
 				}
 			}
@@ -202,10 +202,10 @@ export default class EntityAttachSystem {
 			const frameAdded = await this.#attachItemFrameItems(gen, layerFilter);
 			added += frameAdded;
 		} catch (e) {
-			console.warn("[sdb] item frame items failed:", e);
+			console.warn("[basi] item frame items failed:", e);
 		}
 
-		console.info(`[sdb] EntityAttachSystem: added ${added} group(s)`);
+		console.info(`[basi] EntityAttachSystem: added ${added} group(s)`);
 		this.ctx.requestRender();
 		return added;
 	}
@@ -231,7 +231,7 @@ export default class EntityAttachSystem {
 				loadItemTexture
 			} = await import("../itemFrameItems.js"));
 		} catch (e) {
-			console.error("[sdb] itemFrameItems module failed:", e);
+			console.error("[basi] itemFrameItems module failed:", e);
 			return 0;
 		}
 		if (gen !== this.#attachGen || this.ctx.isDisposed()) return 0;
@@ -257,7 +257,7 @@ export default class EntityAttachSystem {
 					}
 					pool.itemFrameTexCache.set(name, tex);
 				} catch (e) {
-					console.warn("[sdb] item frame texture failed:", name, e);
+					console.warn("[basi] item frame texture failed:", name, e);
 					pool.itemFrameTexCache.set(name, null);
 				}
 			})
@@ -274,11 +274,11 @@ export default class EntityAttachSystem {
 				this.ctx.getLayerGroup(pl.y).add(obj);
 				added++;
 			} catch (e) {
-				console.warn("[sdb] failed item frame item", pl, e);
+				console.warn("[basi] failed item frame item", pl, e);
 			}
 		}
 		if (added) {
-			console.info(`[sdb] EntityAttachSystem: placed ${added} item icon(s)`);
+			console.info(`[basi] EntityAttachSystem: placed ${added} item icon(s)`);
 		}
 		return added;
 	}

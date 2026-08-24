@@ -1,8 +1,8 @@
-# Advanced Structure Inspector
+# Bedrock ASI
 
 Web app for **Minecraft Bedrock** `.mcstructure` files: import, catalog, 3D preview, layer browse, inventory inspect, materials list, and notes — all in the browser.
 
-No backend required. Catalog and files persist in **IndexedDB**. Geometry uses the HoloPrint-style pipeline (Three.js) without generating a resource pack for normal viewing.
+No backend required. Catalog and files persist in **IndexedDB**. Geometry uses a HoloPrint-derived pipeline (Three.js) without generating a resource pack for normal viewing. The HoloPrint pack generator is isolated under `src/holoprint/`.
 
 This repository is a **fork / Adapted Material** of [HoloPrint](https://github.com/SuperLlama88888/holoprint) (CC BY-NC-SA 4.0). See [NOTICE.md](./NOTICE.md) and [FORK.md](./FORK.md).
 
@@ -27,9 +27,12 @@ For **dev serve**, only a static file server is required. Network is used for:
 
 ## Development model
 
-- **Local-first**: no GitHub remote required. We are building **ASI APIs** under `src/viewer/api/` (not continuing HoloPrint product APIs).
+- **Local-first**: no GitHub remote required. Product APIs live under `src/viewer/api/` (not HoloPrint pack APIs).
 - **Branches**: `dev` (active) → `staging` (your QA) → `main` (stable). See [docs/BRANCHING.md](./docs/BRANCHING.md) and [docs/WORKFLOW.md](./docs/WORKFLOW.md).
 - **Appearance / multi-version design** (future): [docs/APPEARANCE_ARCHITECTURE.md](./docs/APPEARANCE_ARCHITECTURE.md).
+- **Authoring core** (voxel editor + geo.json + public geometry API): [docs/AUTHORING_CORE.md](./docs/AUTHORING_CORE.md).
+- **Bedrock dictionary / archive types** (TMC jargon, TBA farm catalog, ZIP `.mc*`, `.brarchive`): [docs/BEDROCK_ARCHIVES.md](./docs/BEDROCK_ARCHIVES.md).
+- **NBT validation around nbtify** (size/encoding gates, whitelist, no raw trees in model context): [docs/NBT_VALIDATION.md](./docs/NBT_VALIDATION.md). Findings: [docs/sec_nbt_findings.md](./docs/sec_nbt_findings.md). Plan: [docs/sec_nbt_plan.md](./docs/sec_nbt_plan.md).
 - **Backup without a remote**: `powershell -File scripts/backup-local.ps1`
 
 ## Quick start (development)
@@ -96,7 +99,7 @@ Deploy the **`dist/`** folder to any static host (GitHub Pages, Netlify, S3, ngi
 - **Materials list** — counts, stacks/shulkers, acquired checkboxes
 - **Notes** — per-structure details (no timestamps in UI)
 - **Parked previews** — LRU cache of last 2 WebGL sessions for fast reselect
-- Original **HoloPrint pack generator** still at `holoprintPack.html`
+- Original **HoloPrint pack generator** isolated at `src/holoprint/holoprintPack.html`
 
 ---
 
@@ -110,8 +113,8 @@ src/
   viewer/                   # IDB, inspect, icons, structurePreview, layerVisibility
     systems/                # Layer / entity / camera / inspect / pool / session
   PreviewRenderer.js        # Single 3D preview (composes systems)
-  HoloPrint.js              # Upstream NBT / pack core
-  holoprintPack.html        # Original pack UI
+  types.js                  # Shared JSDoc types (not HoloPrint runtime)
+  holoprint/                # Isolated HoloPrint pack generator (not the inspector)
   data/                     # Block shapes, item icon maps, …
 pipeline/                   # Build → dist/
 tests/viewerUnit/           # Fast unit tests

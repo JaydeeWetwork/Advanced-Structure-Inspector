@@ -1,4 +1,4 @@
-import { floor, max, nanToUndefined, PatternMap, removeFalsies, ReplacingPatternMap, round, tuple } from "./utils.js";
+import { floor, max, nanToUndefined, PatternMap, removeFalsies, ReplacingPatternMap, round, tuple } from "../utils.js";
 
 export default class MaterialList {
 	/** @type {Map<string, number>} */
@@ -283,5 +283,6 @@ export default class MaterialList {
 	}
 }
 
-/** @import { MaterialListEntry, Block, ExportedMaterialListJsonUi } from "./HoloPrint.js" */
-/** @import * as Data from "./data/schemas" */
+/** @import { Block } from "../types.js" */
+/** @import { MaterialListEntry, ExportedMaterialListJsonUi } from "./packTypes.js" */
+/** @import * as Data from "../data/schemas" */

@@ -1,6 +1,6 @@
-import { assertAs, html, htmlCodeToElement, onEvent, onEventAndNow, selectEl, selectEls } from "../utils.js";
-import * as HoloPrint from "../HoloPrint.js";
-import fetchers from "../fetchers.js";
+import { assertAs, html, htmlCodeToElement, onEvent, onEventAndNow, selectEl, selectEls } from "../../utils.js";
+import { createItemCriteria } from "../itemCriteria.js";
+import fetchers from "../../fetchers.js";
 
 let itemsDatalistPromise = fetchers.vanillaData("metadata/vanilladata_modules/mojang-items.json").then(res => res.json()).then(mojangItems => {
 	let itemNames = mojangItems["data_items"].map(item => item["name"].replace(/^minecraft:/, ""));
@@ -145,7 +145,7 @@ export default class ItemCriteriaInput extends HTMLElement {
 	get value() {
 		let itemNames = Array.from(this.#criteriaInputsCont[selectEls](".itemNameInput")).map(input => input.value.trim());
 		let tagNames = Array.from(this.#criteriaInputsCont[selectEls](".itemTagInput")).map(input => input.value.trim());
-		return JSON.stringify(HoloPrint.createItemCriteria(itemNames, tagNames));
+		return JSON.stringify(createItemCriteria(itemNames, tagNames));
 	}
 	set value(stringifiedValue) {
 		this.#criteriaInputsCont.innerHTML = "";

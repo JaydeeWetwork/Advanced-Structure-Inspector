@@ -6,6 +6,7 @@
  */
 
 import { describeSignPlacement } from "./signPlacement.js";
+import { upgradeItemStack } from "./itemUpgrade.js";
 
 /**
  * @param {unknown} v
@@ -210,7 +211,7 @@ function deepCollectItemStacks(nbt, out, depth, seen) {
  * @param {any} nbt
  * @returns {{ name: string, count: number, slot: number|null, damage: number|null, raw: any }[]}
  */
-export function extractInventoryItems(nbt) {
+export function extractInventoryItems(nbt, itemSchemas = []) {
 	if (!nbt || typeof nbt !== "object") return [];
 
 	/** @type {any[]} */
@@ -233,7 +234,7 @@ export function extractInventoryItems(nbt) {
 	const out = [];
 	for (const raw of lists) {
 		const n = normalizeItemStack(raw);
-		if (n) out.push(n);
+		if (n) out.push(itemSchemas.length ? upgradeItemStack(n, itemSchemas) : n);
 	}
 	return out;
 }
@@ -353,6 +354,7 @@ export function buildInspectIndex(data, opts = {}) {
 		sparse: !opts.full
 	};
 
+	const itemSchemas = opts.itemSchemas ?? [];
 	const structure = data?.structure;
 	if (!structure) return index;
 
@@ -397,7 +399,7 @@ export function buildInspectIndex(data, opts = {}) {
 			}
 		}
 		const beId = be?.id != null ? String(be.id) : null;
-		const items = extractInventoryItems(be);
+		const items = extractInventoryItems(be, itemSchemas);
 
 		let states;
 		if (block?.states && typeof block.states === "object") {
@@ -482,7 +484,7 @@ export function buildInspectIndex(data, opts = {}) {
 			identifier,
 			rawId,
 			pos,
-			items: extractInventoryItems(ent),
+			items: extractInventoryItems(ent, itemSchemas),
 			customName: customName != null ? String(customName) : null,
 			raw: ent
 		});

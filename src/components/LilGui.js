@@ -38,7 +38,7 @@ export default class LilGui extends HTMLElement {
 				container: this.shadowRoot
 			});
 		} catch (e) {
-			console.warn("[sdb] lil-gui GUI construct failed:", e);
+			console.warn("[basi] lil-gui GUI construct failed:", e);
 			this.gui = undefined;
 			return;
 		}
@@ -60,7 +60,7 @@ export default class LilGui extends HTMLElement {
 			<style>
 				:host {
 					width: min(calc(100% - 20px), 245px);
-					/* Host is positioned bottom-right by .sdb-preview-host CSS */
+					/* Host is positioned bottom-right by .basi-preview-host CSS */
 					display: block;
 					max-height: min(48vh, 420px);
 					overflow: auto;
@@ -102,7 +102,7 @@ export default class LilGui extends HTMLElement {
 			</style>
 		`));
 		} catch (e) {
-			console.warn("[sdb] lil-gui shadow styles failed:", e);
+			console.warn("[basi] lil-gui shadow styles failed:", e);
 		}
 		this.#ready = true;
 	}

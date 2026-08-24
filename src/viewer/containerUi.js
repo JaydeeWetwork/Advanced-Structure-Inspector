@@ -8,12 +8,12 @@ import {
 	extractLecternBook,
 	readRedstoneSignal
 } from "./inspectStructure.js";
-import { describeSignPlacement } from "./signPlacement.js?v=judo33";
+import { describeSignPlacement } from "./signPlacement.js";
 import {
 	formatSignInspectDump,
 	renderSignTweakControls,
 	setSignDebugFocus
-} from "./signDebug.js?v=judo33";
+} from "./signDebug.js";
 
 /**
  * @typedef {{ name: string, count: number, slot: number|null, damage: number|null }} ItemStack
@@ -448,7 +448,7 @@ async function applyCrafterResult(root, resultSlot, slots, disabled) {
 			}
 			resultSlot.title = `${formatItemLabel(result.item)} × ${result.count} (crafted)`;
 			// load icon
-			void import("./itemIconLoader.js?v=judo17")
+			void import("./itemIconLoader.js")
 				.then(m => m.hydrateInventoryIcons(resultSlot))
 				.catch(() => {});
 		};
@@ -460,7 +460,7 @@ async function applyCrafterResult(root, resultSlot, slots, disabled) {
 		if (!root.isConnected) return;
 		paint(matchCrafterOutput(slots, disabled));
 	} catch (e) {
-		console.warn("[sdb] crafter recipe match failed", e);
+		console.warn("[basi] crafter recipe match failed", e);
 	}
 }
 

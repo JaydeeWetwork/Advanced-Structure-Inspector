@@ -1,8 +1,8 @@
 import { jsonc } from "./conversions.js";
 
 let translationLanguages = {};
-export async function loadTranslationLanguage(language) {
-	translationLanguages[language] ??= await fetch(`translations/${language}.json`).then(res => jsonc(res)).catch(() => {
+export async function loadTranslationLanguage(language, base = "translations") {
+	translationLanguages[language] ??= await fetch(`${base}/${language}.json`).then(res => jsonc(res)).catch(() => {
 		console.warn(`Failed to load language ${language} for translations!`);
 		return {};
 	});

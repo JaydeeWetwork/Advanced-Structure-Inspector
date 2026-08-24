@@ -1,6 +1,6 @@
 # APIs, classes, and data structures
 
-Advanced Structure Inspector as of `dev`. App and UI should import product contracts from `src/viewer/api/`, not from `systems/` or HoloPrint.
+Bedrock ASI as of `dev`. App and UI should import product contracts from `src/viewer/api/`, not from `systems/` or `src/holoprint/`.
 
 Related: [WORKFLOW.md](./WORKFLOW.md) (habit 3), [APPEARANCE_ARCHITECTURE.md](./APPEARANCE_ARCHITECTURE.md), [SETUP.md](./SETUP.md).
 
@@ -193,6 +193,6 @@ Switch structure → park old canvas in a hidden stash (LRU 2) → restore or re
 
 ## Not product APIs
 
-- `HoloPrint.js` / pack generation (`holoprintPack.html`) — heritage, not the catalog contract.
+- `src/holoprint/` / pack generation (`holoprint/holoprintPack.html`) — heritage, not the catalog contract.
 - `src/viewer/systems/*` — app shell should not import these directly.
 - `nbtify` write (`scripts/fill-sign-test-text.mjs`) — fixture tool only. Runtime parse uses `nbtify-readonly-typeless`.

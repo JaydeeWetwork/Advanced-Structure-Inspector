@@ -1,4 +1,4 @@
-# Setup guide — Advanced Structure Inspector
+# Setup guide — Bedrock ASI
 
 Step-by-step install, run, build, and troubleshoot.
 
@@ -185,7 +185,7 @@ Hard-refresh after pulls. Only `index.html` busts `index.js?v=…`; a leftover `
 Upstream pack generator is still available:
 
 ```
-http://localhost:5173/holoprintPack.html
+http://localhost:5173/holoprint/holoprintPack.html
 ```
 
 (when serving `src/`)

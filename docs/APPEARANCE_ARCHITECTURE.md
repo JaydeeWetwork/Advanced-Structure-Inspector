@@ -1,7 +1,7 @@
 # Appearance architecture — geometry, textures, icons, multi-version
 
 Status: **design / future work** (not implemented as a full subsystem yet).  
-Related: ASI preview (`PreviewRenderer`, `BlockGeoMaker`, `TextureAtlas`, `itemIconLoader`), HoloPrint heritage.
+Related: ASI preview (`PreviewRenderer`, `BlockGeoMaker`, `TextureAtlas`, `itemIconLoader`), HoloPrint heritage. Independent engine direction: [renderer-engine.md](./renderer-engine.md) (BedrockMap as a render-example, not a dependency).
 
 This document captures the target design for making model/block/geometry and texture/icon systems more robust, API-rich, easy to adapt for new Minecraft Bedrock updates, and capable of supporting older structure formats.
 
@@ -27,7 +27,7 @@ This document captures the target design for making model/block/geometry and tex
 | **States → rotation/variant** | `data/blockStateDefinitions.json` | Incomplete for new states |
 | **Texture resolve** | `blocks.json` + `terrain_texture.json` via CDN | Single pin in `fetchers.js` |
 | **Icons** | `data/itemIcons.json` + heuristics in `itemIconLoader.js` | Breaks on renames (`written_book` → `book_written`) |
-| **Legacy blocks** | `BlockUpdater.js` + SuperLlama schemas | Exists but not first-class in ASI preview path |
+| **Legacy blocks** | `BlockUpdater.js` + SuperLlama schemas | Exists but not first-class in ASI preview path. Research: [pmmp schema vs BlockUpdater](./pmmp-schema-vs-blockupdater.md) |
 | **Public API** | `viewer/api/*` | Icons/catalog/inventory only — no geometry/texture API |
 
 ### Pipeline (simplified)

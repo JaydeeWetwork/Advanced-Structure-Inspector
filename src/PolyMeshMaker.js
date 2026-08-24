@@ -98,4 +98,4 @@ export default class PolyMeshMaker {
 	}
 }
 
-/** @import { Vec3, PolyMeshTemplateFaceWithUvs, PolyMesh } from "./HoloPrint.js" */
+/** @import { Vec3, PolyMeshTemplateFaceWithUvs, PolyMesh } from "./types.js" */

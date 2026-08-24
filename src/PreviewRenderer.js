@@ -27,9 +27,9 @@ import {
 	exportGlb as exportGlbFile,
 	wirePreviewOptionsGui,
 	SpecialBlockOverlay
-} from "./viewer/systems/index.js?v=judo39";
-import { disposeObject3D } from "./viewer/systems/disposeObject3D.js?v=judo34";
-import { SIGN_TWEAK_EVENT } from "./viewer/signDebug.js?v=judo34";
+} from "./viewer/systems/index.js";
+import { disposeObject3D } from "./viewer/systems/disposeObject3D.js";
+import { SIGN_TWEAK_EVENT } from "./viewer/signDebug.js";
 
 import Stats from "stats.js";
 
@@ -201,7 +201,7 @@ export default class PreviewRenderer extends AsyncFactory {
 		this.#initSystems();
 		this.#entities.setList(entityList);
 		if (options?.inspectIndex) this.#ctx.inspectIndex = options.inspectIndex;
-		console.info("[sdb] PreviewRenderer constructed, entities:", this.previewEntities.length);
+		console.info("[basi] PreviewRenderer constructed, entities:", this.previewEntities.length);
 		this.#buildLoadingChrome();
 	}
 
@@ -245,7 +245,7 @@ export default class PreviewRenderer extends AsyncFactory {
 				}
 				const gui = /** @type {{ gui?: import("lil-gui").GUI }} */ (guiEl).gui;
 				if (!gui) {
-					console.warn("[sdb] lil-gui panel not ready — options disabled for this preview");
+					console.warn("[basi] lil-gui panel not ready — options disabled for this preview");
 					guiEl.remove();
 				} else {
 					this.#optionsGui = gui;
@@ -257,7 +257,7 @@ export default class PreviewRenderer extends AsyncFactory {
 					gui.onChange?.(() => this.#viewport?.requestRender?.());
 				}
 			} catch (e) {
-				console.warn("[sdb] options GUI setup failed:", e);
+				console.warn("[basi] options GUI setup failed:", e);
 				this.#optionsGui = undefined;
 			}
 		}
@@ -280,7 +280,7 @@ export default class PreviewRenderer extends AsyncFactory {
 		ctx.maxDimPixels = ctx.maxDim * 16;
 		ctx.canvasSizeFallback = this.#canvasSize;
 		ctx.hostEl =
-			this.cont?.closest?.(".sdb-preview-host")
+			this.cont?.closest?.(".basi-preview-host")
 			|| this.cont?.parentElement
 			|| this.cont;
 
@@ -310,7 +310,7 @@ export default class PreviewRenderer extends AsyncFactory {
 				layerFilter: this.#layers?.selectedLayer ?? null
 			});
 		} catch (e) {
-			console.warn("[sdb] special overlays failed:", e);
+			console.warn("[basi] special overlays failed:", e);
 		}
 	}
 
@@ -451,7 +451,7 @@ export default class PreviewRenderer extends AsyncFactory {
 		try {
 			await this.attachEntities(this.previewEntities, this.options.entityResourcePackStack);
 		} catch (e) {
-			console.error("[sdb] entity attach during init failed:", e);
+			console.error("[basi] entity attach during init failed:", e);
 		}
 		if (this.#initAborted()) return;
 
@@ -715,4 +715,4 @@ export default class PreviewRenderer extends AsyncFactory {
 	}
 }
 
-/** @import { I32Vec3, Vec3, Block, PolyMeshTemplateFaceWithUvs } from "./HoloPrint.js" */
+/** @import { I32Vec3, Vec3, Block, PolyMeshTemplateFaceWithUvs } from "./types.js" */

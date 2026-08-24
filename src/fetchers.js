@@ -1,16 +1,40 @@
-import { lazyLoadAsyncFunctionFactory, max, sleep, tuple } from "./utils.js";
+import { lazyLoadAsyncFunctionFactory, max, sleep } from "./utils.js";
+import {
+	VANILLA_SAMPLES_TAG,
+	BLOCK_UPGRADE_OWNER,
+	BLOCK_UPGRADE_REPO,
+	BLOCK_UPGRADE_TAG,
+	ITEM_UPGRADE_OWNER,
+	ITEM_UPGRADE_REPO,
+	ITEM_UPGRADE_TAG
+} from "./data/packPins.js";
+
+export {
+	VANILLA_SAMPLES_TAG,
+	BLOCK_UPGRADE_TAG,
+	ITEM_UPGRADE_TAG
+};
 
 export default {
-	vanillaData: createLazyCachingFetcher("VanillaDataFetcher", "Mojang", "bedrock-samples", "v1.26.40.26-preview"),
+	vanillaData: createLazyCachingFetcher("VanillaDataFetcher", "Mojang", "bedrock-samples", VANILLA_SAMPLES_TAG),
 	bedrockData: createLazyCachingFetcher("BedrockData", "pmmp", "BedrockData", "6.7.0+bedrock-1.26.30"),
-	bedrockBlockUpgradeSchema: createLazyCachingFetcher("BlockUpgrader", "SuperLlama88888", "BedrockBlockUpgradeSchema", "5.2.0+bedrock-1.21.110")
+	bedrockBlockUpgradeSchema: createLazyCachingFetcher(
+		"BlockUpgrader",
+		BLOCK_UPGRADE_OWNER,
+		BLOCK_UPGRADE_REPO,
+		BLOCK_UPGRADE_TAG
+	),
+	bedrockItemUpgradeSchema: createLazyCachingFetcher(
+		"ItemUpgrader",
+		ITEM_UPGRADE_OWNER,
+		ITEM_UPGRADE_REPO,
+		ITEM_UPGRADE_TAG
+	)
 };
 
 const GITHUB_CDN = "https://cdn.jsdelivr.net/gh";
-const CHANGED_FILES_URL = `${GITHUB_CDN}/SuperLlama88888/holoprint-repository-tracker/lists`;
 const CACHE_URL_PREFIX = "https://cache/";
 const BAD_STATUS_CODES = [429, 500, 502, 503];
-const CACHE_METADATA_CHANGED_FILES_URL = "https://metadata/changedFilesTxt";
 
 /**
  * @param {Parameters<typeof createCachingFetcher>} args
@@ -28,43 +52,14 @@ function createLazyCachingFetcher(...args) {
 async function createCachingFetcher(name, owner, repo, version) {
 	let cacheName = `${name}@${version}`;
 	let baseUrl = `${GITHUB_CDN}/${owner}/${repo}@${version}`;
-	let patchUrl = `${CHANGED_FILES_URL}/${owner}/${repo}`;
 	let cache = await caches.open(cacheName);
-	
+
 	let oldCacheNames = (await caches.keys()).filter(c => (c.startsWith(`${name}@`) || c.startsWith(`${name}_`)) && c != cacheName);
-	let sortedOldCacheNames = sortVersions(oldCacheNames);
-	sortedOldCacheNames.slice(0, -1).forEach(cacheName => caches.delete(cacheName)); // delete old caches except the most recent one
-	let prevCacheName = sortedOldCacheNames.at(-1); // if not found in the current cache, we look at this cache
-	let prevCacheVersion = prevCacheName?.slice(prevCacheName.replace("_", "@").indexOf("@") + 1);
-	let prevCache = prevCacheName && await caches.open(prevCacheName);
-	if(!(await prevCache?.keys())?.filter(req => !req.url.startsWith("https://metadata/"))?.length) {
-		caches.delete(prevCacheName);
-		prevCacheName = undefined;
-		prevCache = undefined;
-	}
-	prevCacheName && console.debug(`${cacheName} will load old files from ${prevCacheName}`);
-	
-	let changedFilesTxt = prevCacheName && await cache.match(CACHE_METADATA_CHANGED_FILES_URL).then(res => res?.text());
-	/** @type {boolean} */
-	let successfullyFetchedChangedFilesList = !!changedFilesTxt;
-	if(prevCacheName && !changedFilesTxt) {
-		let changedFilesUrl = `${patchUrl}/${prevCacheVersion}_to_${version}.txt`;
-		console.debug(`Loading changed files from ${changedFilesUrl}`);
-		[changedFilesTxt, successfullyFetchedChangedFilesList] = await fetch(changedFilesUrl).then(async res => {
-			if(res.ok) {
-				return tuple([await res.text(), true]);
-			}
-			throw `Response was not OK: ${res.status} ${res.statusText}`;
-		}).catch(e => {
-			console.error(`Failed to load changed files list from ${changedFilesUrl}: ${e}`);
-			return tuple(["", false]);
-		});
-		cache.put(CACHE_METADATA_CHANGED_FILES_URL, new Response(changedFilesTxt));
-	}
-	let changedFiles = new Set(changedFilesTxt?.split("\n"));
-	
+	sortVersions(oldCacheNames).forEach(oldName => caches.delete(oldName));
+
 	/**
 	 * Fetches a file, checking first against cache.
+	 * No holoprint-repository-tracker: cache miss always hits the CDN.
 	 * @param {string} filename
 	 * @returns {Promise<Response>}
 	 */
@@ -74,21 +69,9 @@ async function createCachingFetcher(name, owner, repo, version) {
 		let res = await cache.match(cacheLink);
 		if(BAD_STATUS_CODES.includes(res?.status)) {
 			await cache.delete(cacheLink);
+			res = undefined;
 		} else if(res) {
-			prevCache?.delete(cacheLink);
 			return res;
-		}
-		if(changedFiles.has(filename) || !successfullyFetchedChangedFilesList) {
-			prevCache?.delete(cacheLink);
-		} else {
-			let prevRes = await prevCache?.match(cacheLink);
-			if(prevRes) {
-				prevCache.delete(cacheLink);
-				if(!BAD_STATUS_CODES.includes(prevRes.status)) {
-					await cache.put(cacheLink, prevRes.clone());
-					return prevRes;
-				}
-			}
 		}
 		res = await retrieve(fullUrl);
 		let fetchAttempsLeft = 5;
@@ -100,7 +83,7 @@ async function createCachingFetcher(name, owner, repo, version) {
 		}
 		if(BAD_STATUS_CODES.includes(res.status)) {
 			console.error(`Couldn't avoid getting bad HTTP status code ${res.status} for ${fullUrl}`);
-		} else {
+		} else if(res.ok) {
 			await cache.put(cacheLink, res.clone());
 		}
 		return res;

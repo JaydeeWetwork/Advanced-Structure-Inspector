@@ -52,7 +52,7 @@ import {
 /** Sentinel for the virtual Uncategorized group (not stored in IDB). */
 export const UNCATEGORIZED_ID = null;
 
-function newId(prefix = "sdb") {
+function newId(prefix = "basi") {
 	if (typeof crypto !== "undefined" && crypto.randomUUID) {
 		return crypto.randomUUID();
 	}
@@ -78,7 +78,7 @@ export default class StructureCatalog {
 	 * @returns {Promise<StructureCatalogEntry>}
 	 */
 	async add(partial) {
-		const id = partial.id ?? newId("sdb");
+		const id = partial.id ?? newId("basi");
 		const categoryId =
 			partial.categoryId != null && this.#categories.has(partial.categoryId)
 				? partial.categoryId
@@ -121,7 +121,7 @@ export default class StructureCatalog {
 			} catch (e) {
 				const msg = e?.message ?? String(e);
 				this.lastPersistError = msg;
-				console.warn("[sdb] IndexedDB put failed:", e);
+				console.warn("[basi] IndexedDB put failed:", e);
 				entry.persistError = msg;
 			}
 		}
@@ -177,7 +177,7 @@ export default class StructureCatalog {
 				const msg = e?.message ?? String(e);
 				this.lastPersistError = msg;
 				entry.persistError = msg;
-				console.warn("[sdb] IndexedDB patch failed:", e);
+				console.warn("[basi] IndexedDB patch failed:", e);
 			}
 		}
 		return entry;
@@ -207,7 +207,7 @@ export default class StructureCatalog {
 				} catch (e) {
 					const msg = e?.message ?? String(e);
 					this.lastPersistError = msg;
-					console.warn("[sdb] IndexedDB delete failed:", e);
+					console.warn("[basi] IndexedDB delete failed:", e);
 					throw e;
 				}
 			}
@@ -226,7 +226,7 @@ export default class StructureCatalog {
 			} catch (e) {
 				const msg = e?.message ?? String(e);
 				this.lastPersistError = msg;
-				console.warn("[sdb] IndexedDB clear failed:", e);
+				console.warn("[basi] IndexedDB clear failed:", e);
 				throw e;
 			}
 		}
@@ -315,7 +315,7 @@ export default class StructureCatalog {
 			} catch (e) {
 				const msg = e?.message ?? String(e);
 				this.lastPersistError = msg;
-				console.warn("[sdb] category put failed:", e);
+				console.warn("[basi] category put failed:", e);
 			}
 		}
 		return cat;
@@ -339,7 +339,7 @@ export default class StructureCatalog {
 			} catch (e) {
 				const msg = e?.message ?? String(e);
 				this.lastPersistError = msg;
-				console.warn("[sdb] category rename failed:", e);
+				console.warn("[basi] category rename failed:", e);
 			}
 		}
 		return cat;
@@ -370,7 +370,7 @@ export default class StructureCatalog {
 			} catch (e) {
 				const msg = e?.message ?? String(e);
 				this.lastPersistError = msg;
-				console.warn("[sdb] category delete failed:", e);
+				console.warn("[basi] category delete failed:", e);
 				throw e;
 			}
 		}
@@ -391,7 +391,7 @@ export default class StructureCatalog {
 				await dbPutCategory(cat);
 				this.lastPersistError = null;
 			} catch (e) {
-				console.warn("[sdb] category collapse failed:", e);
+				console.warn("[basi] category collapse failed:", e);
 			}
 		}
 		return cat;
@@ -425,7 +425,7 @@ export default class StructureCatalog {
 				await dbPutCategories(this.listCategories());
 				this.lastPersistError = null;
 			} catch (e) {
-				console.warn("[sdb] category reorder failed:", e);
+				console.warn("[basi] category reorder failed:", e);
 			}
 		}
 		return true;
@@ -540,7 +540,7 @@ export default class StructureCatalog {
 			this.#notify();
 			return rows.length;
 		} catch (e) {
-			console.warn("[sdb] IndexedDB hydrate failed:", e);
+			console.warn("[basi] IndexedDB hydrate failed:", e);
 			return 0;
 		}
 	}

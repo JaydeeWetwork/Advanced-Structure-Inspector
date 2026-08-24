@@ -38,7 +38,7 @@ try {
 		absWorkingDir: process.cwd(),
 		entryPoints: [
 			"temp/index.js",
-			"temp/holoprintPack.js",
+			"temp/holoprint/holoprintPack.js",
 			"temp/styles/index.css",
 			"temp/viewer/viewer.css"
 		],
@@ -197,7 +197,7 @@ async function processJS(code, filename) {
 		code = code.replace(`const VERSION = "dev";`, `const VERSION = "${buildVersion}";`);
 	} else if(filename == "index.js") {
 		if(exportHoloPrintLib) {
-			code = `export * from "./HoloPrint.js";` + code;
+			code = `export * from "./holoprint/HoloPrint.js";` + code;
 		}
 	}
 	code = await replaceAllAsync(code, /html`([^]+?)`/g, async (_, html) => "`" + (await processHTML(html)).code + "`");

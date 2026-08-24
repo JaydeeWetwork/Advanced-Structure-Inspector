@@ -1,16 +1,16 @@
 import { extractStructureFilesFromMcworld } from "mcbe-leveldb-reader";
-import { selectEl, downloadFile, sleep, selectEls, loadTranslationLanguage, translate, getStackTrace, random, UserError, joinOr, conditionallyGroup, groupByFileExtension, addFilesToFileInput, setFileInputFiles, dispatchInputEvents, getAllChildren, jsonc, toImage, removeFalsies, clearCacheStorage, onEvent, onEventAndNow, cast, clearFileInput, html, removeFileExtension, tuple, assertAs } from "./utils.js";
+import { selectEl, downloadFile, sleep, selectEls, loadTranslationLanguage, translate, getStackTrace, random, UserError, joinOr, conditionallyGroup, groupByFileExtension, addFilesToFileInput, setFileInputFiles, dispatchInputEvents, getAllChildren, jsonc, toImage, removeFalsies, clearCacheStorage, onEvent, onEventAndNow, cast, clearFileInput, html, removeFileExtension, tuple, assertAs } from "../utils.js";
 import * as HoloPrint from "./HoloPrint.js";
 import SupabaseLogger from "./SupabaseLogger.js";
 
-import ResourcePackStack from "./ResourcePackStack.js";
-import LocalResourcePack from "./LocalResourcePack.js";
-import TextureAtlas from "./TextureAtlas.js";
+import ResourcePackStack from "../ResourcePackStack.js";
+import LocalResourcePack from "../LocalResourcePack.js";
+import TextureAtlas from "../TextureAtlas.js";
 import ItemCriteriaInput from "./components/ItemCriteriaInput.js";
 import FileInputTable from "./components/FileInputTable.js";
 import Vec3Input from "./components/Vec3Input.js";
 import SimpleLogger from "./components/SimpleLogger.js";
-import LilGui from "./components/LilGui.js";
+import LilGui from "../components/LilGui.js";
 import ResizingInput from "./components/ResizingInput.js";
 
 const IN_PRODUCTION = false;
@@ -378,7 +378,7 @@ document[onEvent]("DOMContentLoaded", () => {
 	});
 	
 	languageSelector = selectEl("#languageSelector");
-	fetch("translations/languages.json").then(res => jsonc(res)).then(languagesAndNames => {
+	fetch("../translations/languages.json").then(res => jsonc(res)).then(languagesAndNames => {
 		languagesAndNames = Object.fromEntries(Object.entries(languagesAndNames).sort((a, b) => +(a[1] > b[1]))); // sort alphabeticallly
 		let availableLanguages = Object.keys(languagesAndNames);
 		if(availableLanguages.length == 1) {
@@ -488,8 +488,8 @@ async function updateTexturePreview() {
 }
 async function translatePage(language, generateTranslations = false) {
 	let translatableEls = getAllChildren(document.documentElement).filter(el => Array.from(el.attributes).some(attr => attr.name.startsWith("data-translate")));
-	await loadTranslationLanguage(language);
-	let translations = generateTranslations? await fetch(`translations/${language}.json`).then(res => jsonc(res)) : {};
+	await loadTranslationLanguage(language, "../translations");
+	let translations = generateTranslations? await fetch(`../translations/${language}.json`).then(res => jsonc(res)) : {};
 	await Promise.all(translatableEls.map(async el => {
 		if("translate" in el.dataset) {
 			let translationKey = el.dataset["translate"];
@@ -721,4 +721,5 @@ async function makePack(structureFiles, localResourcePacks) {
 	generatePackFormSubmitButton.disabled = false;
 }
 
-/** @import { HoloPrintConfig, Vec3 } from "./HoloPrint.js" */
+/** @import { Vec3 } from "../types.js" */
+/** @import { HoloPrintConfig } from "./packTypes.js" */

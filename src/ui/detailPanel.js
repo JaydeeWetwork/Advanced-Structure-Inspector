@@ -164,7 +164,7 @@ export function renderMaterialList(entry) {
 		if (entry.file && !entry._materialsLoadAttempted) {
 			entry._materialsLoadAttempted = true;
 			const liLoading = document.createElement("li");
-			liLoading.className = "sdb-mat-empty";
+			liLoading.className = "basi-mat-empty";
 			liLoading.textContent = "Loading materials…";
 			list.appendChild(liLoading);
 			if (els.materialListHint) els.materialListHint.textContent = "";
@@ -182,7 +182,7 @@ export function renderMaterialList(entry) {
 			return;
 		}
 		const li = document.createElement("li");
-		li.className = "sdb-mat-empty";
+		li.className = "basi-mat-empty";
 		li.textContent = "No materials";
 		list.appendChild(li);
 		if (els.materialListHint) els.materialListHint.textContent = "";
@@ -202,10 +202,10 @@ export function renderMaterialList(entry) {
 	for (const row of materials) {
 		const isAcquired = acquired.has(row.id);
 		const li = document.createElement("li");
-		li.className = "sdb-mat-row" + (isAcquired ? " is-acquired" : "");
+		li.className = "basi-mat-row" + (isAcquired ? " is-acquired" : "");
 
 		const checkWrap = document.createElement("label");
-		checkWrap.className = "sdb-mat-check";
+		checkWrap.className = "basi-mat-check";
 		checkWrap.title = isAcquired ? "Mark as still needed" : "Mark as acquired";
 		const cb = document.createElement("input");
 		cb.type = "checkbox";
@@ -219,23 +219,23 @@ export function renderMaterialList(entry) {
 		checkWrap.appendChild(cb);
 
 		const left = document.createElement("div");
-		left.className = "sdb-mat-name";
+		left.className = "basi-mat-name";
 		left.append(document.createTextNode(row.label));
 		const idEl = document.createElement("span");
-		idEl.className = "sdb-mat-id";
+		idEl.className = "basi-mat-id";
 		idEl.textContent = row.id;
 		left.appendChild(idEl);
 
 		const right = document.createElement("div");
-		right.className = "sdb-mat-right";
+		right.className = "basi-mat-right";
 
 		const total = document.createElement("span");
-		total.className = "sdb-mat-count";
+		total.className = "basi-mat-count";
 		total.textContent = Number(row.count).toLocaleString();
 		total.title = "Total items (grouped variants summed)";
 
 		const part = document.createElement("span");
-		part.className = "sdb-mat-partition";
+		part.className = "basi-mat-partition";
 		const partitionText = row.partition || formatPartitionFallback(row);
 		// Shulkers / stacks / loose breakdown under the total
 		if (partitionText && partitionText !== String(row.count)) {
@@ -354,13 +354,13 @@ export function renderUserDetails(entry) {
 	const ordered = [...notes].sort((a, b) => (b.addedAt || 0) - (a.addedAt || 0));
 	for (const note of ordered) {
 		const li = document.createElement("li");
-		li.className = "sdb-detail-note";
+		li.className = "basi-detail-note";
 		const text = document.createElement("div");
-		text.className = "sdb-detail-note-text";
+		text.className = "basi-detail-note-text";
 		text.textContent = note.text;
 		const del = document.createElement("button");
 		del.type = "button";
-		del.className = "sdb-detail-note-del";
+		del.className = "basi-detail-note-del";
 		del.title = "Remove detail";
 		del.textContent = "×";
 		del.addEventListener("click", () => {
@@ -421,7 +421,7 @@ export async function removeUserDetail(entryId, noteId) {
 export function applyCollapseState(btn, body, collapsed) {
 	if (btn) {
 		btn.setAttribute("aria-expanded", collapsed ? "false" : "true");
-		const t = btn.querySelector(".sdb-collapse-toggle");
+		const t = btn.querySelector(".basi-collapse-toggle");
 		if (t) t.textContent = collapsed ? "▸" : "▾";
 		btn.classList.toggle("is-collapsed", collapsed);
 	}
@@ -453,7 +453,7 @@ export async function ensureMaterials(entry) {
 		const { buildMaterialListFromFile } = await import("../viewer/materialList.js");
 		return await buildMaterialListFromFile(entry.file);
 	} catch (e) {
-		console.warn("[sdb] material list rebuild failed:", e);
+		console.warn("[basi] material list rebuild failed:", e);
 		return [];
 	}
 }
@@ -467,7 +467,7 @@ export async function ensureHopperStats(entry) {
 		const { scanHopperStatsFromFile } = await import("../viewer/hopperStats.js");
 		return await scanHopperStatsFromFile(entry.file);
 	} catch (e) {
-		console.warn("[sdb] hopper stats failed:", e);
+		console.warn("[basi] hopper stats failed:", e);
 		return null;
 	}
 }

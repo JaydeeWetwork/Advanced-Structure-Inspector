@@ -4,16 +4,16 @@
  *  - lectern open-book indicator
  */
 
-import { disposeObject3D } from "./disposeObject3D.js?v=judo33";
-import { geoPointToThree } from "../previewSpace.js?v=judo33";
-import { signPlaneInstanceVerts } from "../signPlacement.js?v=judo33";
+import { disposeObject3D } from "./disposeObject3D.js";
+import { geoPointToThree } from "../previewSpace.js";
+import { signPlaneInstanceVerts } from "../signPlacement.js";
 import {
 	applySignTweaks,
 	signTweaks,
 	subscribeSignTweaks,
 	tweaksAffectSign,
 	tweaksAreIdentity
-} from "../signDebug.js?v=judo33";
+} from "../signDebug.js";
 import { isOnActiveLayer } from "../layerVisibility.js";
 import { extractSignText, extractLecternBook } from "../inspectStructure.js";
 
@@ -45,7 +45,7 @@ export default class SpecialBlockOverlay {
 		if (scene) {
 			const remove = [];
 			scene.traverse(o => {
-				if (o.userData?.sdbSpecialOverlay) remove.push(o);
+				if (o.userData?.basiSpecialOverlay) remove.push(o);
 			});
 			const policy = pool?.disposePolicy?.() ?? {};
 			for (const o of remove) {
@@ -67,8 +67,8 @@ export default class SpecialBlockOverlay {
 
 		this.clear();
 		const root = new THREE.Group();
-		root.name = "sdb-special-overlays";
-		root.userData.sdbSpecialOverlay = true;
+		root.name = "basi-special-overlays";
+		root.userData.basiSpecialOverlay = true;
 		this.#root = root;
 		scene.add(root);
 
@@ -89,21 +89,21 @@ export default class SpecialBlockOverlay {
 		/** @type {import("three").Mesh[]} */
 		const meshes = [];
 		this.#root.traverse(obj => {
-			if (obj.isMesh && obj.userData?.sdbSignBaseline) meshes.push(obj);
+			if (obj.isMesh && obj.userData?.basiSignBaseline) meshes.push(obj);
 		});
 		if (!meshes.length) return false;
 		for (const obj of meshes) {
-			const baseline = obj.userData.sdbSignBaseline;
+			const baseline = obj.userData.basiSignBaseline;
 			const useTweak =
 				!tweaksAreIdentity(signTweaks)
-				&& tweaksAffectSign(obj.userData.sdbSignBlock, obj.userData.sdbSignName, signTweaks);
+				&& tweaksAffectSign(obj.userData.basiSignBlock, obj.userData.basiSignName, signTweaks);
 			const baked = useTweak ? applySignTweaks(baseline, signTweaks) : baseline;
 			writeSignPlaneVerts(obj, baked);
 			if (obj.material) {
 				obj.material.side = signTweaks.doubleSide ? THREE.DoubleSide : THREE.FrontSide;
 				obj.material.needsUpdate = true;
 			}
-			const markers = obj.userData.sdbSignMarkers;
+			const markers = obj.userData.basiSignMarkers;
 			if (markers) {
 				markers.visible = !!signTweaks.markers;
 				updateSignMarkers(THREE, markers, baked);
@@ -174,19 +174,19 @@ export default class SpecialBlockOverlay {
 		const mesh = new THREE.Mesh(geo, mat);
 		writeSignPlaneVerts(mesh, baked);
 		mesh.renderOrder = 8;
-		mesh.userData.sdbSpecialOverlay = true;
-		mesh.userData.sdbSignBaseline = baseline;
-		mesh.userData.sdbSignBlock = b;
-		mesh.userData.sdbSignName = name;
-		mesh.userData.sdbSignIsBack = isBack;
+		mesh.userData.basiSpecialOverlay = true;
+		mesh.userData.basiSignBaseline = baseline;
+		mesh.userData.basiSignBlock = b;
+		mesh.userData.basiSignName = name;
+		mesh.userData.basiSignIsBack = isBack;
 		mesh.frustumCulled = false;
 
 		const g = new THREE.Group();
-		g.userData.sdbSpecialOverlay = true;
+		g.userData.basiSpecialOverlay = true;
 		g.add(mesh);
 		const markers = this.#makeSignMarkers(THREE, baked, isBack);
 		markers.visible = !!signTweaks.markers;
-		mesh.userData.sdbSignMarkers = markers;
+		mesh.userData.basiSignMarkers = markers;
 		g.add(markers);
 		return g;
 	}
@@ -199,7 +199,7 @@ export default class SpecialBlockOverlay {
 	 */
 	#makeSignMarkers(THREE, baked, isBack) {
 		const g = new THREE.Group();
-		g.userData.sdbSpecialOverlay = true;
+		g.userData.basiSpecialOverlay = true;
 		const board = baked.boardPos;
 		const dot = new THREE.Mesh(
 			new THREE.BoxGeometry(0.7, 0.7, 0.7),
@@ -216,8 +216,8 @@ export default class SpecialBlockOverlay {
 		const arrow = new THREE.ArrowHelper(dir, origin, 5, isBack ? 0xff8800 : 0x00e8ff, 1.2, 0.7);
 		arrow.renderOrder = 20;
 		g.add(arrow);
-		g.userData.sdbSignDot = dot;
-		g.userData.sdbSignArrow = arrow;
+		g.userData.basiSignDot = dot;
+		g.userData.basiSignArrow = arrow;
 		return g;
 	}
 
@@ -275,7 +275,7 @@ export default class SpecialBlockOverlay {
 				g.rotation.y = yaw;
 			}
 
-			g.userData.sdbSpecialOverlay = true;
+			g.userData.basiSpecialOverlay = true;
 			root.add(g);
 		}
 	}
@@ -430,8 +430,8 @@ function writeSignPlaneVerts(mesh, baked) {
  * @param {ReturnType<typeof signPlaneInstanceVerts>} baked
  */
 function updateSignMarkers(THREE, markers, baked) {
-	const dot = markers.userData?.sdbSignDot;
-	const arrow = markers.userData?.sdbSignArrow;
+	const dot = markers.userData?.basiSignDot;
+	const arrow = markers.userData?.basiSignArrow;
 	if (dot && baked.boardPos) {
 		dot.position.set(baked.boardPos.x, baked.boardPos.y, baked.boardPos.z);
 	}

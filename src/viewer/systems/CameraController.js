@@ -1,10 +1,9 @@
 /**
  * Orbit presets, tilt, free mode; fly delegated to FlyController.
  * Uses PreviewContext only (never host-getter bags).
- * cache: judo8
  */
 
-import FlyController from "./FlyController.js?v=judo14";
+import FlyController from "./FlyController.js";
 
 export default class CameraController {
 	/** @type {string} */
@@ -37,7 +36,7 @@ export default class CameraController {
 		try {
 			const target = this.ctx.eventTarget;
 			target?.dispatchEvent?.(
-				new CustomEvent("sdb-camera-preset", {
+				new CustomEvent("basi-camera-preset", {
 					bubbles: true,
 					detail: { preset, tilt: this.tiltDeg }
 				})
@@ -206,7 +205,7 @@ export default class CameraController {
 		const camera = this.ctx?.camera;
 		const controls = this.ctx?.controls;
 		if (!camera || !controls || !THREE) {
-			console.warn("[sdb] setPreset: camera not ready", {
+			console.warn("[basi] setPreset: camera not ready", {
 				hasCamera: !!camera,
 				hasControls: !!controls,
 				hasTHREE: !!THREE,

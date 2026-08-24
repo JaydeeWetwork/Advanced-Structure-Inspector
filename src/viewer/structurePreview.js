@@ -7,7 +7,7 @@ import * as NBT from "nbtify-readonly-typeless";
 import BlockGeoMaker from "../BlockGeoMaker.js";
 import TextureAtlas from "../TextureAtlas.js";
 // Single PreviewRenderer (systems-based) — used by ASI and HoloPrint pack UI
-import PreviewRenderer from "../PreviewRenderer.js?v=judo39";
+import PreviewRenderer from "../PreviewRenderer.js";
 import ResourcePackStack from "../ResourcePackStack.js";
 import EntityGeoMaker from "../EntityGeoMaker.js";
 import LilGui from "../components/LilGui.js";
@@ -22,7 +22,10 @@ import {
 import { getCachedDataFile, getCachedFileBuild } from "./previewCache.js";
 import { extractRenderableEntities } from "./entityExtract.js";
 import { buildInspectIndex } from "./inspectStructure.js";
-import { cargoPaletteEntries } from "./entityCargo.js?v=judo37";
+import { cargoPaletteEntries } from "./entityCargo.js";
+import { VANILLA_SAMPLES_TAG } from "../data/packPins.js";
+import { loadItemUpgradeSchemas } from "./itemUpgrade.js";
+import fetchers from "../fetchers.js";
 
 function ensureLilGuiDefined() {
 	if (!customElements.get("lil-gui")) {
@@ -110,7 +113,7 @@ async function buildPreviewAssets(structureFile, config, resourcePackStack, sign
 		} catch {
 			/* ignore */
 		}
-		console.info(`[sdb] ${msg}`);
+		console.info(`[basi] ${msg}`);
 	};
 
 	throwIfAborted(signal);
@@ -207,6 +210,13 @@ async function buildPreviewAssets(structureFile, config, resourcePackStack, sign
 	);
 	await textureAtlas.makeAtlas(Array.from(blockGeoMaker.textureRefs));
 	throwIfAborted(signal);
+	const unmapped = blockGeoMaker.unmappedBlockNames;
+	if (unmapped?.size) {
+		console.warn(
+			`[basi] ${unmapped.size} unmapped block id(s) drew as unit cubes:`,
+			[...unmapped].sort()
+		);
+	}
 
 	const fullOpacityTextureBlob = textureAtlas.imageBlobs.at(-1)[1];
 	const unscaled = unresolvedPolyMeshTemplatePalette.map(t =>
@@ -221,14 +231,20 @@ async function buildPreviewAssets(structureFile, config, resourcePackStack, sign
 		if (!faces?.length) return;
 		cargoTemplates[entry.kind] = BlockGeoMaker.resolveTemplateFaceUvs(faces, textureAtlas);
 	});
-	console.info(`[sdb] structure entities: ${entities.length} renderable`,
+	console.info(`[basi] structure entities: ${entities.length} renderable`,
 		entities.map(e => e.identifier));
 
 	// Sparse inspect index (block entities only — huge win on large volumes)
 	progress("Indexing containers & entities…");
-	const inspectIndex = buildInspectIndex(nbt);
+	let itemSchemas = [];
+	try {
+		itemSchemas = await loadItemUpgradeSchemas(fetchers);
+	} catch (e) {
+		console.warn("[basi] item upgrade schemas skipped:", e);
+	}
+	const inspectIndex = buildInspectIndex(nbt, { itemSchemas });
 	console.info(
-		`[sdb] inspect index: ${inspectIndex.blocks.size} block-entities, ${inspectIndex.entities.length} entities`
+		`[basi] inspect index: ${inspectIndex.blocks.size} block-entities, ${inspectIndex.entities.length} entities`
 		+ (inspectIndex.sparse ? " (sparse)" : "")
 	);
 
@@ -271,13 +287,13 @@ export async function renderStructurePreview(
 		config.PACK_NAME
 		?? (files.map(f => f.name.replace(/\.mcstructure$/i, "")).join(", ") || "structure");
 
-	console.info("[sdb] renderStructurePreview (no pack, no HoloPrint)");
+	console.info("[basi] renderStructurePreview (no pack, no HoloPrint)");
 
 	/** @type {import("../PreviewRenderer.js").default[]} */
 	const previews = [];
 	const hostParent = previewCont.parentNode;
 	// v14: restore TGA textures (cactus etc.) + icon path maps
-	const cacheKey = `v16|scale=${config.SCALE}|ign=${config.IGNORED_BLOCKS.length}|ent=${config.SHOW_ENTITIES !== false ? 1 : 0}|ol=${config.TEXTURE_OUTLINE_WIDTH}|sky=${config.SHOW_PREVIEW_SKYBOX ? 1 : 0}`;
+	const cacheKey = `v17|pack=${VANILLA_SAMPLES_TAG}|scale=${config.SCALE}|ign=${config.IGNORED_BLOCKS.length}|ent=${config.SHOW_ENTITIES !== false ? 1 : 0}|ol=${config.TEXTURE_OUTLINE_WIDTH}|sky=${config.SHOW_PREVIEW_SKYBOX ? 1 : 0}`;
 
 	try {
 		for (let structureI = 0; structureI < files.length; structureI++) {
@@ -303,7 +319,7 @@ export async function renderStructurePreview(
 					: file.name.replace(/\.mcstructure$/i, "");
 
 			const entityList = assets.entities ?? [];
-			console.info(`[sdb] creating preview with ${entityList.length} entities`);
+			console.info(`[basi] creating preview with ${entityList.length} entities`);
 			const preview = await PreviewRenderer.new(
 				cont,
 				label,
@@ -334,7 +350,7 @@ export async function renderStructurePreview(
 			}
 			throwIfAborted(signal);
 			console.info(
-				`[sdb] preview instance ok; previewEntities=${preview.previewEntities?.length ?? "n/a"}; ` +
+				`[basi] preview instance ok; previewEntities=${preview.previewEntities?.length ?? "n/a"}; ` +
 				`hasAttach=${typeof preview.attachEntities}`
 			);
 			previews.push(preview);
@@ -352,7 +368,7 @@ export async function renderStructurePreview(
 		throw e;
 	}
 
-	console.info("[sdb] preview ready");
+	console.info("[basi] preview ready");
 	return previews;
 }
 

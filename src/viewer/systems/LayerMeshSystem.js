@@ -33,7 +33,7 @@ export default class LayerMeshSystem {
 		if (!THREE || !scene) return;
 		this.#blockPositions = blockPositions;
 		this.layerRoot = new THREE.Group();
-		this.layerRoot.name = "sdb-layers";
+		this.layerRoot.name = "basi-layers";
 		scene.add(this.layerRoot);
 		this.#layerGroups = new Map();
 		this.selectedLayer = null;
@@ -124,20 +124,20 @@ export default class LayerMeshSystem {
 				mesh.receiveShadow = useShadows;
 				mesh.frustumCulled = selected == null;
 				mesh.userData.includeInGlbExport = true;
-				mesh.userData.sdbBlock = true;
-				mesh.userData.sdbPaletteI = paletteI;
-				mesh.userData.sdbBlockPositions = list;
+				mesh.userData.basiBlock = true;
+				mesh.userData.basiPaletteI = paletteI;
+				mesh.userData.basiBlockPositions = list;
 				mesh.userData.layerY = y;
-				mesh.userData.sdbFloorLayer = isFloor;
-				mesh.userData.sdbPickable = true;
+				mesh.userData.basiFloorLayer = isFloor;
+				mesh.userData.basiPickable = true;
 				this.getLayerGroup(y).add(mesh);
 			}
 		}
 
 		console.info(
 			selected == null
-				? "[sdb] LayerMeshSystem: rebuilt all layers"
-				: `[sdb] LayerMeshSystem: rebuilt layer ${selected}`
+				? "[basi] LayerMeshSystem: rebuilt all layers"
+				: `[basi] LayerMeshSystem: rebuilt layer ${selected}`
 					+ (selected > 0 ? ` + solid floor ${selected - 1}` : "")
 		);
 	}

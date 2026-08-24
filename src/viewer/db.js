@@ -2,7 +2,7 @@
  * IndexedDB persistence for structure catalog (metadata + file blobs + categories).
  */
 
-// Keep legacy DB name so existing IndexedDB catalogs still open after rebrand
+// Keep legacy DB name so existing IndexedDB catalogs still open after the Bedrock ASI rebrand
 const DB_NAME = "structure-db-viewer";
 const DB_VERSION = 2;
 const STORE = "structures";

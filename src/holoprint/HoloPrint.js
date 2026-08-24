@@ -1,20 +1,23 @@
 import * as NBT from "nbtify-readonly-typeless";
 import { ZipWriter, TextReader, BlobWriter, BlobReader, ZipReader } from "@zip.js/zip.js";
 
-import BlockGeoMaker from "./BlockGeoMaker.js";
-import TextureAtlas from "./TextureAtlas.js";
+import BlockGeoMaker from "../BlockGeoMaker.js";
+import TextureAtlas from "../TextureAtlas.js";
 import MaterialList from "./MaterialList.js";
-import PreviewRenderer from "./PreviewRenderer.js";
+import PreviewRenderer from "../PreviewRenderer.js";
 
 import entityScripts from "./entityScripts.molang.js";
-import { addPaddingToImage, array2DToMolang, arrayToMolang, awaitAllEntries, weaklyCacheUnaryFunc, concatenateFiles, createNumericEnum, desparseArray, functionToMolang, getFileExtension, hexColorToClampedTriplet, itemCriteriaToMolang, jsonc, JSONMap, JSONSet, lcm, loadTranslationLanguage, max, min, onEvent, overlaySquareImages, pi, removeFalsies, removeFileExtension, resizeImageToBlob, setImageOpacity, sha256, toBlob, toImage, translate, transposeMatrix, tuple, UserError, ReplacingPatternMap, conditionallyCacheUnaryFunc, clonePromise, getStructureIndexFromCoordinates, getGeoSpaceBlockPos } from "./utils.js";
-import ResourcePackStack from "./ResourcePackStack.js";
-import BlockUpdater from "./BlockUpdater.js";
+import { addPaddingToImage, array2DToMolang, arrayToMolang, awaitAllEntries, weaklyCacheUnaryFunc, concatenateFiles, createNumericEnum, desparseArray, functionToMolang, getFileExtension, hexColorToClampedTriplet, itemCriteriaToMolang, jsonc, JSONMap, JSONSet, lcm, loadTranslationLanguage, max, min, onEvent, overlaySquareImages, pi, removeFalsies, removeFileExtension, resizeImageToBlob, setImageOpacity, sha256, toBlob, toImage, translate, transposeMatrix, tuple, UserError, ReplacingPatternMap, conditionallyCacheUnaryFunc, clonePromise, getStructureIndexFromCoordinates, getGeoSpaceBlockPos } from "../utils.js";
+import ResourcePackStack from "../ResourcePackStack.js";
+import BlockUpdater from "../BlockUpdater.js";
 import SpawnAnimationMaker from "./SpawnAnimationMaker.js";
-import PolyMeshMaker from "./PolyMeshMaker.js";
-import fetchers from "./fetchers.js";
-import EntityGeoMaker from "./EntityGeoMaker.js";
+import PolyMeshMaker from "../PolyMeshMaker.js";
+import fetchers from "../fetchers.js";
+import EntityGeoMaker from "../EntityGeoMaker.js";
 import EntityManager from "./EntityManager.js";
+import { createItemCriteria } from "./itemCriteria.js";
+
+export { createItemCriteria };
 // StructureDiagramMaker is loaded lazily in makeStructureDiagrams() so preview-only
 // paths do not pull WebGL diagram shaders until pack generation needs them.
 
@@ -177,7 +180,7 @@ export async function makePack(structureFiles, partialConfig, resourcePackStack 
 	});
 	let resourceLangFilesPromise = loadResources(Object.fromEntries(languagesDotJson.map(language => [language, `texts/${language}.lang`])), resourcePackStack);
 	let packTemplateLangFilesPromise = loadPackTemplate(Object.fromEntries(languagesDotJson.map(language => [language, `texts/${language}.lang`]))).allValues;
-	let translationLanguagesLoadingPromise = Promise.all(languagesDotJson.map(language => loadTranslationLanguage(language)));
+	let translationLanguagesLoadingPromise = Promise.all(languagesDotJson.map(language => loadTranslationLanguage(language, "../translations")));
 	/** @type {[string, Blob][]} */
 	let controlItemTextures = [];
 	let hasModifiedTerrainTexture = false;
@@ -742,21 +745,6 @@ export function findLinksInDescription(description) {
 		links.push([label, url]);
 	});
 	return links;
-}
-/**
- * Creates an ItemCriteria from arrays of names and tags.
- * @param {string | string[]} names
- * @param {string | string[]} [tags]
- * @returns {ItemCriteria}
- */
-export function createItemCriteria(names, tags = []) { // IDK why I haven't made this a class
-	if(!Array.isArray(names)) {
-		names = [names];
-	}
-	if(!Array.isArray(tags)) {
-		tags = [tags];
-	}
-	return { names, tags };
 }
 /**
  * Adds default config options to a potentially incomplete config object.
@@ -1968,298 +1956,7 @@ function expandItemCriteria(itemCriteria, itemTags) {
 	return [...itemCriteria["names"], ...namespacedItemsFromTags.map(itemName => itemName.replace(/^minecraft:/, ""))];
 }
 
-/** @import * as Data from "./data/schemas" */
+/** @import * as Data from "../data/schemas" */
 /** @import { ZipWriterAddDataOptions, FileEntry } from "@zip.js/zip.js" */
-/**
- * @typedef {object} HoloPrintConfig An object for storing HoloPrint config options.
- * @property {string[]} IGNORED_BLOCKS
- * @property {string[]} IGNORED_MATERIAL_LIST_BLOCKS
- * @property {number} SCALE
- * @property {number} OPACITY
- * @property {boolean} MULTIPLE_OPACITIES Whether to generate multiple opacity images and allow in-game switching, or have a constant opacity
- * @property {string} TINT_COLOR Hex RGB #xxxxxx
- * @property {number} TINT_OPACITY 0-1
- * @property {number} MINI_SCALE Size of ghost blocks when in the mini view for layers
- * @property {number} TEXTURE_OUTLINE_WIDTH Measured in pixels, x ∈ [0, 1], x ∈ 2^ℝ
- * @property {string} TEXTURE_OUTLINE_COLOR A colour string
- * @property {number} TEXTURE_OUTLINE_OPACITY 0-1
- * @property {boolean} SPAWN_ANIMATION_ENABLED
- * @property {number} SPAWN_ANIMATION_LENGTH Length of each individual block's spawn animation (seconds)
- * @property {boolean} PLAYER_CONTROLS_ENABLED
- * @property {HoloPrintControlsConfig} CONTROLS
- * @property {boolean} UI_CONTROLS_ENABLED
- * @property {boolean} RETEXTURE_CONTROL_ITEMS
- * @property {number} CONTROL_ITEM_TEXTURE_SCALE How much to scale control item overlay textures. When compositing textures, MCBE scales all textures to the maximum, so the size of the overlay control texture has to be the LCM of itself and in-game items. Hence, if in-game items have a higher resolution than expected, they will probably be scaled wrong. The solution is to scale the overlay textures even more, which can be adjusted with this.
- * @property {boolean} RENAME_CONTROL_ITEMS
- * @property {Vec4} WRONG_BLOCK_OVERLAY_COLOR Clamped colour quartet
- * @property {Vec3} INITIAL_OFFSET
- * @property {Vec4[] | undefined} COORDINATE_LOCK If present, each structure's hologram will be locked to these coordinates. The last component is rotation.
- * @property {number} BACKUP_SLOT_COUNT
- * @property {boolean} VALIDATE_AIR_BLOCKS
- * @property {number} LAYER_BY_LAYER_DIAGRAM_BLOCK_RESOLUTION The resolution, in pixels, of each block in the layer-by-layer diagram.
- * @property {string | undefined} PACK_NAME The name of the completed pack; will default to the structure file names
- * @property {Blob} PACK_ICON_BLOB Blob for `pack_icon.png`
- * @property {string[]} AUTHORS
- * @property {string | undefined} DESCRIPTION
- * @property {number} COMPRESSION_LEVEL
- * @property {number} PREVIEW_BLOCK_LIMIT The maximum number of blocks a structure can have for rendering a preview
- * @property {boolean} SHOW_PREVIEW_SKYBOX
- * @property {boolean} SHOW_PREVIEW_WIDGETS Whether to show or hide the FPS counter and options menu for previews
- */
-/**
- * @typedef {object} HoloPrintControlsConfig Controls which items are used for in-game controls.
- * @property {ItemCriteria} TOGGLE_RENDERING
- * @property {ItemCriteria} CHANGE_OPACITY
- * @property {ItemCriteria} TOGGLE_TINT
- * @property {ItemCriteria} TOGGLE_VALIDATING
- * @property {ItemCriteria} CHANGE_LAYER Both for players and armour stands
- * @property {ItemCriteria} DECREASE_LAYER
- * @property {ItemCriteria} CHANGE_LAYER_MODE Single layer or all layers below
- * @property {ItemCriteria} MOVE_HOLOGRAM
- * @property {ItemCriteria} ROTATE_HOLOGRAM
- * @property {ItemCriteria} CHANGE_STRUCTURE For players only
- * @property {ItemCriteria} DISABLE_PLAYER_CONTROLS
- * @property {ItemCriteria} BACKUP_HOLOGRAM Force armour stands to try and backup the hologram state for 30s.
- */
-/**
- * @typedef {object} ItemCriteria Stores item names and tags for checking items. Leaving everything empty will check for nothing being held.
- * @property {string[]} names Item names the matching item could have. The `minecraft:` namespace will be used if no namespace is specified.
- * @property {string[]} tags Item tags the matching item could have. The `minecraft:` namespace will be used if no namespace is specified.
- */
-/**
- * @typedef {object} NBTBlock A block as stored in NBT.
- * @property {string} name The block's ID
- * @property {Record<string, number | string>} states Block states
- * @property {number} version
- */
-/**
- * @typedef {object} Block A block palette entry, similar to how it appears in the NBT, as used in HoloPrint.
- * @property {string} name The block's ID
- * @property {Record<string, number | string>} [states] Block states
- * @property {object} [block_entity_data] Block entity data
- */
-/**
- * @typedef {object} BlockToValidate
- * @property {string} locator
- * @property {string} block
- * @property {Vec3} pos
- */
-/**
- * @typedef {Record<Data.CardinalDirection, { uv: Vec2, uv_size: Vec2 }>} CubeUv
- */
-/**
- * @typedef {object} PolyMesh A `poly_mesh` object as in geometry files.
- * @property {boolean} [normalized_uvs]
- * @property {Vec3[]} normals
- * @property {Vec2[]} uvs
- * @property {Vec3[]} positions
- * @property {PolyMeshFace[]} polys
- */
-/**
- * @typedef {[Vec3, Vec3, Vec3, Vec3]} PolyMeshFace A square face.
- */
-/**
- * @typedef {object} PolyMeshTemplateFace
- * @property {Vec3} normal
- * @property {number} textureRefI
- * @property {[PolyMeshTemplateVertex, PolyMeshTemplateVertex, PolyMeshTemplateVertex, PolyMeshTemplateVertex]} vertices
- */
-/**
- * @typedef {object} PolyMeshTemplateVertex
- * @property {Vec3} pos
- * @property {number} corner 0: top left, 1: top right, 2: bottom left, 3: bottom right
- */
-/**
- * @typedef {object} PolyMeshTemplateFaceWithUvs
- * @property {Vec3} normal
- * @property {number} transparency Average transparency per texture pixel. 255 = fully transparent, 0 = fully opaque
- * @property {[PolyMeshTemplateVertexWithUv, PolyMeshTemplateVertexWithUv, PolyMeshTemplateVertexWithUv, PolyMeshTemplateVertexWithUv]} vertices
- */
-/**
- * @typedef {object} PolyMeshTemplateVertexWithUv
- * @property {Vec3} pos
- * @property {Vec2} uv
- */
-/**
- * @typedef {object} TextureReference A texture reference, made in BlockGeoMaker.js and turned into a texture in TextureAtlas.js.
- * @property {Vec2} uv UV coordinates
- * @property {Vec2} uv_size	UV size
- * @property {string} block_name Block ID to get the texture from
- * @property {string} texture_face Which face's texture to use
- * @property {number} variant Which terrain_texture.json variant to use
- * @property {string} [texture_path_override] An overriding texture file path to look at
- * @property {string} [terrain_texture_override] A terrain texture key override; will override block_name and texture_face
- * @property {Vec3} [tint] A tint override
- */
-/**
- * @typedef {object} TextureFragment An unresolved texture fragment containing an image path, tint, and UV position and size.
- * @property {string} texturePath
- * @property {Vec3} [tint]
- * @property {boolean} [tint_like_png]
- * @property {number} opacity
- * @property {Vec2} uv
- * @property {Vec2} uv_size
- */
-/**
- * @typedef {object} ImageFragment An image fragment containing image data, UV position, and UV size.
- * @property {ImageData} imageData
- * @property {number} w Width
- * @property {number} h Height
- * @property {number} sourceX
- * @property {number} sourceY
- * @property {Rectangle} [crop]
- */
-/**
- * @typedef {object} ImageUv
- * @property {Vec2} uv
- * @property {Vec2} uv_size
- * @property {number} transparency
- * @property {Rectangle} [crop]
- */
-/**
- * @typedef {object} MaterialListEntry An entry in a material list.
- * @property {string} itemName
- * @property {string} translationKey
- * @property {string} translatedName
- * @property {number} count How many of this item is required
- * @property {string} partitionedCount A formatted string representing partitions of the total count
- * @property {string} partitionedCountWithoutTotal Same as partitionedCount, but without the "[total count] = " at the start
- * @property {number | undefined} auxId The item's aux ID
- */
-/**
- * @typedef {object} ExportedMaterialListJsonUi
- * @property {Record<string, object>[]} entries
- * @property {number} visibleHeight
- * @property {number} longestItemNameLength
- * @property {number} longestCountLength
- * @property {[string | number, string | number]} itemNameColumnSize
- */
-/**
- * @typedef {object} SpawnAnimationBone Information about a bone in the spawn animation.
- * @property {string} boneName
- * @property {Vec3} blockPos The block position (i.e. in-game blocks relative to the structure origin)
- */
-/**
- * @typedef {object} MinecraftAnimation A Minecraft animation as seen in `.animation.json` files.
- * @property {number} [animation_length]
- * @property {Record<string, object>} [bones]
- */
-/**
- * @typedef {object} PreviewPointLight A point light in the structure preview.
- * @property {Vec3} pos Position in Three.js space
- * @property {import("three").Color} col As a hex number, e.g. 0xFF0000
- * @property {number} intensity
- */
-/**
- * @typedef {object} MCStructure The parsed NBT of a `.mcstructure` file.
- * @property {number} format_version Format version, should be always set to 1.
- * @property {I32Vec3} size Size of the structure in blocks.
- * @property {object} structure
- * @property {[Int32Array, Int32Array]} structure.block_indices Block indices for the structure.
- * @property {EntityNBTCompound[]} structure.entities List of entities stored as NBT.
- * @property {object} structure.palette
- * @property {object} structure.palette.default
- * @property {NBTBlock[]} structure.palette.default.block_palette List of ordered block entries that the indices refer to.
- * @property {Record<number, BlockPositionData>} [structure.palette.default.block_position_data] Additional data for individual blocks in the structure.
- * @property {I32Vec3} structure_world_origin The original world position where the structure was saved.
- */
-/**
- * @typedef {Record<string, any>} EntityNBTCompound Represents an entity NBT compound structure (placeholder).
- */
-/**
- * @typedef {object} BlockPositionData Additional data for individual blocks.
- * @property {EntityNBTCompound} [block_entity_data] Block entity data.
- * @property {TickQueueData[]} [tick_queue_data] Scheduled tick information for blocks that need updates.
- */
-/**
- * @typedef {object} TickQueueData Represents a scheduled pending tick update. Used in observers.
- * @property {number} tick_delay Number of ticks remaining before update.
- */
-/**
- * @typedef {object} TypedBlockStateProperty
- * @property {number} [int] - An integer property.
- * @property {string} [string] - A string property.
- * @property {number} [byte] - A byte property.
- */
-/**
- * @typedef {object} BlockUpdateSchemaFlattenRule
- * @property {string} prefix - The prefix for the flattened property.
- * @property {string} flattenedProperty - The name of the flattened property.
- * @property {"int" | "string" | "byte"} [flattenedPropertyType] - The type of the flattened property.
- * @property {string} suffix - The suffix for the flattened property.
- * @property {Record<string, string>} [flattenedValueRemaps] - A mapping of flattened values.
- */
-/**
- * @typedef {object} BlockUpdateSchemaRemappedState
- * @property {Record<string, TypedBlockStateProperty> | null} oldState - The property values before the remapping.
- * @property {string} [newName] - An optional new name for the block.
- * @property {BlockUpdateSchemaFlattenRule} [newFlattenedName] - An optional flattened property rule providing a new name.
- * @property {Record<string, TypedBlockStateProperty> | null} newState - The new property values after the remapping.
- * @property {string[]} [copiedState] - Optional list of property names to copy from the old state.
- */
-/**
- * @typedef {object} BlockUpdateSchemaSkeleton
- * @property {string} filename
- * @property {number} maxVersionMajor - The major version (must be >= 0).
- * @property {number} maxVersionMinor - The minor version (must be >= 0).
- * @property {number} maxVersionPatch - The patch version (must be >= 0).
- * @property {number} maxVersionRevision - The revision version (must be >= 0).
- */
-/**
- * @typedef {object} BlockUpdateSchema
- * @property {number} maxVersionMajor - The major version (must be >= 0).
- * @property {number} maxVersionMinor - The minor version (must be >= 0).
- * @property {number} maxVersionPatch - The patch version (must be >= 0).
- * @property {number} maxVersionRevision - The revision version (must be >= 0).
- * @property {Record<string, string>} [renamedIds] - Mapping of renamed IDs.
- * @property {Record<string, Record<string, TypedBlockStateProperty>>} [addedProperties] - Mapping of added properties.
- * @property {Record<string, Record<string, string>>} [renamedProperties] - Mapping of renamed properties.
- * @property {Record<string, string[]>} [removedProperties] - Mapping of removed properties.
- * @property {Record<string, Record<string, string>>} [remappedPropertyValues] - Mapping of remapped property values.
- * @property {Record<string, { old: TypedBlockStateProperty, new: TypedBlockStateProperty }[]>} [remappedPropertyValuesIndex] - Index of remapped property values.
- * @property {Record<string, BlockUpdateSchemaFlattenRule>} [flattenedProperties] - Mapping of flattened properties.
- * @property {Record<string, BlockUpdateSchemaRemappedState[]>} [remappedStates] - Mapping of remapped states.
- */
-/**
- * @typedef {object} Rectangle
- * @property {number} x
- * @property {number} y
- * @property {number} w
- * @property {number} h
- */
-/**
- * @typedef {[number, number]} Vec2 2D vector.
- */
-/**
- * @typedef {[number, number, number]} Vec3 3D vector.
- */
-/**
- * @typedef {[number, number, number, number]} Vec4 4D vector.
- */
-/**
- * @template T
- * @template {number} N
- * @template {T[]} [R=[]]
- * @typedef {number extends N? T[] : R["length"] extends N? R : Tuple<T, N, [T, ...R]>} Tuple
- */
-/**
- * @template {number} R
- * @template {number} C
- * @template [T=number]
- * @typedef {R extends R? C extends C? (T[] & { length: C })[] & { length: R } : never : never} Matrix
- */
-/**
- * @template {number} R
- * @template {number} C
- * @template [T=number]
- * @typedef {R extends R? C extends C? Tuple<Tuple<T, C>, R> : never : never} TupleMatrix
- */
-/**
- * @typedef {[Vec4, Vec4, Vec4, Vec4]} Mat4 4x4 matrix.
- */
-/**
- * @typedef {Int32Array & { length: 3 }} I32Vec3
- */
-/**
- * @typedef {Float32Array & { length: 8 }} F32Vec8
- */
+/** @import { ItemCriteria, NBTBlock, Block, CubeUv, PolyMesh, PolyMeshFace, PolyMeshTemplateFace, PolyMeshTemplateVertex, PolyMeshTemplateFaceWithUvs, PolyMeshTemplateVertexWithUv, TextureReference, TextureFragment, ImageFragment, ImageUv, PreviewPointLight, MCStructure, EntityNBTCompound, BlockPositionData, TickQueueData, TypedBlockStateProperty, BlockUpdateSchemaFlattenRule, BlockUpdateSchemaRemappedState, BlockUpdateSchemaSkeleton, BlockUpdateSchema, Rectangle, Vec2, Vec3, Vec4, Tuple, Matrix, TupleMatrix, Mat4, I32Vec3, F32Vec8 } from "../types.js" */
+/** @import { HoloPrintConfig, HoloPrintControlsConfig, BlockToValidate, MaterialListEntry, ExportedMaterialListJsonUi, SpawnAnimationBone, MinecraftAnimation } from "./packTypes.js" */

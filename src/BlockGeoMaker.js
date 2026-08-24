@@ -3,6 +3,7 @@
 // https://github.com/bricktea/MCStructure/blob/main/docs/1.16.201/enums/B.md
 
 import { hexColorToClampedTriplet, JSONSet, max, rotateDeg, conditionallyGroup, mulMat4, tuple, vec2, vec3, PatternMap } from "./utils.js";
+import { resolveBlockShapeName } from "./viewer/appearanceFallback.js";
 
 // https://wiki.bedrock.dev/visuals/material-creations.html#overlay-color-in-render-controllers
 // https://wiki.bedrock.dev/documentation/materials.html#entity-alphatest
@@ -27,9 +28,11 @@ export default class BlockGeoMaker {
 	#blockNameBlockStateTextureVariants;
 	
 	#cachedBlockShapes = new Map();
+	/** @type {Set<string>} ids that had no shape table hit (rendered as unit cube) */
+	unmappedBlockNames = new Set();
 	
 	/**
-	 * @param {HoloPrintConfig} config
+	 * @param {AsiPreviewConfig} config
 	 * @param {EntityGeoMaker} entityGeoMaker
 	 * @param {Data.BlockShapes} blockShapes
 	 * @param {Data.BlockShapeGeos} blockShapeGeos
@@ -39,6 +42,7 @@ export default class BlockGeoMaker {
 	constructor(config, entityGeoMaker, blockShapes, blockShapeGeos, blockStateDefs, eigenvariants) {
 		this.config = config;
 		this.#entityGeoMaker = entityGeoMaker;
+		this.unmappedBlockNames = new Set();
 		
 		this.#individualBlockShapes = blockShapes["individual_blocks"];
 		this.#blockShapePatterns = Object.entries(blockShapes["patterns"]).map(([rule, blockShape]) => [new RegExp(rule), blockShape]); // store regular expressions from the start to avoid recompiling them every time
@@ -98,7 +102,7 @@ export default class BlockGeoMaker {
 	async #makePolyMeshTemplate(block) {
 		let blockName = block["name"];
 		// ASI synthetic shapes (e.g. double-chest halves) override name lookup
-		let blockShape = block["sdb_block_shape"] || this.#getBlockShape(blockName);
+		let blockShape = block["basi_block_shape"] || this.#getBlockShape(blockName);
 		let { faces, centerOfMass } = await this.#makePolyMeshTemplateFaces(block, blockShape);
 		if(!faces) {
 			console.debug(`No faces are being rendered for block ${blockName}`);
@@ -109,7 +113,7 @@ export default class BlockGeoMaker {
 		}
 		let rotation = this.#getBlockRotation(block, blockShape);
 		// Extra yaw for double-chest half so open face points at pair
-		const pairYaw = Number(block?.states?.sdb_pair_yaw ?? 0);
+		const pairYaw = Number(block?.states?.basi_pair_yaw ?? 0);
 		if(pairYaw) {
 			rotation = rotation ? [rotation[0], rotation[1] + pairYaw, rotation[2]] : [0, pairYaw, 0];
 		}
@@ -141,14 +145,16 @@ export default class BlockGeoMaker {
 		if(this.#cachedBlockShapes.has(blockName)) {
 			return this.#cachedBlockShapes.get(blockName);
 		}
-		let individualBlockShape = this.#individualBlockShapes[blockName];
-		if(individualBlockShape) {
-			return individualBlockShape;
+		let { shape, fallback } = resolveBlockShapeName(
+			blockName,
+			this.#individualBlockShapes,
+			this.#blockShapePatterns
+		);
+		if(fallback) {
+			this.unmappedBlockNames.add(blockName);
 		}
-		let matchingBlockShape = this.#blockShapePatterns.find(([pattern]) => pattern.test(blockName))?.[1]; // could use .filter to catch double matches but that's a skill issue
-		let blockShape = matchingBlockShape ?? "block";
-		this.#cachedBlockShapes.set(blockName, blockShape);
-		return blockShape;
+		this.#cachedBlockShapes.set(blockName, shape);
+		return shape;
 	}
 	/**
 	 * Makes the poly mesh faces for a block.
@@ -164,7 +170,8 @@ export default class BlockGeoMaker {
 		
 		let unfilteredCubes = structuredClone(this.#blockShapeGeos[blockShape]);
 		if(!unfilteredCubes) {
-			console.error(`Could not find geometry for block shape ${blockShape}; defaulting to "block"`);
+			this.unmappedBlockNames.add(block["name"]);
+			console.warn(`[basi] no geo for shape ${blockShape} (${block["name"]}); unit cube`);
 			unfilteredCubes = structuredClone(this.#blockShapeGeos["block"]);
 		}
 		let filteredCubes = [];
@@ -1121,7 +1128,7 @@ export default class BlockGeoMaker {
  * @typedef {Data.Cube & Record<"x" | "y" | "z" | "w" | "h" | "d", number>} CubeWithEasyProperties
  */
 
-/** @import { Vec3, Block, HoloPrintConfig, PolyMeshTemplateFaceWithUvs, PolyMeshTemplateFace, Rectangle, PolyMeshTemplateVertex, CubeUv } from "./HoloPrint.js" */
+/** @import { Vec3, Block, AsiPreviewConfig, PolyMeshTemplateFaceWithUvs, PolyMeshTemplateFace, Rectangle, PolyMeshTemplateVertex, CubeUv } from "./types.js" */
 /** @import TextureAtlas from "./TextureAtlas.js" */
 /** @import EntityGeoMaker from "./EntityGeoMaker.js" */
 /** @import * as Data from "./data/schemas" */

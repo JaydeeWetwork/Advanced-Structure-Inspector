@@ -1,7 +1,7 @@
 // Disclaimer: This is mostly AI-generated, I did not have the willpower to go through tutorial hell again
 // I have some experience with WebGL beforehand but writing it is never fun
 
-import { getOffscreenCanvasContext } from "./utils.js";
+import { getOffscreenCanvasContext } from "../utils.js";
 import { vertexShaderSource, fragmentShaderSource } from "./WebGL2QuadRendererShaders.js";
 
 /** A lightweight WebGL 2 utility to render arbitrary quads directly to an `ImageBitmap`. */
@@ -157,4 +157,4 @@ export default class WebGL2QuadRenderer {
 	};
 }
 
-/** @import { F32Vec8 } from "./HoloPrint.js" */
+/** @import { F32Vec8 } from "./types.js" */

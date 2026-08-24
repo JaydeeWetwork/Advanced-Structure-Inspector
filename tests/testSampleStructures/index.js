@@ -30,7 +30,7 @@ test(async page => {
 		let structureFileContent = fs.readFileSync(structurePath).toString("base64");
 		try {
 			totalTime += await page.evaluate(async (structureFileName, structureFileContent, browserEngine) => {
-				/** @type {import("../../src/HoloPrint.js")} */
+				/** @type {import("../../src/holoprint/HoloPrint.js")} */
 				const HoloPrint = await import("../index.js"); // testing workflow makes index.js export everything from HoloPrint.js
 				
 				console.group(`Testing ${structureFileName}...`);

@@ -32,7 +32,7 @@ export function bindFloatingWindow(opts) {
 			sessionStorage.setItem(storageKey, JSON.stringify({
 				left: win.style.left,
 				top: win.style.top,
-				collapsed: win.classList.contains("sdb-win-collapsed")
+				collapsed: win.classList.contains("basi-win-collapsed")
 			}));
 		} catch {
 			/* ignore */
@@ -51,7 +51,7 @@ export function bindFloatingWindow(opts) {
 				win.style.right = "auto";
 				win.style.bottom = "auto";
 				win.style.transform = "none";
-				win.classList.add("sdb-win-moved");
+				win.classList.add("basi-win-moved");
 			}
 			setCollapsed(!!o.collapsed, false);
 			return !!(o.left && o.top);
@@ -81,7 +81,7 @@ export function bindFloatingWindow(opts) {
 	}
 
 	function placeDefault() {
-		if (win.classList.contains("sdb-win-moved") && win.style.left && win.style.top) {
+		if (win.classList.contains("basi-win-moved") && win.style.left && win.style.top) {
 			clamp();
 			return;
 		}
@@ -97,7 +97,7 @@ export function bindFloatingWindow(opts) {
 	}
 
 	function setCollapsed(collapsed, save = true) {
-		win.classList.toggle("sdb-win-collapsed", collapsed);
+		win.classList.toggle("basi-win-collapsed", collapsed);
 		const btn = opts.collapseBtn;
 		if (btn) {
 			btn.setAttribute("aria-expanded", collapsed ? "false" : "true");
@@ -126,7 +126,7 @@ export function bindFloatingWindow(opts) {
 		win.style.right = "auto";
 		win.style.bottom = "auto";
 		win.style.transform = "none";
-		win.classList.add("sdb-win-dragging");
+		win.classList.add("basi-win-dragging");
 		bar.classList.add("is-dragging");
 		try {
 			bar.setPointerCapture(e.pointerId);
@@ -144,14 +144,14 @@ export function bindFloatingWindow(opts) {
 		if (Math.hypot(dx, dy) > 3) moved = true;
 		win.style.left = `${origL + dx}px`;
 		win.style.top = `${origT + dy}px`;
-		win.classList.add("sdb-win-moved");
+		win.classList.add("basi-win-moved");
 		clamp();
 	}
 
 	function onPointerUp(e) {
 		if (!dragging) return;
 		dragging = false;
-		win.classList.remove("sdb-win-dragging");
+		win.classList.remove("basi-win-dragging");
 		bar.classList.remove("is-dragging");
 		try {
 			if (pointerId != null) bar.releasePointerCapture(pointerId);
@@ -170,12 +170,12 @@ export function bindFloatingWindow(opts) {
 	bar.addEventListener("pointercancel", onPointerUp);
 	bar.addEventListener("dblclick", e => {
 		if (e.target instanceof Element && e.target.closest("button")) return;
-		setCollapsed(!win.classList.contains("sdb-win-collapsed"));
+		setCollapsed(!win.classList.contains("basi-win-collapsed"));
 	});
 
 	opts.collapseBtn?.addEventListener("click", e => {
 		e.stopPropagation();
-		setCollapsed(!win.classList.contains("sdb-win-collapsed"));
+		setCollapsed(!win.classList.contains("basi-win-collapsed"));
 	});
 	opts.closeBtn?.addEventListener("click", e => {
 		e.stopPropagation();
@@ -189,6 +189,6 @@ export function bindFloatingWindow(opts) {
 		clamp,
 		setCollapsed,
 		persist,
-		isCollapsed: () => win.classList.contains("sdb-win-collapsed")
+		isCollapsed: () => win.classList.contains("basi-win-collapsed")
 	};
 }

@@ -10,7 +10,7 @@ import {
 	blockGeoEulerToThree,
 	structurePosToThree
 } from "./previewSpace.js";
-import { getItemIconUrl } from "./itemIconLoader.js?v=judo17";
+import { getItemIconUrl } from "./itemIconLoader.js";
 
 export { applyBlockGeoEuler, blockGeoEulerToThree };
 
@@ -165,7 +165,7 @@ export async function loadItemTexture(THREE, itemName) {
 		texture.generateMipmaps = false;
 		return texture;
 	} catch (e) {
-		console.warn("[sdb] item frame texture failed:", itemName, e);
+		console.warn("[basi] item frame texture failed:", itemName, e);
 		return null;
 	}
 }
@@ -183,7 +183,7 @@ export function createItemFrameItemObject3D(THREE, placement, texture) {
 	group.userData.previewEntity = true; // cleaned with entities
 	group.userData.itemFrameItem = true;
 	group.userData.layerY = placement.y;
-	group.userData.sdbItemFrame = placement;
+	group.userData.basiItemFrame = placement;
 
 	// Plane in local space facing +Z (same as default item_frame plate)
 	const size = 10; // matches inner frame opening (~10 units in block geo)

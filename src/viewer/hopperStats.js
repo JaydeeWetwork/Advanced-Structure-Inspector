@@ -132,7 +132,7 @@ export async function scanHopperStatsFromFile(structureFile) {
 			return computeHopperStats(null, data);
 		}
 	} catch (e) {
-		console.warn("[sdb] light hopper scan failed:", e);
+		console.warn("[basi] light hopper scan failed:", e);
 		return null;
 	}
 }
