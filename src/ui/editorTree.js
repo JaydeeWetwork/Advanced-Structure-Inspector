@@ -27,6 +27,66 @@ function stop(e) {
 	e.stopPropagation();
 }
 
+const CAT_DRAG = "application/x-basi-category";
+
+function clearDropMarks(host) {
+	host?.querySelectorAll(".basi-ed-node.drop-before, .basi-ed-node.drop-after").forEach(el => {
+		el.classList.remove("drop-before", "drop-after");
+	});
+}
+
+function categoryRowFromPoint(clientX, clientY) {
+	const el = document.elementFromPoint(clientX, clientY);
+	const row = el?.closest?.(".basi-ed-node");
+	if (!row) return null;
+	if (row.dataset.kind === "category") return row;
+	const cid = row.dataset.categoryId;
+	if (!cid) return null;
+	return els.editorTree?.querySelector(`.basi-ed-node[data-kind="category"][data-id="${CSS.escape(cid)}"]`) ?? null;
+}
+
+function bindTreeScrollAndDnD(host) {
+	if (host.dataset.dndBound) return;
+	host.dataset.dndBound = "1";
+	host.addEventListener("scroll", () => {
+		editorUi.treeScroll = host.scrollTop;
+	}, { passive: true });
+	host.addEventListener("dragover", e => {
+		const types = [...(e.dataTransfer?.types || [])];
+		if (!types.includes(CAT_DRAG) && !types.includes("text/plain")) return;
+		e.preventDefault();
+		e.dataTransfer.dropEffect = "move";
+		const r = host.getBoundingClientRect();
+		const edge = 32;
+		if (e.clientY < r.top + edge) host.scrollTop -= 14;
+		else if (e.clientY > r.bottom - edge) host.scrollTop += 14;
+		clearDropMarks(host);
+		const row = categoryRowFromPoint(e.clientX, e.clientY);
+		if (!row || row.dataset.id === editorUi.dragCategoryId) return;
+		const box = row.getBoundingClientRect();
+		row.classList.add(e.clientY < box.top + box.height / 2 ? "drop-before" : "drop-after");
+	});
+	host.addEventListener("drop", e => {
+		const raw = e.dataTransfer?.getData(CAT_DRAG) || e.dataTransfer?.getData("text/plain") || "";
+		const fromId = raw.startsWith("cat:") ? raw.slice(4) : raw;
+		clearDropMarks(host);
+		if (!fromId) return;
+		e.preventDefault();
+		const row = categoryRowFromPoint(e.clientX, e.clientY);
+		if (!row || row.dataset.id === fromId) return;
+		const box = row.getBoundingClientRect();
+		const place = e.clientY < box.top + box.height / 2 ? "before" : "after";
+		void catalog.moveCategoryTo(fromId, row.dataset.id, place).then(() => {
+			editorUi.dragCategoryId = null;
+			renderEditor();
+			setStatus("Category moved.", "ok");
+		});
+	});
+	host.addEventListener("dragleave", e => {
+		if (!host.contains(e.relatedTarget)) clearDropMarks(host);
+	});
+}
+
 /**
  * @param {string} label
  * @param {string} value
@@ -97,16 +157,34 @@ function iconBtn(label, title, onClick, disabled = false) {
 	return btn;
 }
 
-function nodeRow({ kind, id, name, meta, color, collapsed, depth, onToggle, onClick }) {
+function nodeRow({ kind, id, name, meta, color, collapsed, depth, onToggle, onClick, categoryId, draggable }) {
 	const row = document.createElement("div");
 	row.className = "basi-ed-node" + (isSelected(kind, id) ? " is-selected" : "");
 	row.dataset.kind = kind;
 	row.dataset.id = id;
+	if (categoryId) row.dataset.categoryId = categoryId;
 	row.style.setProperty("--depth", String(depth));
 	if (color) row.style.setProperty("--cat-color", color);
 	row.tabIndex = 0;
 	row.setAttribute("role", "treeitem");
 	row.setAttribute("aria-selected", isSelected(kind, id) ? "true" : "false");
+	if (draggable) {
+		row.draggable = true;
+		row.classList.add("is-draggable");
+		row.title = "Drag to reorder";
+		row.addEventListener("dragstart", e => {
+			editorUi.dragCategoryId = id;
+			e.dataTransfer.effectAllowed = "move";
+			e.dataTransfer.setData(CAT_DRAG, `cat:${id}`);
+			e.dataTransfer.setData("text/plain", `cat:${id}`);
+			row.classList.add("is-dragging");
+		});
+		row.addEventListener("dragend", () => {
+			editorUi.dragCategoryId = null;
+			row.classList.remove("is-dragging");
+			clearDropMarks(els.editorTree);
+		});
+	}
 
 	if (onToggle) {
 		const tog = document.createElement("button");
@@ -153,6 +231,8 @@ function nodeRow({ kind, id, name, meta, color, collapsed, depth, onToggle, onCl
 export function renderEditorTree() {
 	const host = els.editorTree;
 	if (!host) return;
+	bindTreeScrollAndDnD(host);
+	const keepScroll = Number.isFinite(editorUi.treeScroll) ? editorUi.treeScroll : host.scrollTop;
 	host.replaceChildren();
 
 	const tree = catalog.listTree();
@@ -205,6 +285,7 @@ export function renderEditorTree() {
 				color,
 				collapsed: group.category.collapsed,
 				depth: 0,
+				draggable: true,
 				onToggle: () => {
 					void catalog
 						.setCategoryCollapsed(group.category.id, !group.category.collapsed)
@@ -224,6 +305,7 @@ export function renderEditorTree() {
 					color,
 					collapsed: entry.collapsed,
 					depth: 1,
+					categoryId: group.category.id,
 					onToggle: () => {
 						void catalog
 							.setCatalogEntryCollapsed(entry.id, !entry.collapsed)
@@ -249,12 +331,18 @@ export function renderEditorTree() {
 						meta: formatSize(s.size),
 						color,
 						depth: 2,
+						categoryId: group.category.id,
 						onClick: () => select("structure", s.id)
 					})
 				);
 			}
 		}
 	}
+
+	host.scrollTop = keepScroll;
+	requestAnimationFrame(() => {
+		if (els.editorTree) els.editorTree.scrollTop = keepScroll;
+	});
 }
 
 export function renderEditorToolbar() {
@@ -289,36 +377,17 @@ export function renderEditorToolbar() {
 		setStatus(`Entry “${created.name}” created.`, "ok");
 	});
 
-	host.append(addCat, addEntry);
+	const features = document.createElement("button");
+	features.type = "button";
+	features.className = "basi-btn" + (editorUi.featuresOpen ? "" : " secondary");
+	features.classList.add("basi-ed-toolbar-features");
+	features.textContent = editorUi.featuresOpen ? "Hide features" : "Features";
+	features.addEventListener("click", () => {
+		editorUi.featuresOpen = !editorUi.featuresOpen;
+		renderEditor();
+	});
 
-	if (sel?.kind === "entry") {
-		const assign = document.createElement("label");
-		assign.className = "basi-ed-assign";
-		const span = document.createElement("span");
-		span.textContent = "Assign";
-		const selectEl = document.createElement("select");
-		selectEl.className = "basi-ed-input";
-		const placeholder = document.createElement("option");
-		placeholder.value = "";
-		placeholder.textContent = "Structure…";
-		selectEl.appendChild(placeholder);
-		for (const s of catalog.list()) {
-			const opt = document.createElement("option");
-			opt.value = s.id;
-			const parent = s.entryId ? catalog.getCatalogEntry(s.entryId) : null;
-			opt.textContent = parent ? `${s.name} (${parent.name})` : s.name;
-			selectEl.appendChild(opt);
-		}
-		selectEl.addEventListener("change", async () => {
-			const id = selectEl.value;
-			if (!id) return;
-			await catalog.setStructureEntry(id, sel.id);
-			select("structure", id);
-			setStatus("Structure assigned.", "ok");
-		});
-		assign.append(span, selectEl);
-		host.appendChild(assign);
-	}
+	host.append(addCat, addEntry, features);
 }
 
 export function renderEditorInspector() {
@@ -405,6 +474,33 @@ export function renderEditorInspector() {
 		});
 		parent.append(pLabel, pSel);
 		host.appendChild(parent);
+		const assign = document.createElement("label");
+		assign.className = "basi-ed-field";
+		const aLabel = document.createElement("span");
+		aLabel.className = "basi-ed-label";
+		aLabel.textContent = "Assign structure";
+		const aSel = document.createElement("select");
+		aSel.className = "basi-ed-input";
+		const placeholder = document.createElement("option");
+		placeholder.value = "";
+		placeholder.textContent = "Choose a structure…";
+		aSel.appendChild(placeholder);
+		for (const s of catalog.list()) {
+			const opt = document.createElement("option");
+			opt.value = s.id;
+			const parentEnt = s.entryId ? catalog.getCatalogEntry(s.entryId) : null;
+			opt.textContent = parentEnt ? `${s.name} (${parentEnt.name})` : s.name;
+			aSel.appendChild(opt);
+		}
+		aSel.addEventListener("change", async () => {
+			const id = aSel.value;
+			if (!id) return;
+			await catalog.setStructureEntry(id, ent.id);
+			select("structure", id);
+			setStatus("Structure assigned.", "ok");
+		});
+		assign.append(aLabel, aSel);
+		host.appendChild(assign);
 		const actions = document.createElement("div");
 		actions.className = "basi-ed-actions";
 		actions.append(
@@ -476,7 +572,7 @@ export function renderEditorInspector() {
 
 		const featLabel = document.createElement("div");
 		featLabel.className = "basi-ed-label";
-		featLabel.textContent = "Features — click a card on the right to toggle";
+		featLabel.textContent = "Features";
 		host.appendChild(featLabel);
 		const chips = document.createElement("div");
 		chips.className = "basi-feature-chips";
@@ -491,5 +587,14 @@ export function renderEditorInspector() {
 			chips.textContent = "None yet";
 		}
 		host.appendChild(chips);
+		const manage = document.createElement("button");
+		manage.type = "button";
+		manage.className = "basi-btn secondary";
+		manage.textContent = editorUi.featuresOpen ? "Hide feature library" : "Add / edit features";
+		manage.addEventListener("click", () => {
+			editorUi.featuresOpen = !editorUi.featuresOpen;
+			renderEditor();
+		});
+		host.appendChild(manage);
 	}
 }

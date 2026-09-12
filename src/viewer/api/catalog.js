@@ -20,5 +20,9 @@ export {
 	dbPutFeature,
 	dbPutFeatures,
 	dbDeleteFeature,
-	dbLoadFeatures
+	dbLoadFeatures,
+	dbCloneCatalog,
+	dbDeleteCatalog,
+	setActiveDbName,
+	getActiveDbName
 } from "../db.js";

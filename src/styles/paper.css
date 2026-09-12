@@ -102,7 +102,7 @@ body.basi-app .basi-theme-btn {
 /* —— Full-bleed canvas; chrome overlays —— */
 body.basi-app {
 	--basi-chrome-top: 3.4rem;
-	--basi-chrome-bottom: 1.55rem;
+	--basi-chrome-bottom: 0px;
 }
 
 body.basi-app:has(#selectionBar:not(.hidden)) {
@@ -585,7 +585,7 @@ body.basi-app .basi-preview-host .previewCont lil-gui {
 @media (max-width: 720px) {
 	body.basi-app {
 		--basi-chrome-top: 4.6rem;
-		--basi-chrome-bottom: 1.8rem;
+		--basi-chrome-bottom: 0px;
 	}
 
 	body.basi-app .basi-float {

@@ -4,8 +4,18 @@
  */
 
 // Keep legacy DB name so existing IndexedDB catalogs still open after the Bedrock ASI rebrand
-const DB_NAME = "structure-db-viewer";
+export const DEFAULT_DB_NAME = "structure-db-viewer";
 const DB_VERSION = 3;
+/** @type {string} */
+let activeDbName = DEFAULT_DB_NAME;
+
+export function getActiveDbName() {
+	return activeDbName;
+}
+
+export function setActiveDbName(name) {
+	activeDbName = String(name || DEFAULT_DB_NAME);
+}
 const STORE = "structures";
 const CATEGORIES_STORE = "categories";
 const ENTRIES_STORE = "entries";
@@ -77,15 +87,17 @@ const FEATURES_STORE = "features";
  */
 
 /**
+ * @param {string} [name]
  * @returns {Promise<IDBDatabase>}
  */
-function openDb() {
+function openDb(name) {
+	const dbName = name || activeDbName;
 	return new Promise((resolve, reject) => {
 		if (typeof indexedDB === "undefined") {
 			reject(new Error("indexedDB is not available"));
 			return;
 		}
-		const req = indexedDB.open(DB_NAME, DB_VERSION);
+		const req = indexedDB.open(dbName, DB_VERSION);
 		req.onerror = () => reject(req.error ?? new Error("IDB open failed"));
 		req.onsuccess = () => resolve(req.result);
 		req.onupgradeneeded = () => {
@@ -504,6 +516,55 @@ export async function dbLoadFeatures() {
 	} finally {
 		db.close();
 	}
+}
+
+const ALL_STORES = [STORE, CATEGORIES_STORE, ENTRIES_STORE, FEATURES_STORE];
+
+/**
+ * Copy every catalog store from one IndexedDB into another (creates dest if needed).
+ * @param {string} fromName
+ * @param {string} toName
+ */
+export async function dbCloneCatalog(fromName, toName) {
+	if (!fromName || !toName || fromName === toName) return;
+	const src = await openDb(fromName);
+	const dst = await openDb(toName);
+	try {
+		const names = existingStores(src, ALL_STORES);
+		/** @type {Record<string, object[]>} */
+		const data = {};
+		if (names.length) {
+			const tx = src.transaction(names, "readonly");
+			for (const name of names) {
+				data[name] = await idbReq(tx.objectStore(name).getAll());
+			}
+			await idbTxDone(tx);
+		}
+		const destNames = existingStores(dst, ALL_STORES);
+		const txw = dst.transaction(destNames, "readwrite");
+		for (const name of destNames) {
+			const store = txw.objectStore(name);
+			await idbReq(store.clear());
+			for (const rec of data[name] || []) store.put(rec);
+		}
+		await idbTxDone(txw);
+	} finally {
+		src.close();
+		dst.close();
+	}
+}
+
+/**
+ * @param {string} name
+ */
+export async function dbDeleteCatalog(name) {
+	if (!name) return;
+	return new Promise((resolve, reject) => {
+		const req = indexedDB.deleteDatabase(name);
+		req.onsuccess = () => resolve();
+		req.onerror = () => reject(req.error ?? new Error("IDB delete failed"));
+		req.onblocked = () => resolve();
+	});
 }
 
 /** Drop legacy localStorage metadata index from the scaffold era. */

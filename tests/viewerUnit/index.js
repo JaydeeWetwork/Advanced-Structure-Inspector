@@ -177,6 +177,31 @@ describe("countStructureEntities", () => {
 
 // ---- catalog (in-memory, persist off) ------------------------------------
 
+describe("catalogRegistry", async () => {
+	const {
+		loadRegistry,
+		DEFAULT_CATALOG_ID,
+		addCatalogRecord,
+		renameCatalog
+	} = await import("../../src/viewer/catalogRegistry.js");
+
+	it("has a default named catalog", () => {
+		const r = loadRegistry();
+		assert.ok(r.items.length >= 1);
+		assert.ok(r.items.some(i => i.id === DEFAULT_CATALOG_ID));
+		assert.equal(typeof r.items[0].name, "string");
+	});
+
+	it("adds and renames records when localStorage exists", () => {
+		if (typeof localStorage === "undefined") return;
+		const rec = addCatalogRecord("Temp farms");
+		assert.equal(rec.name, "Temp farms");
+		assert.match(rec.dbName, /^basi-catalog-/);
+		const renamed = renameCatalog(rec.id, "Farm pack");
+		assert.equal(renamed.name, "Farm pack");
+	});
+});
+
 describe("StructureCatalog", () => {
 	it("adds, searches, and removes entries", async () => {
 		const cat = new StructureCatalog();
@@ -245,6 +270,9 @@ describe("StructureCatalog", () => {
 
 		await cat.reorderCategory(c2.id, -1);
 		assert.equal(cat.listCategories()[0].id, c2.id);
+		await cat.moveCategoryTo(c2.id, c1.id, "after");
+		assert.equal(cat.listCategories()[0].id, c1.id);
+		assert.equal(cat.listCategories()[1].id, c2.id);
 
 		await cat.setCategoryCollapsed(c1.id, true);
 		assert.equal(cat.getCategory(c1.id).collapsed, true);

@@ -51,7 +51,10 @@ export const editorUi = {
 	selected: null,
 	featureFilter: "",
 	expandedFeatureId: /** @type {string|null} */ (null),
-	uncategorizedCollapsed: false
+	uncategorizedCollapsed: false,
+	featuresOpen: false,
+	treeScroll: 0,
+	dragCategoryId: /** @type {string|null} */ (null)
 };
 
 /** Single-flight import */
@@ -135,6 +138,7 @@ export function createEls() {
 		editorStage: $("editorStage"),
 		appStage: $("appStage"),
 		editorTree: $("editorTree"),
+		editorDbBar: $("editorDbBar"),
 		editorTreeToolbar: $("editorTreeToolbar"),
 		editorInspector: $("editorInspector"),
 		editorFeatures: $("editorFeatures"),
@@ -142,6 +146,7 @@ export function createEls() {
 		editorFeatureFilter: /** @type {HTMLInputElement|null} */ ($("editorFeatureFilter")),
 		editorFeatureHint: $("editorFeatureHint"),
 		addFeatureBtn: $("addFeatureBtn"),
+		editorFeatureCloseBtn: $("editorFeatureCloseBtn"),
 		detailFeatureChips: $("detailFeatureChips")
 	};
 }

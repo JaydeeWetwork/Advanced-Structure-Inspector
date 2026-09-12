@@ -20,7 +20,8 @@ import {
 	dbPutFeatures,
 	dbDeleteFeature,
 	dbLoadFeatures,
-	clearLegacyLocalStorageIndex
+	clearLegacyLocalStorageIndex,
+	getActiveDbName
 } from "./db.js";
 import {
 	TAXONOMY_SEED_STATE_KEY,
@@ -550,6 +551,31 @@ export default class StructureCatalog {
 		return true;
 	}
 
+	/**
+	 * Place `id` before or after `targetId` in category sort order.
+	 * @param {string} id
+	 * @param {string} targetId
+	 * @param {"before"|"after"} place
+	 */
+	async moveCategoryTo(id, targetId, place) {
+		if (!id || id === targetId) return false;
+		const ordered = this.listCategories();
+		const from = ordered.findIndex(c => c.id === id);
+		const to = ordered.findIndex(c => c.id === targetId);
+		if (from < 0 || to < 0) return false;
+		const [item] = ordered.splice(from, 1);
+		let insert = ordered.findIndex(c => c.id === targetId);
+		if (insert < 0) return false;
+		if (place === "after") insert += 1;
+		ordered.splice(insert, 0, item);
+		ordered.forEach((c, i) => {
+			c.sortOrder = i;
+		});
+		this.#notify();
+		await this.#tryPersist(() => dbPutCategories(this.listCategories()), "category move");
+		return true;
+	}
+
 	// ---- Catalog function-entries ----
 
 	/**
@@ -972,12 +998,19 @@ export default class StructureCatalog {
 		return { categories: nCat, entries: nEnt, features: nFeat };
 	}
 
+	#seedStateKey() {
+		return `${TAXONOMY_SEED_STATE_KEY}::${getActiveDbName()}`;
+	}
+
 	#loadAppliedSeedKeys() {
 		if (!this.#persistEnabled || typeof localStorage === "undefined") {
 			return new Set();
 		}
 		try {
-			const raw = localStorage.getItem(TAXONOMY_SEED_STATE_KEY);
+			let raw = localStorage.getItem(this.#seedStateKey());
+			if (!raw && getActiveDbName() === "structure-db-viewer") {
+				raw = localStorage.getItem(TAXONOMY_SEED_STATE_KEY);
+			}
 			if (!raw) return new Set();
 			const o = JSON.parse(raw);
 			return new Set(Array.isArray(o?.applied) ? o.applied : []);
@@ -990,12 +1023,21 @@ export default class StructureCatalog {
 		if (!this.#persistEnabled || typeof localStorage === "undefined") return;
 		try {
 			localStorage.setItem(
-				TAXONOMY_SEED_STATE_KEY,
+				this.#seedStateKey(),
 				JSON.stringify({ version: TAXONOMY_SEED_VERSION, applied: [...applied] })
 			);
 		} catch {
 			/* ignore */
 		}
+	}
+
+	/** Wipe in-memory maps and reload the active IndexedDB catalog. */
+	async reloadFromDb() {
+		this.#entries.clear();
+		this.#categories.clear();
+		this.#catalogEntries.clear();
+		this.#features.clear();
+		return this.hydrateFromDb();
 	}
 
 	#markSeedAppliedKeys(keys) {

@@ -109,7 +109,10 @@ function renderFeatureCard(feat, assigned, structureId) {
 		tags.appendChild(on);
 	}
 
-	bar.append(name, desc, tags);
+	bar.append(name, tags);
+	if (editorUi.expandedFeatureId === feat.id && feat.description) {
+		bar.appendChild(desc);
+	}
 	card.appendChild(bar);
 
 	const tools = document.createElement("div");

@@ -88,12 +88,17 @@ body.basi-app {
 }
 
 .basi-header-actions,
-.basi-sel-actions {
+.basi-sel-actions,
+.basi-detail-actions {
 	display: flex;
 	flex-wrap: wrap;
 	gap: 8px;
 	align-items: center;
 	flex-shrink: 0;
+}
+
+.basi-detail-actions {
+	padding: 0 10px 8px;
 }
 
 /* Selected structure strip in top header */

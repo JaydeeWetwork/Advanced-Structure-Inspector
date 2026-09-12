@@ -45,6 +45,8 @@ import {
 } from "./app/previewLifecycle.js";
 import { handleFiles } from "./app/importExport.js";
 import { BUILD_ID } from "./buildId.js";
+import { getActiveCatalog } from "./viewer/catalogRegistry.js";
+import { setActiveDbName } from "./viewer/db.js";
 
 setEls(createEls());
 
@@ -257,6 +259,7 @@ async function boot() {
 	if (els.bootBadge) {
 		els.bootBadge.textContent = "Loading…";
 	}
+	setActiveDbName(getActiveCatalog().dbName);
 	const n = await catalog.hydrateFromDb();
 	applyView();
 	if (n > 0) {
