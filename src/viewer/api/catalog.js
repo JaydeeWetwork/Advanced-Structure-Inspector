@@ -25,8 +25,5 @@ export {
 	dbDeleteCatalog,
 	dbGetMeta,
 	dbPutMeta,
-	DEFAULT_DB_NAME,
-	LEGACY_DEFAULT_DB_NAME,
-	decideDefaultCatalogMigration,
-	migrateDefaultCatalogIfNeeded
+	DEFAULT_DB_NAME
 } from "../db.js";

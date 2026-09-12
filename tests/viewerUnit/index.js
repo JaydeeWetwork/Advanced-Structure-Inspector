@@ -219,12 +219,11 @@ describe("catalogRegistry", async () => {
 });
 
 describe("default IndexedDB rename", async () => {
+	const { DEFAULT_DB_NAME, LEGACY_DEFAULT_DB_NAME } = await import("../../src/viewer/db.js");
 	const {
-		DEFAULT_DB_NAME,
-		LEGACY_DEFAULT_DB_NAME,
 		canonicalDefaultDbName,
 		decideDefaultCatalogMigration
-	} = await import("../../src/viewer/db.js");
+	} = await import("../../src/viewer/dbMigrate.js");
 	const {
 		DEFAULT_CATALOG_ID,
 		loadRegistry,
@@ -240,22 +239,22 @@ describe("default IndexedDB rename", async () => {
 		assert.equal(canonicalDefaultDbName("basi-catalog-x"), "basi-catalog-x");
 	});
 
-	it("clones only when dest is empty and source has rows", () => {
+	it("clones only when dest is empty and source has rows; never deletes an uncloned source", () => {
 		assert.deepEqual(
-			decideDefaultCatalogMigration({ destCount: 0, sourceCount: 3, legacyStillInUse: false }),
-			{ clone: true, deleteLegacy: true }
+			decideDefaultCatalogMigration({ destCount: 0, sourceCount: 3 }),
+			{ clone: true, remap: false, writeFlag: false }
 		);
 		assert.deepEqual(
-			decideDefaultCatalogMigration({ destCount: 5, sourceCount: 3, legacyStillInUse: false }),
-			{ clone: false, deleteLegacy: true }
+			decideDefaultCatalogMigration({ destCount: 5, sourceCount: 3 }),
+			{ clone: false, remap: false, writeFlag: false }
 		);
 		assert.deepEqual(
-			decideDefaultCatalogMigration({ destCount: 0, sourceCount: 3, legacyStillInUse: true }),
-			{ clone: true, deleteLegacy: false }
+			decideDefaultCatalogMigration({ destCount: 0, sourceCount: 0 }),
+			{ clone: false, remap: true, writeFlag: true }
 		);
 		assert.deepEqual(
 			decideDefaultCatalogMigration({ destCount: 0, sourceCount: 0, legacyKnownMissing: true }),
-			{ clone: false, deleteLegacy: false }
+			{ clone: false, remap: true, writeFlag: true }
 		);
 	});
 

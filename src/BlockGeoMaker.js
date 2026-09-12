@@ -1133,11 +1133,9 @@ export default class BlockGeoMaker {
 				this.#applyFaceCropping(face, imageUv["crop"]);
 			}
 			let vertices = tuple([face["vertices"][0], face["vertices"][1], face["vertices"][3], face["vertices"][2]]); // go around in a square
-			if(this.#dot3(this.#quadWinding(vertices), origWinding) < 0) {
-				vertices = tuple([vertices[0], vertices[3], vertices[2], vertices[1]]);
-			}
-			if(face["flipWinding"]) {
-				vertices = tuple([vertices[0], vertices[3], vertices[2], vertices[1]]);
+			const windingFlipped = vec3.dot(this.#quadWinding(vertices), origWinding) < 0;
+			if(windingFlipped !== Boolean(face["flipWinding"])) {
+				vertices = this.#reverseQuad(vertices);
 			}
 			const uw = Math.abs(imageUv["uv_size"][0]);
 			const vh = Math.abs(imageUv["uv_size"][1]);
@@ -1171,12 +1169,12 @@ export default class BlockGeoMaker {
 		);
 	}
 	/**
-	 * @param {Vec3} a
-	 * @param {Vec3} b
-	 * @returns {number}
+	 * @template {{ pos: Vec3 }} V
+	 * @param {[V, V, V, V]} vertices
+	 * @returns {[V, V, V, V]}
 	 */
-	static #dot3(a, b) {
-		return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+	static #reverseQuad(vertices) {
+		return tuple([vertices[0], vertices[3], vertices[2], vertices[1]]);
 	}
 	/**
 	 * Crops a face, modifying the input object.

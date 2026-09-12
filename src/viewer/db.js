@@ -5,7 +5,6 @@
 
 export const DEFAULT_DB_NAME = "asi-db-viewer";
 export const LEGACY_DEFAULT_DB_NAME = "structure-db-viewer";
-const MIGRATE_FLAG_KEY = "basi.defaultDbMigrated.v1";
 const DB_VERSION = 4;
 /** @type {string} */
 let activeDbName = DEFAULT_DB_NAME;
@@ -19,27 +18,7 @@ export function setActiveDbName(name) {
 }
 
 export function isProtectedDefaultDbName(name) {
-	return name === DEFAULT_DB_NAME || name === LEGACY_DEFAULT_DB_NAME;
-}
-
-export function canonicalDefaultDbName(name) {
-	if (!name || name === LEGACY_DEFAULT_DB_NAME) return DEFAULT_DB_NAME;
-	return name;
-}
-
-/**
- * Policy for copying `structure-db-viewer` → `asi-db-viewer`.
- * @param {{ destCount?: number, sourceCount?: number, legacyStillInUse?: boolean, legacyKnownMissing?: boolean }} input
- * @returns {{ clone: boolean, deleteLegacy: boolean }}
- */
-export function decideDefaultCatalogMigration(input = {}) {
-	if (input.legacyKnownMissing) return { clone: false, deleteLegacy: false };
-	const destEmpty = (Number(input.destCount) || 0) === 0;
-	const sourceHasData = (Number(input.sourceCount) || 0) > 0;
-	return {
-		clone: destEmpty && sourceHasData,
-		deleteLegacy: !input.legacyStillInUse
-	};
+	return name === DEFAULT_DB_NAME;
 }
 
 const STORE = "structures";
@@ -557,6 +536,28 @@ export async function dbLoadFeatures(dbName) {
 const ALL_STORES = [STORE, CATEGORIES_STORE, ENTRIES_STORE, FEATURES_STORE, META_STORE];
 
 /**
+ * Row count across catalog stores. Opening a missing DB may create it.
+ * @param {string} dbName
+ * @returns {Promise<number>}
+ */
+export async function dbCatalogRowCount(dbName) {
+	const db = await openDb(dbName);
+	try {
+		const names = existingStores(db, ALL_STORES);
+		if (!names.length) return 0;
+		const tx = db.transaction(names, "readonly");
+		let n = 0;
+		for (const name of names) {
+			n += await idbReq(tx.objectStore(name).count());
+		}
+		await idbTxDone(tx);
+		return n;
+	} finally {
+		db.close();
+	}
+}
+
+/**
  * @param {string} [dbName]
  * @returns {Promise<{ id: string, version?: number, applied?: string[] }|null>}
  */
@@ -651,104 +652,6 @@ export async function dbDeleteCatalog(name) {
 			/* wait for connections to close; timeout rejects */
 		};
 	});
-}
-
-/**
- * @param {string} name
- * @returns {Promise<boolean|null>} true/false if known, null if the browser cannot list DBs
- */
-async function databaseExists(name) {
-	if (typeof indexedDB === "undefined") return false;
-	if (typeof indexedDB.databases !== "function") return null;
-	try {
-		const list = await indexedDB.databases();
-		return (list || []).some(d => d && d.name === name);
-	} catch {
-		return null;
-	}
-}
-
-/**
- * @param {string} dbName
- * @returns {Promise<number>}
- */
-async function catalogStoreCount(dbName) {
-	const db = await openDb(dbName);
-	try {
-		const names = existingStores(db, ALL_STORES);
-		if (!names.length) return 0;
-		const tx = db.transaction(names, "readonly");
-		let n = 0;
-		for (const name of names) {
-			n += await idbReq(tx.objectStore(name).count());
-		}
-		await idbTxDone(tx);
-		return n;
-	} finally {
-		db.close();
-	}
-}
-
-function readMigrateFlag() {
-	try {
-		if (typeof localStorage === "undefined") return null;
-		return localStorage.getItem(MIGRATE_FLAG_KEY);
-	} catch {
-		return null;
-	}
-}
-
-function writeMigrateFlag() {
-	try {
-		if (typeof localStorage === "undefined") return;
-		localStorage.setItem(MIGRATE_FLAG_KEY, DEFAULT_DB_NAME);
-	} catch {
-		/* ignore */
-	}
-}
-
-/**
- * Copy the legacy default catalog into `asi-db-viewer` once, then drop the old DB.
- * @param {{ legacyStillInUse?: boolean }} [opts]
- * @returns {Promise<{ cloned: boolean, deleted: boolean, skipped?: boolean }>}
- */
-export async function migrateDefaultCatalogIfNeeded(opts = {}) {
-	if (typeof indexedDB === "undefined" || DEFAULT_DB_NAME === LEGACY_DEFAULT_DB_NAME) {
-		return { cloned: false, deleted: false, skipped: true };
-	}
-	if (readMigrateFlag() === DEFAULT_DB_NAME) {
-		return { cloned: false, deleted: false, skipped: true };
-	}
-
-	const destKnown = await databaseExists(DEFAULT_DB_NAME);
-	const legacyKnown = await databaseExists(LEGACY_DEFAULT_DB_NAME);
-	const destCount = destKnown === false ? 0 : await catalogStoreCount(DEFAULT_DB_NAME);
-	const sourceCount = legacyKnown === false ? 0 : await catalogStoreCount(LEGACY_DEFAULT_DB_NAME);
-	const plan = decideDefaultCatalogMigration({
-		destCount,
-		sourceCount,
-		legacyStillInUse: !!opts.legacyStillInUse,
-		legacyKnownMissing: legacyKnown === false
-	});
-
-	let cloned = false;
-	if (plan.clone) {
-		await dbCloneCatalog(LEGACY_DEFAULT_DB_NAME, DEFAULT_DB_NAME);
-		cloned = true;
-	}
-
-	let deleted = false;
-	if (plan.deleteLegacy) {
-		try {
-			await dbDeleteCatalog(LEGACY_DEFAULT_DB_NAME);
-			deleted = true;
-		} catch (e) {
-			console.warn("[basi] legacy IndexedDB delete failed:", e);
-		}
-	}
-
-	if (legacyKnown === false || deleted) writeMigrateFlag();
-	return { cloned, deleted };
 }
 
 /**

@@ -97,10 +97,6 @@ export function remapLegacyDefaultDbNames() {
 	return r;
 }
 
-export function registryUsesDbName(name) {
-	return loadRegistry().items.some(i => i.dbName === name);
-}
-
 export function getActiveCatalog() {
 	const r = loadRegistry();
 	return r.items.find(i => i.id === r.activeId) ?? r.items[0];
