@@ -3,11 +3,36 @@
  * The original `structure-db-viewer` DB is the default catalog so existing data stays.
  */
 
-import { TAXONOMY_SEED_STATE_KEY } from "../data/taxonomy.js";
+import { DEFAULT_DB_NAME } from "./db.js";
 
+export { DEFAULT_DB_NAME };
 export const DEFAULT_CATALOG_ID = "default";
-export const DEFAULT_DB_NAME = "structure-db-viewer";
 export const REGISTRY_KEY = "basi.catalogRegistry.v1";
+
+/** @type {Storage|null} */
+let registryStorage = typeof localStorage !== "undefined" ? localStorage : null;
+
+/** Inject storage (unit tests). Pass null to use an in-memory map. */
+export function setRegistryStorage(storage) {
+	registryStorage = storage;
+}
+
+function store() {
+	if (registryStorage) return registryStorage;
+	if (typeof localStorage !== "undefined") return localStorage;
+	return {
+		_d: new Map(),
+		getItem(k) {
+			return this._d.has(k) ? this._d.get(k) : null;
+		},
+		setItem(k, v) {
+			this._d.set(k, String(v));
+		},
+		removeItem(k) {
+			this._d.delete(k);
+		}
+	};
+}
 
 function newId() {
 	if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
@@ -33,7 +58,7 @@ function fallbackRegistry() {
  */
 export function loadRegistry() {
 	try {
-		const raw = localStorage.getItem(REGISTRY_KEY);
+		const raw = store().getItem(REGISTRY_KEY);
 		if (!raw) return fallbackRegistry();
 		const o = JSON.parse(raw);
 		if (!o || !Array.isArray(o.items) || !o.items.length) return fallbackRegistry();
@@ -54,7 +79,7 @@ export function loadRegistry() {
 }
 
 export function saveRegistry(reg) {
-	localStorage.setItem(REGISTRY_KEY, JSON.stringify(reg));
+	store().setItem(REGISTRY_KEY, JSON.stringify(reg));
 	return reg;
 }
 
@@ -94,13 +119,17 @@ export function setActiveCatalogId(id) {
 	return saveRegistry(r);
 }
 
-export function addCatalogRecord(name) {
-	const id = newId();
+/**
+ * @param {string} name
+ * @param {{ id?: string, dbName?: string }} [opts]
+ */
+export function addCatalogRecord(name, opts = {}) {
+	const id = opts.id || newId();
 	const r = loadRegistry();
 	const item = {
 		id,
 		name: String(name || "").trim() || "Untitled",
-		dbName: `basi-catalog-${id}`,
+		dbName: opts.dbName || `basi-catalog-${id}`,
 		updatedAt: Date.now()
 	};
 	r.items.push(item);
@@ -112,19 +141,6 @@ export function createCatalogRecord(name) {
 	const item = addCatalogRecord(name);
 	setActiveCatalogId(item.id);
 	return item;
-}
-
-export function copySeedState(fromDbName, toDbName) {
-	if (!fromDbName || !toDbName || fromDbName === toDbName) return;
-	try {
-		let raw = localStorage.getItem(`${TAXONOMY_SEED_STATE_KEY}::${fromDbName}`);
-		if (!raw && fromDbName === DEFAULT_DB_NAME) {
-			raw = localStorage.getItem(TAXONOMY_SEED_STATE_KEY);
-		}
-		if (raw) localStorage.setItem(`${TAXONOMY_SEED_STATE_KEY}::${toDbName}`, raw);
-	} catch {
-		/* ignore */
-	}
 }
 
 export function removeCatalogRecord(id) {

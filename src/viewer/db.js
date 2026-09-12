@@ -5,7 +5,7 @@
 
 // Keep legacy DB name so existing IndexedDB catalogs still open after the Bedrock ASI rebrand
 export const DEFAULT_DB_NAME = "structure-db-viewer";
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 /** @type {string} */
 let activeDbName = DEFAULT_DB_NAME;
 
@@ -20,6 +20,7 @@ const STORE = "structures";
 const CATEGORIES_STORE = "categories";
 const ENTRIES_STORE = "entries";
 const FEATURES_STORE = "features";
+const META_STORE = "meta";
 
 /**
  * @typedef {object} StoredStructure
@@ -114,6 +115,9 @@ function openDb(name) {
 			if (!db.objectStoreNames.contains(FEATURES_STORE)) {
 				db.createObjectStore(FEATURES_STORE, { keyPath: "id" });
 			}
+			if (!db.objectStoreNames.contains(META_STORE)) {
+				db.createObjectStore(META_STORE, { keyPath: "id" });
+			}
 		};
 	});
 }
@@ -196,37 +200,40 @@ function serializeFeature(feature) {
  * @param {Omit<StoredStructure, "blob"|"fileName"> & { file: File, parseError?: string, hopperStats?: import("./hopperStats.js").HopperStats|null, entryId?: string|null, featureIds?: string[] }} entry
  * @returns {Promise<void>}
  */
-export async function dbPutStructure(entry) {
-	const db = await openDb();
+function serializeStructure(entry) {
+	return {
+		id: entry.id,
+		name: entry.name,
+		sourceName: entry.sourceName,
+		sourceKind: entry.sourceKind,
+		size: entry.size,
+		worldOrigin: entry.worldOrigin,
+		paletteSize: entry.paletteSize,
+		blockCount: entry.blockCount,
+		blockNames: entry.blockNames,
+		entityCount: entry.entityCount ?? 0,
+		materials: entry.materials ?? [],
+		hopperStats: entry.hopperStats ?? null,
+		entryId: entry.entryId ?? null,
+		featureIds: Array.isArray(entry.featureIds) ? entry.featureIds : [],
+		acquiredMaterials: Array.isArray(entry.acquiredMaterials) ? entry.acquiredMaterials : [],
+		defaultCameraPreset: entry.defaultCameraPreset || "iso-north",
+		userDetails: Array.isArray(entry.userDetails) ? entry.userDetails : [],
+		creator: typeof entry.creator === "string" ? entry.creator : "",
+		credits: typeof entry.credits === "string" ? entry.credits : "",
+		sourceLink: typeof entry.sourceLink === "string" ? entry.sourceLink : "",
+		addedAt: entry.addedAt,
+		blob: entry.file,
+		fileName: entry.file?.name || `${entry.name}.mcstructure`,
+		parseError: entry.parseError
+	};
+}
+
+export async function dbPutStructure(entry, dbName) {
+	const db = await openDb(dbName);
 	try {
-		const record = {
-			id: entry.id,
-			name: entry.name,
-			sourceName: entry.sourceName,
-			sourceKind: entry.sourceKind,
-			size: entry.size,
-			worldOrigin: entry.worldOrigin,
-			paletteSize: entry.paletteSize,
-			blockCount: entry.blockCount,
-			blockNames: entry.blockNames,
-			entityCount: entry.entityCount ?? 0,
-			materials: entry.materials ?? [],
-			hopperStats: entry.hopperStats ?? null,
-			entryId: entry.entryId ?? null,
-			featureIds: Array.isArray(entry.featureIds) ? entry.featureIds : [],
-			acquiredMaterials: Array.isArray(entry.acquiredMaterials) ? entry.acquiredMaterials : [],
-			defaultCameraPreset: entry.defaultCameraPreset || "iso-north",
-			userDetails: Array.isArray(entry.userDetails) ? entry.userDetails : [],
-			creator: typeof entry.creator === "string" ? entry.creator : "",
-			credits: typeof entry.credits === "string" ? entry.credits : "",
-			sourceLink: typeof entry.sourceLink === "string" ? entry.sourceLink : "",
-			addedAt: entry.addedAt,
-			blob: entry.file,
-			fileName: entry.file.name || `${entry.name}.mcstructure`,
-			parseError: entry.parseError
-		};
 		const tx = db.transaction(STORE, "readwrite");
-		await idbReq(tx.objectStore(STORE).put(record));
+		await idbReq(tx.objectStore(STORE).put(serializeStructure(entry)));
 		await idbTxDone(tx);
 	} finally {
 		db.close();
@@ -237,8 +244,8 @@ export async function dbPutStructure(entry) {
  * @param {string} id
  * @returns {Promise<void>}
  */
-export async function dbDeleteStructure(id) {
-	const db = await openDb();
+export async function dbDeleteStructure(id, dbName) {
+	const db = await openDb(dbName);
 	try {
 		const tx = db.transaction(STORE, "readwrite");
 		await idbReq(tx.objectStore(STORE).delete(id));
@@ -248,11 +255,14 @@ export async function dbDeleteStructure(id) {
 	}
 }
 
-/** @returns {Promise<void>} */
-export async function dbClearAll() {
-	const db = await openDb();
+/**
+ * @param {string} [dbName]
+ * @returns {Promise<void>}
+ */
+export async function dbClearAll(dbName) {
+	const db = await openDb(dbName);
 	try {
-		const names = existingStores(db, [STORE, CATEGORIES_STORE, ENTRIES_STORE, FEATURES_STORE]);
+		const names = existingStores(db, [STORE, CATEGORIES_STORE, ENTRIES_STORE, FEATURES_STORE, META_STORE]);
 		if (!names.length) return;
 		const tx = db.transaction(names, "readwrite");
 		for (const name of names) {
@@ -265,8 +275,8 @@ export async function dbClearAll() {
 }
 
 /** Clear structure blobs/metadata only (keep taxonomy). */
-export async function dbClearStructures() {
-	const db = await openDb();
+export async function dbClearStructures(dbName) {
+	const db = await openDb(dbName);
 	try {
 		if (!db.objectStoreNames.contains(STORE)) return;
 		const tx = db.transaction(STORE, "readwrite");
@@ -280,8 +290,8 @@ export async function dbClearStructures() {
 /**
  * @returns {Promise<Array<Omit<StoredStructure, "blob"|"fileName"> & { file: File }>>}
  */
-export async function dbLoadAll() {
-	const db = await openDb();
+export async function dbLoadAll(dbName) {
+	const db = await openDb(dbName);
 	try {
 		const tx = db.transaction(STORE, "readonly");
 		/** @type {StoredStructure[]} */
@@ -319,8 +329,8 @@ export async function dbLoadAll() {
  * @param {StoredCategory} category
  * @returns {Promise<void>}
  */
-export async function dbPutCategory(category) {
-	const db = await openDb();
+export async function dbPutCategory(category, dbName) {
+	const db = await openDb(dbName);
 	try {
 		const tx = db.transaction(CATEGORIES_STORE, "readwrite");
 		await idbReq(tx.objectStore(CATEGORIES_STORE).put(serializeCategory(category)));
@@ -334,8 +344,8 @@ export async function dbPutCategory(category) {
  * @param {StoredCategory[]} categories
  * @returns {Promise<void>}
  */
-export async function dbPutCategories(categories) {
-	const db = await openDb();
+export async function dbPutCategories(categories, dbName) {
+	const db = await openDb(dbName);
 	try {
 		const tx = db.transaction(CATEGORIES_STORE, "readwrite");
 		const store = tx.objectStore(CATEGORIES_STORE);
@@ -352,8 +362,8 @@ export async function dbPutCategories(categories) {
  * @param {string} id
  * @returns {Promise<void>}
  */
-export async function dbDeleteCategory(id) {
-	const db = await openDb();
+export async function dbDeleteCategory(id, dbName) {
+	const db = await openDb(dbName);
 	try {
 		const tx = db.transaction(CATEGORIES_STORE, "readwrite");
 		await idbReq(tx.objectStore(CATEGORIES_STORE).delete(id));
@@ -366,8 +376,8 @@ export async function dbDeleteCategory(id) {
 /**
  * @returns {Promise<StoredCategory[]>}
  */
-export async function dbLoadCategories() {
-	const db = await openDb();
+export async function dbLoadCategories(dbName) {
+	const db = await openDb(dbName);
 	try {
 		if (!db.objectStoreNames.contains(CATEGORIES_STORE)) return [];
 		const tx = db.transaction(CATEGORIES_STORE, "readonly");
@@ -386,8 +396,8 @@ export async function dbLoadCategories() {
  * @param {StoredCatalogEntry} entry
  * @returns {Promise<void>}
  */
-export async function dbPutEntry(entry) {
-	const db = await openDb();
+export async function dbPutEntry(entry, dbName) {
+	const db = await openDb(dbName);
 	try {
 		const tx = db.transaction(ENTRIES_STORE, "readwrite");
 		await idbReq(tx.objectStore(ENTRIES_STORE).put(serializeCatalogEntry(entry)));
@@ -401,8 +411,8 @@ export async function dbPutEntry(entry) {
  * @param {StoredCatalogEntry[]} entries
  * @returns {Promise<void>}
  */
-export async function dbPutEntries(entries) {
-	const db = await openDb();
+export async function dbPutEntries(entries, dbName) {
+	const db = await openDb(dbName);
 	try {
 		const tx = db.transaction(ENTRIES_STORE, "readwrite");
 		const store = tx.objectStore(ENTRIES_STORE);
@@ -419,8 +429,8 @@ export async function dbPutEntries(entries) {
  * @param {string} id
  * @returns {Promise<void>}
  */
-export async function dbDeleteEntry(id) {
-	const db = await openDb();
+export async function dbDeleteEntry(id, dbName) {
+	const db = await openDb(dbName);
 	try {
 		if (!db.objectStoreNames.contains(ENTRIES_STORE)) return;
 		const tx = db.transaction(ENTRIES_STORE, "readwrite");
@@ -434,8 +444,8 @@ export async function dbDeleteEntry(id) {
 /**
  * @returns {Promise<StoredCatalogEntry[]>}
  */
-export async function dbLoadEntries() {
-	const db = await openDb();
+export async function dbLoadEntries(dbName) {
+	const db = await openDb(dbName);
 	try {
 		if (!db.objectStoreNames.contains(ENTRIES_STORE)) return [];
 		const tx = db.transaction(ENTRIES_STORE, "readonly");
@@ -454,8 +464,8 @@ export async function dbLoadEntries() {
  * @param {StoredFeature} feature
  * @returns {Promise<void>}
  */
-export async function dbPutFeature(feature) {
-	const db = await openDb();
+export async function dbPutFeature(feature, dbName) {
+	const db = await openDb(dbName);
 	try {
 		const tx = db.transaction(FEATURES_STORE, "readwrite");
 		await idbReq(tx.objectStore(FEATURES_STORE).put(serializeFeature(feature)));
@@ -469,8 +479,8 @@ export async function dbPutFeature(feature) {
  * @param {StoredFeature[]} features
  * @returns {Promise<void>}
  */
-export async function dbPutFeatures(features) {
-	const db = await openDb();
+export async function dbPutFeatures(features, dbName) {
+	const db = await openDb(dbName);
 	try {
 		const tx = db.transaction(FEATURES_STORE, "readwrite");
 		const store = tx.objectStore(FEATURES_STORE);
@@ -487,8 +497,8 @@ export async function dbPutFeatures(features) {
  * @param {string} id
  * @returns {Promise<void>}
  */
-export async function dbDeleteFeature(id) {
-	const db = await openDb();
+export async function dbDeleteFeature(id, dbName) {
+	const db = await openDb(dbName);
 	try {
 		if (!db.objectStoreNames.contains(FEATURES_STORE)) return;
 		const tx = db.transaction(FEATURES_STORE, "readwrite");
@@ -502,8 +512,8 @@ export async function dbDeleteFeature(id) {
 /**
  * @returns {Promise<StoredFeature[]>}
  */
-export async function dbLoadFeatures() {
-	const db = await openDb();
+export async function dbLoadFeatures(dbName) {
+	const db = await openDb(dbName);
 	try {
 		if (!db.objectStoreNames.contains(FEATURES_STORE)) return [];
 		const tx = db.transaction(FEATURES_STORE, "readonly");
@@ -518,7 +528,46 @@ export async function dbLoadFeatures() {
 	}
 }
 
-const ALL_STORES = [STORE, CATEGORIES_STORE, ENTRIES_STORE, FEATURES_STORE];
+const ALL_STORES = [STORE, CATEGORIES_STORE, ENTRIES_STORE, FEATURES_STORE, META_STORE];
+
+/**
+ * @param {string} [dbName]
+ * @returns {Promise<{ id: string, version?: number, applied?: string[] }|null>}
+ */
+export async function dbGetMeta(dbName) {
+	const db = await openDb(dbName);
+	try {
+		if (!db.objectStoreNames.contains(META_STORE)) return null;
+		const tx = db.transaction(META_STORE, "readonly");
+		const row = await idbReq(tx.objectStore(META_STORE).get("seed"));
+		await idbTxDone(tx);
+		return row ?? null;
+	} finally {
+		db.close();
+	}
+}
+
+/**
+ * @param {{ version?: number, applied?: string[] }} record
+ * @param {string} [dbName]
+ */
+export async function dbPutMeta(record, dbName) {
+	const db = await openDb(dbName);
+	try {
+		if (!db.objectStoreNames.contains(META_STORE)) return;
+		const tx = db.transaction(META_STORE, "readwrite");
+		await idbReq(
+			tx.objectStore(META_STORE).put({
+				id: "seed",
+				version: record.version ?? 0,
+				applied: Array.isArray(record.applied) ? record.applied : []
+			})
+		);
+		await idbTxDone(tx);
+	} finally {
+		db.close();
+	}
+}
 
 /**
  * Copy every catalog store from one IndexedDB into another (creates dest if needed).
@@ -561,10 +610,92 @@ export async function dbDeleteCatalog(name) {
 	if (!name) return;
 	return new Promise((resolve, reject) => {
 		const req = indexedDB.deleteDatabase(name);
-		req.onsuccess = () => resolve();
-		req.onerror = () => reject(req.error ?? new Error("IDB delete failed"));
-		req.onblocked = () => resolve();
+		const timer = setTimeout(() => {
+			reject(new Error("IndexedDB delete blocked — close other tabs using this catalog"));
+		}, 8000);
+		req.onsuccess = () => {
+			clearTimeout(timer);
+			resolve();
+		};
+		req.onerror = () => {
+			clearTimeout(timer);
+			reject(req.error ?? new Error("IDB delete failed"));
+		};
+		req.onblocked = () => {
+			/* wait for connections to close; timeout rejects */
+		};
 	});
+}
+
+/**
+ * @param {string} dbName
+ * @param {{ categoryId: string, childEntryIds: string[], movedStructures: object[], taggedFeatures: object[] }} spec
+ */
+export async function dbRemoveCategoryCascade(dbName, spec) {
+	const db = await openDb(dbName);
+	try {
+		const names = existingStores(db, [CATEGORIES_STORE, ENTRIES_STORE, STORE, FEATURES_STORE]);
+		const tx = db.transaction(names, "readwrite");
+		if (names.includes(CATEGORIES_STORE)) tx.objectStore(CATEGORIES_STORE).delete(spec.categoryId);
+		if (names.includes(ENTRIES_STORE)) {
+			for (const id of spec.childEntryIds || []) tx.objectStore(ENTRIES_STORE).delete(id);
+		}
+		if (names.includes(STORE)) {
+			for (const entry of spec.movedStructures || []) {
+				tx.objectStore(STORE).put(serializeStructure(entry));
+			}
+		}
+		if (names.includes(FEATURES_STORE)) {
+			for (const feat of spec.taggedFeatures || []) {
+				tx.objectStore(FEATURES_STORE).put(serializeFeature(feat));
+			}
+		}
+		await idbTxDone(tx);
+	} finally {
+		db.close();
+	}
+}
+
+/**
+ * @param {string} dbName
+ * @param {{ entryId: string, movedStructures: object[] }} spec
+ */
+export async function dbRemoveEntryCascade(dbName, spec) {
+	const db = await openDb(dbName);
+	try {
+		const names = existingStores(db, [ENTRIES_STORE, STORE]);
+		const tx = db.transaction(names, "readwrite");
+		if (names.includes(ENTRIES_STORE)) tx.objectStore(ENTRIES_STORE).delete(spec.entryId);
+		if (names.includes(STORE)) {
+			for (const entry of spec.movedStructures || []) {
+				tx.objectStore(STORE).put(serializeStructure(entry));
+			}
+		}
+		await idbTxDone(tx);
+	} finally {
+		db.close();
+	}
+}
+
+/**
+ * @param {string} dbName
+ * @param {{ featureId: string, touchedStructures: object[] }} spec
+ */
+export async function dbRemoveFeatureCascade(dbName, spec) {
+	const db = await openDb(dbName);
+	try {
+		const names = existingStores(db, [FEATURES_STORE, STORE]);
+		const tx = db.transaction(names, "readwrite");
+		if (names.includes(FEATURES_STORE)) tx.objectStore(FEATURES_STORE).delete(spec.featureId);
+		if (names.includes(STORE)) {
+			for (const entry of spec.touchedStructures || []) {
+				tx.objectStore(STORE).put(serializeStructure(entry));
+			}
+		}
+		await idbTxDone(tx);
+	} finally {
+		db.close();
+	}
 }
 
 /** Drop legacy localStorage metadata index from the scaffold era. */

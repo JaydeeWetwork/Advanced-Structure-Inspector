@@ -789,16 +789,17 @@ export function formatInspectText(hit) {
 			}
 		}
 
-		if (b.items?.length) {
-			lines.push(`Inventory (${b.items.length}):`);
-			for (const it of b.items) {
+		const inv = b.doubleChest && Array.isArray(b.doubleItems) ? b.doubleItems : b.items;
+		if (inv?.length) {
+			lines.push(`Inventory (${inv.length}):`);
+			for (const it of inv) {
 				const slot = it.slot != null ? `[${it.slot}] ` : "";
 				const dmg = it.damage != null ? ` dmg=${it.damage}` : "";
 				lines.push(`  ${slot}${it.count}× ${it.name}${dmg}`);
 			}
 		} else if (b.blockEntityId && CONTAINER_BLOCK_ENTITY_IDS.has(b.blockEntityId) && !lectern) {
 			lines.push("Inventory: empty");
-		} else if (b.blockEntity && !b.items?.length && !sign && !lectern) {
+		} else if (b.blockEntity && !inv?.length && !sign && !lectern) {
 			const keys = Object.keys(b.blockEntity).filter(k => !["id", "isMovable"].includes(k)).slice(0, 8);
 			if (keys.length) lines.push(`Entity data keys: ${keys.join(", ")}`);
 		}

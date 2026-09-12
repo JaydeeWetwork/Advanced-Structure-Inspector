@@ -1,36 +1,22 @@
 /**
- * Named catalog switcher in the editor (rename / save as / load / new).
+ * Named catalog switcher: rename, save as, load, new, delete.
  */
 
-import { catalog, editorUi, els, setSelectedId } from "../app/state.js";
+import { catalog, editorUi, els, session } from "../app/state.js";
 import { setStatus } from "../app/dom.js";
 import { renderEditor } from "./editorRender.js";
-import { renderList } from "./catalogList.js";
-import {
-	addCatalogRecord,
-	copySeedState,
-	createCatalogRecord,
-	DEFAULT_DB_NAME,
-	getActiveCatalog,
-	listCatalogs,
-	removeCatalogRecord,
-	renameCatalog,
-	setActiveCatalogId,
-	touchCatalog
-} from "../viewer/catalogRegistry.js";
-import { dbClearAll, dbCloneCatalog, dbDeleteCatalog, setActiveDbName } from "../viewer/db.js";
+import { getActiveCatalog, listCatalogs } from "../viewer/catalogRegistry.js";
+import { selectEntry } from "../app/previewLifecycle.js";
 
-async function switchToRecord(item) {
-	if (!item) return;
-	setActiveCatalogId(item.id);
-	setActiveDbName(item.dbName);
+function resetAfterCatalogSwitch() {
 	editorUi.selected = null;
-	setSelectedId(null);
-	await catalog.reloadFromDb();
-	touchCatalog(item.id);
-	renderList();
-	renderEditor();
-	setStatus(`Loaded “${item.name}”.`, "ok");
+	editorUi.inspectConfirm = null;
+	try {
+		session.clearEverything({ resetIcons: false });
+	} catch {
+		/* ignore */
+	}
+	selectEntry(null);
 }
 
 export function renderEditorDbBar() {
@@ -52,8 +38,8 @@ export function renderEditorDbBar() {
 			name.value = active.name;
 			return;
 		}
-		renameCatalog(active.id, next);
-		renderEditorDbBar();
+		catalog.renameActive(next);
+		renderEditor();
 		setStatus(`Renamed to “${next}”.`, "ok");
 	});
 	name.addEventListener("keydown", e => {
@@ -76,26 +62,91 @@ export function renderEditorDbBar() {
 	load.addEventListener("change", () => {
 		const item = items.find(i => i.id === load.value);
 		if (!item || item.id === active.id) return;
-		void switchToRecord(item);
+		resetAfterCatalogSwitch();
+		void catalog.activate(item.id).then(() => {
+			setStatus(`Loaded “${item.name}”.`, "ok");
+		}).catch(e => setStatus(`Load failed: ${e?.message ?? e}`, "error"));
 	});
+
+	host.append(name, load);
+
+	const form = editorUi.dbForm;
+	if (form) {
+		if (form.mode === "delete") {
+			const warn = document.createElement("span");
+			warn.className = "basi-ed-hint";
+			warn.textContent = `Delete “${active.name}”?`;
+			const yes = document.createElement("button");
+			yes.type = "button";
+			yes.className = "basi-btn secondary basi-ed-danger";
+			yes.textContent = "Confirm";
+			yes.addEventListener("click", async () => {
+				try {
+					editorUi.dbForm = null;
+					resetAfterCatalogSwitch();
+					const next = await catalog.deleteActive();
+					setStatus(`Deleted “${active.name}”. Loaded “${next.name}”.`, "ok");
+				} catch (e) {
+					setStatus(`Delete failed: ${e?.message ?? e}`, "error");
+				}
+			});
+			const no = document.createElement("button");
+			no.type = "button";
+			no.className = "basi-btn secondary";
+			no.textContent = "Cancel";
+			no.addEventListener("click", () => {
+				editorUi.dbForm = null;
+				renderEditor();
+			});
+			host.append(warn, yes, no);
+			return;
+		}
+
+		const input = document.createElement("input");
+		input.type = "text";
+		input.className = "basi-ed-input";
+		input.value = form.name || "";
+		input.placeholder = form.mode === "new" ? "New database name" : "Save as…";
+		input.addEventListener("input", () => {
+			form.name = input.value;
+		});
+		const ok = document.createElement("button");
+		ok.type = "button";
+		ok.className = "basi-btn";
+		ok.textContent = form.mode === "new" ? "Create" : "Save";
+		ok.addEventListener("click", async () => {
+			const n = (form.name || "").trim();
+			if (!n) return;
+			try {
+				const mode = form.mode;
+				editorUi.dbForm = null;
+				resetAfterCatalogSwitch();
+				if (mode === "new") await catalog.createEmpty(n);
+				else await catalog.saveAs(n);
+				setStatus(mode === "new" ? `Created “${n}”.` : `Saved as “${n}”.`, "ok");
+			} catch (e) {
+				setStatus(`Failed: ${e?.message ?? e}`, "error");
+			}
+		});
+		const no = document.createElement("button");
+		no.type = "button";
+		no.className = "basi-btn secondary";
+		no.textContent = "Cancel";
+		no.addEventListener("click", () => {
+			editorUi.dbForm = null;
+			renderEditor();
+		});
+		host.append(input, ok, no);
+		return;
+	}
 
 	const saveAs = document.createElement("button");
 	saveAs.type = "button";
 	saveAs.className = "basi-btn secondary";
 	saveAs.textContent = "Save as";
-	saveAs.addEventListener("click", async () => {
-		const suggested = `${active.name} copy`;
-		const typed = prompt("Save this database as:", suggested);
-		if (typed == null) return;
-		const rec = addCatalogRecord(typed);
-		try {
-			await dbCloneCatalog(active.dbName, rec.dbName);
-			copySeedState(active.dbName, rec.dbName);
-			await switchToRecord(rec);
-			setStatus(`Saved as “${rec.name}”.`, "ok");
-		} catch (e) {
-			setStatus(`Save as failed: ${e?.message ?? e}`, "error");
-		}
+	saveAs.addEventListener("click", () => {
+		editorUi.dbForm = { mode: "saveAs", name: `${active.name} copy` };
+		renderEditor();
 	});
 
 	const neu = document.createElement("button");
@@ -103,43 +154,21 @@ export function renderEditorDbBar() {
 	neu.className = "basi-btn secondary";
 	neu.textContent = "New";
 	neu.title = "New database with the default category layout";
-	neu.addEventListener("click", async () => {
-		const typed = prompt("Name for the new database:", "Untitled");
-		if (typed == null) return;
-		const rec = createCatalogRecord(typed);
-		setActiveDbName(rec.dbName);
-		editorUi.selected = null;
-		setSelectedId(null);
-		await catalog.reloadFromDb();
-		renderList();
+	neu.addEventListener("click", () => {
+		editorUi.dbForm = { mode: "new", name: "Untitled" };
 		renderEditor();
-		setStatus(`Created “${rec.name}”.`, "ok");
 	});
 
-	host.append(name, load, saveAs, neu);
+	host.append(saveAs, neu);
 
 	if (items.length > 1) {
 		const del = document.createElement("button");
 		del.type = "button";
 		del.className = "basi-btn secondary basi-ed-danger";
 		del.textContent = "Delete";
-		del.title = "Delete this database";
-		del.addEventListener("click", async () => {
-			if (!confirm(`Delete database “${active.name}”? Structures in it are removed from this browser.`)) return;
-			const gone = removeCatalogRecord(active.id);
-			if (!gone) return;
-			try {
-				if (gone.removed.dbName !== DEFAULT_DB_NAME) {
-					await dbDeleteCatalog(gone.removed.dbName);
-				} else {
-					setActiveDbName(gone.removed.dbName);
-					await dbClearAll();
-				}
-			} catch (e) {
-				console.warn("[basi] catalog delete", e);
-			}
-			await switchToRecord(gone.next);
-			setStatus(`Deleted “${gone.removed.name}”.`, "ok");
+		del.addEventListener("click", () => {
+			editorUi.dbForm = { mode: "delete" };
+			renderEditor();
 		});
 		host.appendChild(del);
 	}

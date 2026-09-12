@@ -119,7 +119,7 @@ export function selectEntry(id, opts = {}) {
 		disposeParkedPreview(entry.id);
 		void loadPreview({ force: true });
 	} else if (restoreParkedPreview(entry.id)) {
-		setStatus(`Preview restored for “${entry.name}” (cached).`, "ok");
+		setStatus(`Preview restored for “${entry.name}” (cached).`, "ok", { catalog: false });
 		syncLayerUiFromPreview();
 		syncCamBarActive();
 	} else {
@@ -150,14 +150,15 @@ export async function loadPreview(opts = {}) {
 	if (els.previewBtn) els.previewBtn.disabled = true;
 	// Drop any leftover conts/guis before building (force: intentional start of a new load)
 	showPreviewPlaceholder("Building geometry & textures…", { force: true });
-	setStatus(`Loading “${entry.name}”…`, "");
+	setStatus(`Loading “${entry.name}”…`, "", { catalog: false });
 
 	const host = els.previewHost;
 	if (host) host.dataset.basiPreviewBuilding = "1";
 
 	try {
-		const { renderStructurePreview } = await import("../viewer/structurePreview.js?v=judo60");
-		const { default: ResourcePackStack } = await import("../ResourcePackStack.js?v=judo60");
+		const { BUILD_ID } = await import("../buildId.js");
+		const { renderStructurePreview } = await import(`../viewer/structurePreview.js?v=${BUILD_ID}`);
+		const { default: ResourcePackStack } = await import(`../ResourcePackStack.js?v=${BUILD_ID}`);
 		if (signal.aborted || getSelectedId() !== buildForId) return;
 
 		const previewCont = document.createElement("div");
@@ -188,7 +189,7 @@ export async function loadPreview(opts = {}) {
 				onProgress: msg => {
 					if (signal.aborted || getSelectedId() !== buildForId) return;
 					// Status bar + in-cont label only — never replaceChildren on host
-					setStatus(msg, "");
+					setStatus(msg, "", { catalog: false });
 					if (loadingLabel.isConnected) loadingLabel.textContent = msg;
 				}
 			}
@@ -235,17 +236,10 @@ export async function loadPreview(opts = {}) {
 		});
 		els.previewHost?.focus?.({ preventScroll: true });
 
-		const entN = previews.reduce((n, p) => n + (p.previewEntities?.length ?? p.entities?.length ?? 0), 0);
-		const maxY = previews[0]?.getMaxLayer?.() ?? 0;
-		setStatus(
-			entN
-				? `Preview ready for “${entry.name}” (${entN} entity mesh${entN === 1 ? "" : "es"}). Layers 0–${maxY}: ↑↓ · ← all · → cam · dbl-click inspect.`
-				: `Preview ready for “${entry.name}”. Layers 0–${maxY}: ↑↓ · ← all · → cam · dbl-click inspect.`,
-			"ok"
-		);
+		setStatus("", "");
 	} catch (e) {
 		if (isAbortError(e) || signal.aborted || getSelectedId() !== buildForId) {
-			if (getSelectedId() === buildForId) setStatus("Preview cancelled.", "");
+			if (getSelectedId() === buildForId) setStatus("Preview cancelled.", "", { catalog: false });
 			return;
 		}
 		console.error("[basi] preview failed", e);

@@ -1,4 +1,3 @@
-import * as NBT from "nbtify-readonly-typeless";
 import { ZipWriter, TextReader, BlobWriter, BlobReader, ZipReader } from "@zip.js/zip.js";
 
 import BlockGeoMaker from "../BlockGeoMaker.js";
@@ -16,6 +15,10 @@ import fetchers from "../fetchers.js";
 import EntityGeoMaker from "../EntityGeoMaker.js";
 import EntityManager from "./EntityManager.js";
 import { createItemCriteria } from "./itemCriteria.js";
+import {
+	McstructureCodecError,
+	readMcstructure
+} from "../viewer/api/structure.js";
 
 export { createItemCriteria };
 // StructureDiagramMaker is loaded lazily in makeStructureDiagrams() so preview-only
@@ -805,55 +808,25 @@ export const readStructureNBT = weaklyCacheUnaryFunc(
 	 * @returns {Promise<MCStructure>}
 	 */
 	async structureFile => {
-		let arrayBuffer = await structureFile.arrayBuffer().catch(e => {
-			throw new Error(`Could not read contents of structure file "${structureFile.name}"!\n${e}`);
-		});
-		if(structureFile.size == 0) { // this check must happen after reading the bytes, otherwise Google Drive files can't be read on Android Chrome: https://issues.chromium.org/issues/40123366#comment104
-			throw new UserError(`"${structureFile.name}" is an empty file! Please try exporting your structure again.\nIf you play on a version below 1.20.50, exporting to OneDrive will cause your structure file to be empty.`);
-		}
 		try {
-			return await readStructureNBTWithOptions(structureFile, arrayBuffer, {
-				endian: "little", // true .mcstructure files are little-endian
-				strict: false // some files have duplicated sections, which makes strict mode throw an error: #68
-			});
-		} catch(e) {
-			console.warn(`Structure file ${structureFile.name} couldn't be read with default .mcstructure NBT read settings. Trying generic settings...`);
-			console.debug(e);
-			return await readStructureNBTWithOptions(structureFile, arrayBuffer); // if the .mcstructure was generated from an external source, it's best to try with generic NBT read settings
+			const { nbt } = await readMcstructure(structureFile);
+			return nbt;
+		} catch (e) {
+			if (e instanceof McstructureCodecError) {
+				if (e.code === "STRUCTURE_EMPTY") {
+					throw new UserError(`"${structureFile.name}" is an empty file! Please try exporting your structure again.\nIf you play on a version below 1.20.50, exporting to OneDrive will cause your structure file to be empty.`);
+				}
+				if (e.code === "STRUCTURE_NBT_REJECTED" || e.code === "JAVA_NBT_DETECTED") {
+					throw new UserError(getInvalidMcstructureErrorMessage(structureFile, e.extra?.nbt ?? {}));
+				}
+				throw e.toError(structureFile.name, UserError);
+			}
+			throw e;
 		}
 	},
 	clonePromise
 );
 
-/**
- * Reads the NBT of a structure file, returning a JSON object.
- * @param {File} structureFile `*.mcstructure`
- * @param {ArrayBuffer} arrayBuffer
- * @param {Partial<NBT.ReadOptions>} [options]
- * @returns {Promise<MCStructure>}
- */
-async function readStructureNBTWithOptions(structureFile, arrayBuffer, options = {}) {
-	let nbtRes = await NBT.read(arrayBuffer, options).catch(e => {
-		if(e instanceof NBT.InvalidTagError) {
-			throw new UserError(`"${structureFile.name}" is not a .mcstructure file! Please look at the tutorial on the wiki: https://holoprint-mc.github.io/wiki/creating-packs`);
-		}
-		throw new Error(`Invalid NBT in structure file "${structureFile.name}"!\n${e}`);
-	});
-	let nbt = nbtRes.data;
-	if(!isNBTValidMcstructure(nbt)) {
-		let errorMessage = getInvalidMcstructureErrorMessage(structureFile, nbt);
-		throw new UserError(errorMessage);
-	}
-	return nbt;
-}
-/**
- * Checks if a NBT object is valid .mcstructure NBT.
- * @param {NBT.RootTag} nbt
- * @returns {nbt is MCStructure}
- */
-function isNBTValidMcstructure(nbt) {
-	return nbt["format_version"] == 1 && nbt["size"] instanceof Int32Array && nbt["size"].length == 3 && "structure" in nbt && nbt["structure_world_origin"] instanceof Int32Array && nbt["structure_world_origin"].length == 3;
-}
 /**
  * Gets the error message for a NBT file that isn't .mcstructures.
  * @param {File} structureFile

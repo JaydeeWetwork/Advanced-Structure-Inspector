@@ -513,13 +513,9 @@ body.basi-has-selection .basi-float-right {
 	flex: 0 1 auto;
 }
 
-.basi-collapsible#detailsInfoSection {
-	flex: 0 0 auto;
-	min-height: 0;
-}
-
+.basi-collapsible#detailsInfoSection,
 .basi-collapsible#materialsSection {
-	flex: 1 1 auto;
+	flex: 0 0 auto;
 	min-height: 0;
 }
 
@@ -1208,6 +1204,20 @@ body.basi-no-selection .basi-float-left::after {
 	border: none;
 }
 
+/* One scroller for info + materials so the dock never clips */
+.basi-detail-scroll {
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow-y: auto;
+	overflow-x: hidden;
+	overscroll-behavior: contain;
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	padding-right: 2px;
+	touch-action: pan-y;
+}
+
 .basi-stats {
 	display: grid;
 	grid-template-columns: 1fr;
@@ -1269,24 +1279,20 @@ body.basi-no-selection .basi-float-left::after {
 	text-align: right;
 }
 
-/* Only this element scrolls — long lists never grow the page */
+/* Grows with rows; the parent .basi-detail-scroll is the scroller */
 .basi-material-list {
 	list-style: none;
 	margin: 0;
 	padding: 0;
-	flex: 1 1 0;
+	flex: 0 0 auto;
 	min-height: 0;
-	max-height: 100%;
-	overflow-y: auto;
-	overflow-x: hidden;
-	overscroll-behavior: contain;
+	overflow: visible;
 	background: #fff;
 	border: 1px solid var(--basi-border);
 	border-radius: 8px;
 	font-size: 0.88rem;
 	width: 100%;
 	box-sizing: border-box;
-	-webkit-overflow-scrolling: touch;
 }
 
 .basi-material-list li {

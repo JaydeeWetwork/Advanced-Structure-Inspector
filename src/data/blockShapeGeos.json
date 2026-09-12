@@ -114,63 +114,34 @@
 			}
 		}
 	],
-	// Double chest: 30×14 entity split across two blocks on 128×64 double_* textures.
-	// Minecraft adjacency (left flush east). N/S preview join is instance scale.x = -1,
-	// not a vertex mirror (that turned the shell inside-out).
-	"chest_double": [
+	// One 30-wide large chest (same cube/box-UV path as chest-minecart cargo).
+	// Placed on the player-left cell; partner is chest_double_skip. 128×64 double_* sheet.
+	"chest_large": [
 		{
-			"if": "basi_chest_half==left",
 			"pos": [1, 0, 1],
-			"size": [15, 10, 14],
-			"textures": { "*": "#tex", "up": "none", "east": "none" },
+			"size": [30, 10, 14],
+			"textures": { "*": "#tex", "up": "none" },
 			"texture_size": [128, 64],
-			"uv": { "north": [14, 33], "south": [73, 33], "west": [0, 33], "down": [44, 19] },
-			"uv_sizes": { "north": [15, 10], "south": [15, 10], "west": [14, 10], "down": [15, 14] }
+			"box_uv": [0, 19],
+			"box_uv_size": [30, 10, 14]
 		},
 		{
-			"if": "basi_chest_half==left",
 			"pos": [1, 10, 1],
-			"size": [15, 4, 14],
-			"textures": { "*": "#tex", "east": "none" },
+			"size": [30, 4, 14],
+			"textures": { "*": "#tex" },
 			"texture_size": [128, 64],
-			"uv": { "north": [14, 14], "south": [73, 14], "west": [0, 14], "down": [44, 0], "up": [14, 0] },
-			"uv_sizes": { "north": [15, 4], "south": [15, 4], "west": [14, 4], "down": [15, 14], "up": [15, 14] }
+			"box_uv": [0, 0],
+			"box_uv_size": [30, 4, 14]
 		},
 		{
-			"if": "basi_chest_half==left",
 			"pos": [15, 7, 0],
-			"size": [1, 4, 1],
+			"size": [2, 4, 1],
 			"textures": { "*": "#tex", "south": "none" },
 			"texture_size": [128, 64],
-			"uv": { "*": [1, 1] }
-		},
-		{
-			"if": "basi_chest_half==right",
-			"pos": [0, 0, 1],
-			"size": [15, 10, 14],
-			"textures": { "*": "#tex", "up": "none", "west": "none" },
-			"texture_size": [128, 64],
-			"uv": { "north": [29, 33], "south": [58, 33], "east": [44, 33], "down": [59, 19] },
-			"uv_sizes": { "north": [15, 10], "south": [15, 10], "east": [14, 10], "down": [15, 14] }
-		},
-		{
-			"if": "basi_chest_half==right",
-			"pos": [0, 10, 1],
-			"size": [15, 4, 14],
-			"textures": { "*": "#tex", "west": "none" },
-			"texture_size": [128, 64],
-			"uv": { "north": [29, 14], "south": [58, 14], "east": [44, 14], "down": [59, 0], "up": [29, 0] },
-			"uv_sizes": { "north": [15, 4], "south": [15, 4], "east": [14, 4], "down": [15, 14], "up": [15, 14] }
-		},
-		{
-			"if": "basi_chest_half==right",
-			"pos": [0, 7, 0],
-			"size": [1, 4, 1],
-			"textures": { "*": "#tex", "south": "none" },
-			"texture_size": [128, 64],
-			"uv": { "*": [2, 1] }
+			"uv": { "*": [0, 1] }
 		}
 	],
+	"chest_double_skip": [],
 	"honey_block": [ // this is unofficial (i.e. not in https://wiki.bedrock.dev/blocks/block-shapes.html)
 		{
 			"pos": [0, 0, 0],

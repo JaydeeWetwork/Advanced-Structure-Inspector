@@ -2,7 +2,7 @@
  * Lightweight .mcstructure NBT parse for the catalog (no HoloPrint import).
  */
 
-import * as NBT from "nbtify-readonly-typeless";
+import { McstructureCodecError, readMcstructure } from "./api/structure.js";
 import { normalizeVec3 } from "./palette.js";
 import { countStructureEntities } from "./entityCount.js";
 import { buildMaterialListFromNbt } from "./materialList.js";
@@ -32,20 +32,14 @@ function blockName(name) {
  * @param {{ sourceName?: string, sourceKind?: string }} [meta]
  */
 export async function parseStructureFile(structureFile, meta = {}) {
-	const arrayBuffer = await structureFile.arrayBuffer();
-	if (structureFile.size === 0 || arrayBuffer.byteLength === 0) {
-		throw new Error(`"${structureFile.name}" is empty`);
-	}
-
 	let data;
 	try {
-		data = (await NBT.read(arrayBuffer, { endian: "little", strict: false })).data;
-	} catch (first) {
-		try {
-			data = (await NBT.read(arrayBuffer)).data;
-		} catch (second) {
-			throw new Error(`Could not read NBT in "${structureFile.name}": ${second?.message ?? second}`);
+		data = (await readMcstructure(structureFile, { fileName: structureFile.name })).nbt;
+	} catch (e) {
+		if (e instanceof McstructureCodecError) {
+			throw e.toError(structureFile.name);
 		}
+		throw new Error(`Could not read NBT in "${structureFile.name}": ${e?.message ?? e}`);
 	}
 
 	const size = normalizeVec3(data?.size);
@@ -73,9 +67,6 @@ export async function parseStructureFile(structureFile, meta = {}) {
 	for (const idx of indices) {
 		const n = Number(idx);
 		if (Number.isFinite(n) && n >= 0) blockCount++;
-	}
-	if (!blockCount && size.every(n => Number.isFinite(n) && n > 0)) {
-		blockCount = size[0] * size[1] * size[2];
 	}
 
 	const entityCount = countStructureEntities(data);

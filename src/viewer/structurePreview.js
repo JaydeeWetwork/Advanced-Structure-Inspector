@@ -2,10 +2,9 @@
  * Structure preview pipeline — PreviewRenderer only, never makePack / diagrams / HoloPrint.
  */
 
-import * as NBT from "nbtify-readonly-typeless";
-
-import BlockGeoMaker from "../BlockGeoMaker.js?v=judo60";
-import TextureAtlas from "../TextureAtlas.js?v=judo60";
+import BlockGeoMaker from "../BlockGeoMaker.js";
+import TextureAtlas from "../TextureAtlas.js";
+import { BUILD_ID } from "../buildId.js";
 // Single PreviewRenderer (systems-based) — used by ASI and HoloPrint pack UI
 import PreviewRenderer from "../PreviewRenderer.js";
 import ResourcePackStack from "../ResourcePackStack.js";
@@ -24,6 +23,7 @@ import { extractRenderableEntities } from "./entityExtract.js";
 import { buildInspectIndex } from "./inspectStructure.js";
 import { cargoPaletteEntries } from "./entityCargo.js";
 import { VANILLA_SAMPLES_TAG } from "../data/packPins.js";
+import { McstructureCodecError, readMcstructure } from "./api/structure.js";
 import { loadItemUpgradeSchemas } from "./itemUpgrade.js";
 import fetchers from "../fetchers.js";
 
@@ -57,21 +57,15 @@ function defaultPreviewConfig(partial = {}) {
  */
 async function readStructureNBT(structureFile, signal) {
 	throwIfAborted(signal);
-	const arrayBuffer = await structureFile.arrayBuffer();
-	throwIfAborted(signal);
-	if (!structureFile.size || !arrayBuffer.byteLength) {
-		throw new UserError(`"${structureFile.name}" is empty`);
-	}
-	let data;
 	try {
-		data = (await NBT.read(arrayBuffer, { endian: "little", strict: false })).data;
-	} catch {
-		data = (await NBT.read(arrayBuffer)).data;
-	}
-	if (data?.format_version != 1 || !data?.structure || !data?.size) {
+		const { nbt } = await readMcstructure(structureFile);
+		return nbt;
+	} catch (e) {
+		if (e instanceof McstructureCodecError) {
+			throw e.toError(structureFile.name, UserError);
+		}
 		throw new UserError(`"${structureFile.name}" is not a valid .mcstructure`);
 	}
-	return data;
 }
 
 function loadDataFiles(fileNames, signal) {
@@ -303,14 +297,26 @@ export async function renderStructurePreview(
 	const previews = [];
 	const hostParent = previewCont.parentNode;
 	// v14: restore TGA textures (cactus etc.) + icon path maps
-	const cacheKey = `v27|pack=${VANILLA_SAMPLES_TAG}|scale=${config.SCALE}|ign=${config.IGNORED_BLOCKS.length}|ent=${config.SHOW_ENTITIES !== false ? 1 : 0}|ol=${config.TEXTURE_OUTLINE_WIDTH}|sky=${config.SHOW_PREVIEW_SKYBOX ? 1 : 0}`;
+	const ign = [...config.IGNORED_BLOCKS].sort().join(",");
+	const cacheKey = [
+		BUILD_ID,
+		`pack=${VANILLA_SAMPLES_TAG}`,
+		`scale=${config.SCALE}`,
+		`ign=${ign}`,
+		`ent=${config.SHOW_ENTITIES !== false ? 1 : 0}`,
+		`ol=${config.TEXTURE_OUTLINE_WIDTH}`,
+		`sky=${config.SHOW_PREVIEW_SKYBOX ? 1 : 0}`,
+		`crop=${config.SKIP_TEXTURE_CROP ? 1 : 0}`,
+		`op=${config.OPACITY}`,
+		`multi=${config.MULTIPLE_OPACITIES ? 1 : 0}`
+	].join("|");
 
 	try {
 		for (let structureI = 0; structureI < files.length; structureI++) {
 			throwIfAborted(signal);
 			const file = files[structureI];
 			const assets = await getCachedFileBuild(file, cacheKey, () =>
-				buildPreviewAssets(file, config, resourcePackStack, signal, onProgress)
+				buildPreviewAssets(file, config, resourcePackStack, null, onProgress)
 			);
 			throwIfAborted(signal);
 

@@ -2,6 +2,7 @@ import potpack from "potpack";
 import { ceil, floor, fnv1a, getPixelBytesInSquare, hexColorToClampedTriplet, JSONSet, max, range, tuple, vec2 } from "./utils.js";
 import ResourcePackStack from "./ResourcePackStack.js";
 import { packAssetStore } from "./viewer/appearance/PackAssetStore.js";
+import { VANILLA_SAMPLES_TAG } from "./data/packPins.js";
 
 /** @type {Map<string, { uvs: ImageUv[], atlasImageData: ImageData|null, imageBlobs: [string, Blob|null][], textureWidth: number, textureHeight: number, textureFillEfficiency: number }>} */
 const packedAtlasCache = new Map();
@@ -117,6 +118,7 @@ export default class TextureAtlas {
 	async makeAtlas(textureRefs) {
 		console.log("Texture references:", textureRefs);
 		const packedKey = JSON.stringify({
+			pack: VANILLA_SAMPLES_TAG,
 			refs: [...textureRefs],
 			outline: this.config.TEXTURE_OUTLINE_WIDTH,
 			opacity: this.config.OPACITY,

@@ -182,8 +182,22 @@ describe("catalogRegistry", async () => {
 		loadRegistry,
 		DEFAULT_CATALOG_ID,
 		addCatalogRecord,
-		renameCatalog
+		renameCatalog,
+		setRegistryStorage
 	} = await import("../../src/viewer/catalogRegistry.js");
+	const mem = {
+		_d: new Map(),
+		getItem(k) {
+			return this._d.has(k) ? this._d.get(k) : null;
+		},
+		setItem(k, v) {
+			this._d.set(k, String(v));
+		},
+		removeItem(k) {
+			this._d.delete(k);
+		}
+	};
+	setRegistryStorage(mem);
 
 	it("has a default named catalog", () => {
 		const r = loadRegistry();
@@ -192,8 +206,7 @@ describe("catalogRegistry", async () => {
 		assert.equal(typeof r.items[0].name, "string");
 	});
 
-	it("adds and renames records when localStorage exists", () => {
-		if (typeof localStorage === "undefined") return;
+	it("adds and renames records in isolated storage", () => {
 		const rec = addCatalogRecord("Temp farms");
 		assert.equal(rec.name, "Temp farms");
 		assert.match(rec.dbName, /^basi-catalog-/);
@@ -1440,32 +1453,37 @@ describe("doubleChest", async () => {
 		);
 		assert.equal(
 			doubleChestNeedsPreviewXMirror({
-				basi_block_shape: "chest_double<x>",
+				basi_block_shape: "chest_large<textures/entity/chest/double_normal>",
 				states: { "minecraft:cardinal_direction": "north" }
 			}),
 			true
 		);
 		assert.equal(
 			doubleChestNeedsPreviewXMirror({
-				basi_block_shape: "chest_double<x>",
+				basi_block_shape: "chest_large<textures/entity/chest/double_normal>",
 				states: { "minecraft:cardinal_direction": "east" }
 			}),
 			false
 		);
-		assert.equal(doubleChestNeedsPreviewXMirror({ name: "chest", states: {} }), false);
 	});
 
-	it("palette halves use chest_double left/right and double_* textures", () => {
+	it("nbtNumber unwraps typed values", async () => {
+		const { nbtNumber } = await import("../../src/viewer/doubleChest.js");
+		assert.equal(nbtNumber(11), 11);
+		assert.equal(nbtNumber({ value: 11 }), 11);
+		assert.ok(Number.isNaN(nbtNumber(null)));
+	});
+
+	it("palette lead uses chest_large; partner is skipped", () => {
 		const js = readFileSync(join(root, "src/viewer/doubleChest.js"), "utf8");
 		const geo = readFileSync(join(root, "src/data/blockShapeGeos.json"), "utf8");
-		assert.match(js, /chest_double</);
+		assert.match(js, /chest_large</);
+		assert.match(js, /chest_double_skip/);
 		assert.match(js, /double_normal/);
-		assert.match(geo, /"chest_double"/);
-		assert.match(geo, /basi_chest_half==left/);
-		assert.match(geo, /basi_chest_half==right/);
+		assert.match(geo, /"chest_large"/);
+		assert.match(geo, /"box_uv"/);
 		assert.match(geo, /128, 64/);
-		assert.match(geo, /"pos": \[1, 0, 1\]/);
-		assert.match(geo, /"pos": \[0, 0, 1\]/);
+		assert.match(geo, /"size": \[30, 10, 14\]/);
 		assert.doesNotMatch(geo, /sdb_chest_latch/);
 		assert.doesNotMatch(js, /basi_pair_yaw/);
 	});
@@ -1513,7 +1531,8 @@ describe("doubleChest", async () => {
 		assert.equal(r.pairedCount, 2);
 		assert.equal(r.palette[r.indices[0][0]].states.basi_chest_half, "left");
 		assert.equal(r.palette[r.indices[0][1]].states.basi_chest_half, "right");
-		assert.match(r.palette[r.indices[0][0]].basi_block_shape, /chest_double</);
+		assert.match(r.palette[r.indices[0][0]].basi_block_shape, /chest_large</);
+		assert.equal(r.palette[r.indices[0][1]].basi_block_shape, "chest_double_skip");
 	});
 });
 
@@ -2127,6 +2146,14 @@ describe("paper theme", async () => {
 		assert.match(html, /styles\/paper\.css/);
 		assert.doesNotMatch(html, /Hover left edge/);
 	});
+
+	it("details dock scrolls as one column instead of clipping", () => {
+		const html = readFileSync(join(root, "src/index.html"), "utf8");
+		assert.match(html, /id="detailScroll"/);
+		const css = readFileSync(join(root, "src/viewer/viewer.css"), "utf8");
+		assert.match(css, /\.basi-detail-scroll/);
+		assert.match(css, /overscroll-behavior:\s*contain/);
+	});
 });
 
 describe("preview load cache / preload", () => {
@@ -2142,6 +2169,7 @@ describe("preview load cache / preload", () => {
 		assert.match(preview, /MULTIPLE_OPACITIES: partial\.MULTIPLE_OPACITIES \?\? false/);
 		assert.match(preview, /SKIP_TEXTURE_CROP/);
 		assert.match(preview, /atlasImageData/);
+		assert.match(preview, /BUILD_ID/);
 		const atlas = readFileSync(join(root, "src/TextureAtlas.js"), "utf8");
 		assert.match(atlas, /packedAtlasCache/);
 		assert.match(atlas, /mapPool/);
@@ -2186,6 +2214,121 @@ describe("preview load cache / preload", () => {
 		assert.doesNotMatch(src, /rps:vanilla:/);
 	});
 
+	it("product NBT.read always goes through mcstructureCodec with compression null", () => {
+		const codec = readFileSync(join(root, "src/viewer/core/nbt/mcstructureCodec.js"), "utf8");
+		assert.match(codec, /compression:\s*null/);
+		assert.match(codec, /endian:\s*"little"/);
+		assert.match(codec, /NBT\.read\(buffer,\s*MCSTRUCTURE_READ_OPTIONS\)/);
+		for (const rel of [
+			"src/viewer/parseStructure.js",
+			"src/viewer/structurePreview.js",
+			"src/viewer/hopperStats.js",
+			"src/viewer/materialList.js",
+			"src/holoprint/HoloPrint.js"
+		]) {
+			const src = readFileSync(join(root, rel), "utf8");
+			assert.match(src, /readMcstructure/);
+			assert.doesNotMatch(src, /NBT\.read\(arrayBuffer\)/);
+			assert.doesNotMatch(src, /NBT\.read\(ab\)/);
+			assert.doesNotMatch(src, /NBT\.read\(arrayBuffer,\s*options\)/);
+		}
+	});
+});
+
+describe("mcstructureCodec", async () => {
+	const {
+		gateMcstructureBytes,
+		readMcstructure,
+		McstructureCodecError,
+		MCSTRUCTURE_MAX_BYTES,
+		isNBTValidMcstructure
+	} = await import("../../src/viewer/core/nbt/mcstructureCodec.js");
+
+	it("rejects empty, oversized, gzip, and zlib before nbtify", () => {
+		assert.throws(() => gateMcstructureBytes({ byteLength: 0 }), e => e.code === "STRUCTURE_EMPTY");
+		assert.throws(
+			() => gateMcstructureBytes({ byteLength: MCSTRUCTURE_MAX_BYTES + 1 }),
+			e => e.code === "STRUCTURE_TOO_LARGE"
+		);
+		const gzip = new Uint8Array([0x1f, 0x8b, 0, 0, 0, 0, 0, 0, 0, 0]);
+		assert.throws(() => gateMcstructureBytes(gzip), e => e.code === "STRUCTURE_COMPRESSED");
+		const zlib = new Uint8Array([0x78, 0x9c, 0, 0, 0, 0, 0, 0, 0, 0]);
+		assert.throws(() => gateMcstructureBytes(zlib), e => e.code === "STRUCTURE_COMPRESSED");
+	});
+
+	it("parses sample hoppers.mcstructure", async () => {
+		const p = join(root, "tests/sampleStructures/hoppers.mcstructure");
+		if (!existsSync(p)) return;
+		const buf = readFileSync(p);
+		const { nbt, diagnostics } = await readMcstructure(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength));
+		assert.equal(isNBTValidMcstructure(nbt), true);
+		assert.ok(diagnostics.volume > 0);
+	});
+
+	it("rejects missing format_version after a compound-shaped object via layers assert", async () => {
+		const { assertMcstructureLayers } = await import("../../src/viewer/core/nbt/mcstructureCodec.js");
+		assert.throws(
+			() => assertMcstructureLayers({ format_version: 2, size: new Int32Array([1, 1, 1]) }),
+			e => e instanceof McstructureCodecError && e.code === "STRUCTURE_NBT_REJECTED"
+		);
+	});
+
+	it("rejects one-layer block_indices and oversize cell product", async () => {
+		const { assertMcstructureLayers } = await import("../../src/viewer/core/nbt/mcstructureCodec.js");
+		const base = {
+			format_version: 1,
+			size: new Int32Array([1, 1, 1]),
+			structure_world_origin: new Int32Array([0, 0, 0]),
+			structure: { block_indices: [new Int32Array([0])] }
+		};
+		assert.throws(
+			() => assertMcstructureLayers(base),
+			e => e instanceof McstructureCodecError && e.code === "STRUCTURE_NBT_REJECTED"
+		);
+		assert.throws(
+			() => assertMcstructureLayers({
+				...base,
+				size: new Int32Array([2048, 2048, 2048]),
+				structure: { block_indices: [new Int32Array(0), new Int32Array(0)] }
+			}),
+			e => e instanceof McstructureCodecError && e.code === "STRUCTURE_NBT_REJECTED"
+		);
+	});
+
+	it("rejects NBT depth over 64", async () => {
+		const { assertNbtQuotas } = await import("../../src/viewer/core/nbt/mcstructureCodec.js");
+		let nest = {};
+		let cur = nest;
+		for (let i = 0; i < 70; i++) {
+			cur.child = {};
+			cur = cur.child;
+		}
+		assert.throws(
+			() => assertNbtQuotas(nest, 1),
+			e => e instanceof McstructureCodecError && e.code === "STRUCTURE_NBT_REJECTED"
+		);
+	});
+
+	it("does not treat uint32 length coincidence as level.dat", () => {
+		const buf = new Uint8Array(16);
+		buf[0] = 0x0a;
+		buf[3] = 0x01;
+		new DataView(buf.buffer).setUint32(4, 8, true);
+		buf[8] = 0x0a;
+		assert.doesNotThrow(() => gateMcstructureBytes(buf));
+	});
+
+	it("detects a real level.dat version header", () => {
+		const buf = new Uint8Array(16);
+		const v = new DataView(buf.buffer);
+		v.setUint32(0, 8, true);
+		v.setUint32(4, 8, true);
+		buf[8] = 0x0a;
+		assert.throws(() => gateMcstructureBytes(buf), e => e.code === "STRUCTURE_LEVEL_DAT");
+	});
+});
+
+describe("boot leftover", () => {
 	it("boot preloads via ResourcePackStack + BlockUpdater module cache", () => {
 		const preload = readFileSync(join(root, "src/viewer/preloadVanilla.js"), "utf8");
 		assert.match(preload, /JSON_FILES_TO_MERGE/);

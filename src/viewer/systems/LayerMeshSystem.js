@@ -115,11 +115,12 @@ export default class LayerMeshSystem {
 			for (const [y, list] of byY) {
 				const isFloor = selected != null && y === selected - 1;
 				const palBlock = this.ctx.blockPalette?.[paletteI];
+				const largeChest = String(palBlock?.basi_block_shape ?? "").startsWith("chest_large");
 				const mirrorX = !isFloor && doubleChestNeedsPreviewXMirror(palBlock);
 				let material = isFloor
 					? (pool.solidFloorMat ?? pool.regularMat)
 					: (isTranslucent ? pool.transparentMat : pool.regularMat);
-				if (mirrorX) material = pool.ensureChestMirrorMat(this.ctx.THREE) ?? material;
+				if (largeChest) material = pool.ensureChestMirrorMat(this.ctx.THREE) ?? material;
 				const threePositions = list.map(([x, yy, z]) => [-16 * x - 16, 16 * yy, -16 * z - 16]);
 				const mesh = this.ctx.geo.instanceBufferGeoAtPositions(geo, threePositions, material, {
 					mirrorX
@@ -135,7 +136,7 @@ export default class LayerMeshSystem {
 				mesh.userData.basiBlockPositions = list;
 				mesh.userData.layerY = y;
 				mesh.userData.basiFloorLayer = isFloor;
-				mesh.userData.basiPickable = true;
+				mesh.userData.basiPickable = !isFloor;
 				this.getLayerGroup(y).add(mesh);
 			}
 		}

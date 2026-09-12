@@ -1,8 +1,8 @@
 /**
  * Bedrock double chests: two block entities with pairx/pairz (and optional pairlead).
  * Palette only stores name+facing, so both halves share one single-chest template.
- * We expand the palette so each paired half gets chest_double left/right geo
- * (128×64 double_* entity texture). No extra yaw — 180° would flip the latch.
+ * We expand the palette so the player-left cell gets one 30-wide chest_large
+ * (same BlockGeoMaker cubes as chest-minecart cargo). The partner is skipped.
  */
 
 /**
@@ -63,14 +63,20 @@ export function classifyChestPair(facing, dx, dz) {
 /**
  * Preview instances negate X (`-16*x`) but already flip Z in BufferGeometry.
  * North/south pairs sit on X, so those meshes need instance scale.x = -1.
- * East/west pairs sit on Z and already meet.
  *
  * @param {any} block palette entry
  */
 export function doubleChestNeedsPreviewXMirror(block) {
-	if (!String(block?.basi_block_shape ?? "").startsWith("chest_double")) return false;
+	if (!String(block?.basi_block_shape ?? "").startsWith("chest_large")) return false;
 	const s = String(chestFacing(block.states)).toLowerCase();
 	return s === "north" || s === "south";
+}
+
+/** Coerce nbtify wrappers and primitives to a number. */
+export function nbtNumber(v) {
+	if (v == null) return NaN;
+	if (typeof v === "object" && "value" in v) return Number(/** @type {{ value: unknown }} */ (v).value);
+	return Number(v);
 }
 
 /**
@@ -126,7 +132,7 @@ export function applyDoubleChestPalette(nbt, palette, indices) {
 		let y;
 		let z;
 		if (be.x != null && be.y != null && be.z != null) {
-			[x, y, z] = worldToLocal(Number(be.x), Number(be.y), Number(be.z));
+			[x, y, z] = worldToLocal(nbtNumber(be.x), nbtNumber(be.y), nbtNumber(be.z));
 		} else {
 			// index i = (x * sy + y) * sz + z
 			const t = Math.floor(i / sz);
@@ -139,7 +145,7 @@ export function applyDoubleChestPalette(nbt, palette, indices) {
 		z = Math.floor(z);
 		if (x < 0 || y < 0 || z < 0 || x >= sx || y >= sy || z >= sz) continue;
 
-		const [px, , pz] = worldToLocal(Number(be.pairx), oy, Number(be.pairz));
+		const [px, , pz] = worldToLocal(nbtNumber(be.pairx), oy, nbtNumber(be.pairz));
 		const dx = Math.round(px - x);
 		const dz = Math.round(pz - z);
 
@@ -155,7 +161,8 @@ export function applyDoubleChestPalette(nbt, palette, indices) {
 		if (!cls) continue;
 
 		const texPath = chestTexturePath(name, true);
-		const halfKey = `${name}|${facing}|${cls.half}|${texPath}`;
+		const shape = cls.half === "left" ? `chest_large<${texPath}>` : "chest_double_skip";
+		const halfKey = `${name}|${facing}|${cls.half}|${shape}`;
 		let newPi = halfPalette.get(halfKey);
 		if (newPi == null) {
 			newPi = newPalette.length;
@@ -166,7 +173,7 @@ export function applyDoubleChestPalette(nbt, palette, indices) {
 					...(block.states || {}),
 					basi_chest_half: cls.half
 				},
-				basi_block_shape: `chest_double<${texPath}>`
+				basi_block_shape: shape
 			});
 		}
 		layer0[flat] = newPi;
@@ -280,13 +287,16 @@ export function linkInspectDoubleChests(blocks, ox, oz) {
 		if (be.forceunpair === 1 || be.forceunpair === true) continue;
 		if (!isChestBlockName(block.name)) continue;
 
-		const pairx = Number(be.pairx?.value ?? be.pairx);
-		const pairz = Number(be.pairz?.value ?? be.pairz);
+		const pairx = nbtNumber(be.pairx);
+		const pairz = nbtNumber(be.pairz);
 		if (!Number.isFinite(pairx) || !Number.isFinite(pairz)) continue;
 		const px = Math.floor(pairx - Number(ox || 0));
 		const pz = Math.floor(pairz - Number(oz || 0));
 		const partner = blocks.get(`${px},${block.y},${pz}`);
-		if (!partner?.blockEntity) continue;
+		if (!partner?.blockEntity || partner.doubleChest) continue;
+		const backX = Math.floor(nbtNumber(partner.blockEntity.pairx) - Number(ox || 0));
+		const backZ = Math.floor(nbtNumber(partner.blockEntity.pairz) - Number(oz || 0));
+		if (backX !== block.x || backZ !== block.z) continue;
 
 		const dx = px - block.x;
 		const dz = pz - block.z;

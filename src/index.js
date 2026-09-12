@@ -45,8 +45,7 @@ import {
 } from "./app/previewLifecycle.js";
 import { handleFiles } from "./app/importExport.js";
 import { BUILD_ID } from "./buildId.js";
-import { getActiveCatalog } from "./viewer/catalogRegistry.js";
-import { setActiveDbName } from "./viewer/db.js";
+
 
 setEls(createEls());
 
@@ -101,8 +100,8 @@ function wireUi() {
 	els.openEditorBtn?.addEventListener("click", () => goView("editor"));
 	window.addEventListener("hashchange", applyView);
 	catalog.subscribe(() => {
+		renderList();
 		if (isEditorView()) renderEditor();
-		else renderList();
 	});
 	applyView();
 
@@ -259,8 +258,7 @@ async function boot() {
 	if (els.bootBadge) {
 		els.bootBadge.textContent = "Loading…";
 	}
-	setActiveDbName(getActiveCatalog().dbName);
-	const n = await catalog.hydrateFromDb();
+	const n = await catalog.bootFromRegistry();
 	applyView();
 	if (n > 0) {
 		setStatus(`Restored ${n} structure(s) from IndexedDB.`, "ok");

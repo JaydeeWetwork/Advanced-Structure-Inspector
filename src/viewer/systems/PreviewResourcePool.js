@@ -15,6 +15,7 @@ export default class PreviewResourcePool {
 	/** DoubleSide clone for N/S double chests (instance scale.x = -1). */
 	/** @type {import("three").MeshLambertMaterial|null} */
 	chestMirrorMat = null;
+
 	/** @type {Map<number, import("three").BufferGeometry>} */
 	geoByPalette = new Map();
 	/** @type {import("three").Texture|null} */
@@ -97,7 +98,6 @@ export default class PreviewResourcePool {
 	}
 
 	/**
-	 * Negative-X instances invert FrontSide; DoubleSide keeps the shell outside-out.
 	 * @param {typeof import("three")} THREE
 	 */
 	ensureChestMirrorMat(THREE) {
@@ -105,6 +105,9 @@ export default class PreviewResourcePool {
 		if (!this.regularMat || !THREE) return null;
 		this.chestMirrorMat = this.regularMat.clone();
 		this.chestMirrorMat.side = THREE.DoubleSide;
+		this.chestMirrorMat.polygonOffset = true;
+		this.chestMirrorMat.polygonOffsetFactor = -1;
+		this.chestMirrorMat.polygonOffsetUnits = -2;
 		return this.chestMirrorMat;
 	}
 
@@ -293,11 +296,6 @@ export default class PreviewResourcePool {
 			/* ignore */
 		}
 
-		try {
-			this.chestMirrorMat?.dispose?.();
-		} catch {
-			/* ignore */
-		}
 		this.regularMat = null;
 		this.transparentMat = null;
 		this.solidFloorMat = null;

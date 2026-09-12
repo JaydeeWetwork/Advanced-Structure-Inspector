@@ -59,6 +59,7 @@ export function createStructureRow(entry, color = null) {
 		}
 		if (e.key === "Delete" || e.key === "Backspace") {
 			e.preventDefault();
+			_selectEntry(entry.id);
 			import("../app/previewLifecycle.js").then(m => m.removeSelected());
 		}
 	});

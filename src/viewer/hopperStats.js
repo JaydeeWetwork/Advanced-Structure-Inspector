@@ -10,6 +10,8 @@
  * We still count hopper minecarts; Enabled NBT is used when present.
  */
 
+import { readMcstructure } from "./api/structure.js";
+
 /**
  * @param {string|undefined|null} id
  */
@@ -113,15 +115,7 @@ export function computeHopperStats(inspectIndex, rawNbt) {
  */
 export async function scanHopperStatsFromFile(structureFile) {
 	try {
-		const NBT = await import("nbtify-readonly-typeless");
-		const arrayBuffer = await structureFile.arrayBuffer();
-		if (!structureFile.size || !arrayBuffer.byteLength) return null;
-		let data;
-		try {
-			data = (await NBT.read(arrayBuffer, { endian: "little", strict: false })).data;
-		} catch {
-			data = (await NBT.read(arrayBuffer)).data;
-		}
+		const { nbt: data } = await readMcstructure(structureFile);
 		if (!data?.structure) return null;
 		// Prefer inspect index when cheap; palette+indices fallback is built into computeHopperStats
 		try {

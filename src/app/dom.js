@@ -10,8 +10,9 @@ const _floatFlashTimers = new Map();
 /**
  * @param {string} message
  * @param {string} [kind]
+ * @param {{ catalog?: boolean }} [opts] catalog defaults true; false = toast only
  */
-export function setStatus(message, kind = "") {
+export function setStatus(message, kind = "", opts = {}) {
 	const toast = document.getElementById("statusToast");
 	const apply = el => {
 		if (!el) return;
@@ -25,7 +26,7 @@ export function setStatus(message, kind = "") {
 		if (kind) el.classList.add(kind);
 		el.textContent = message;
 	};
-	apply(els?.statusBox);
+	if (opts.catalog !== false) apply(els?.statusBox);
 	apply(toast);
 	if (message && toast) {
 		clearTimeout(setStatus._toastTimer);
@@ -133,6 +134,13 @@ export function initFloatPins() {
 		e.stopPropagation();
 		toggle("detail");
 	});
+
+	// Wheel over docks must not zoom/orbit the canvas, even at scroll ends.
+	const trapWheel = el => {
+		el?.addEventListener("wheel", e => e.stopPropagation(), { passive: true });
+	};
+	trapWheel(els?.detailFloat);
+	trapWheel(els?.catalogFloat);
 }
 
 /**

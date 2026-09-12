@@ -54,7 +54,10 @@ export const editorUi = {
 	uncategorizedCollapsed: false,
 	featuresOpen: false,
 	treeScroll: 0,
-	dragCategoryId: /** @type {string|null} */ (null)
+	dragCategoryId: /** @type {string|null} */ (null),
+	/** @type {null|{ mode: "saveAs"|"new"|"delete", name?: string }} */
+	dbForm: null,
+	inspectConfirm: /** @type {string|null} */ (null)
 };
 
 /** Single-flight import */

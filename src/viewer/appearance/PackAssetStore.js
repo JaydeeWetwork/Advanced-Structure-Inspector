@@ -173,7 +173,8 @@ export default class PackAssetStore {
 	 * @param {import("./VersionContext.js").BedrockVersionContext} [ctx]
 	 */
 	getJson(filePath, ctx) {
-		const key = filePath;
+		const tag = ctx?.renderPackTag || VANILLA_SAMPLES_TAG;
+		const key = `${tag}:${filePath}`;
 		if (this.#json.has(key)) return this.#json.get(key);
 		const p = this.fetchVanilla(filePath, ctx).then(async ({ res }) => {
 			if (!res?.ok) return null;
@@ -235,7 +236,8 @@ export default class PackAssetStore {
 	decodeTexture(pathNoExt, opts = {}) {
 		const p = normPath(pathNoExt);
 		const placeholder = opts.placeholder !== false;
-		const cacheKey = `${p}|${placeholder ? "ph" : "noph"}`;
+		const tag = (opts.ctx ?? defaultVersionContext()).renderPackTag || VANILLA_SAMPLES_TAG;
+		const cacheKey = `${tag}|${p}|${placeholder ? "ph" : "noph"}`;
 		if (this.#decoded.has(cacheKey)) return this.#decoded.get(cacheKey);
 		const promise = (async () => {
 			const { imageRes, ext } = await this.fetchTexture(p, opts.ctx ?? defaultVersionContext(), {

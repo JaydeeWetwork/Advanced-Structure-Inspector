@@ -135,14 +135,13 @@ export async function setMaterialAcquired(entryId, materialId, acquired) {
 	const set = acquiredMaterialSet(entry);
 	if (acquired) set.add(materialId);
 	else set.delete(materialId);
-	entry.acquiredMaterials = [...set];
 	try {
-		await catalog.patch(entryId, { acquiredMaterials: entry.acquiredMaterials });
+		await catalog.patch(entryId, { acquiredMaterials: [...set] });
 	} catch {
-		/* still update UI from in-memory */
+		/* persist error is on catalog.lastPersistError */
 	}
 	if (getSelectedId() === entryId) {
-		renderMaterialList(entry);
+		renderMaterialList(catalog.get(entryId));
 	}
 }
 

@@ -23,6 +23,7 @@ export {
 	dbLoadFeatures,
 	dbCloneCatalog,
 	dbDeleteCatalog,
-	setActiveDbName,
-	getActiveDbName
+	dbGetMeta,
+	dbPutMeta,
+	DEFAULT_DB_NAME
 } from "../db.js";

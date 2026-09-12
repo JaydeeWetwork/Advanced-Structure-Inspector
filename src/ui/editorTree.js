@@ -1,30 +1,22 @@
 /**
- * Editor left pane: taxonomy tree + inspector.
+ * Editor left pane: taxonomy tree.
  */
 
 import { catalog, editorUi, els } from "../app/state.js";
 import { formatSize, setStatus } from "../app/dom.js";
-import { renderFeatureChips } from "./featureChips.js";
 import { renderEditor } from "./editorRender.js";
-
-function hex6(color) {
-	const h = String(color || "#64748b").replace("#", "");
-	if (h.length === 3) return `#${h.split("").map(c => c + c).join("")}`;
-	return `#${h}`.slice(0, 7);
-}
+import { selectEditorNode } from "./editorSelect.js";
 
 function isSelected(kind, id) {
 	return editorUi.selected?.kind === kind && editorUi.selected?.id === id;
 }
 
-function select(kind, id) {
-	editorUi.selected = { kind, id };
-	editorUi.expandedFeatureId = null;
-	renderEditor();
-}
-
 function stop(e) {
 	e.stopPropagation();
+}
+
+function select(kind, id) {
+	selectEditorNode(kind, id);
 }
 
 const CAT_DRAG = "application/x-basi-category";
@@ -52,8 +44,9 @@ function bindTreeScrollAndDnD(host) {
 		editorUi.treeScroll = host.scrollTop;
 	}, { passive: true });
 	host.addEventListener("dragover", e => {
-		const types = [...(e.dataTransfer?.types || [])];
+		const types = [...(e.dataTransfer?.types || [])].map(t => t.toLowerCase());
 		if (!types.includes(CAT_DRAG) && !types.includes("text/plain")) return;
+		if (!editorUi.dragCategoryId) return;
 		e.preventDefault();
 		e.dataTransfer.dropEffect = "move";
 		const r = host.getBoundingClientRect();
@@ -68,7 +61,7 @@ function bindTreeScrollAndDnD(host) {
 	});
 	host.addEventListener("drop", e => {
 		const raw = e.dataTransfer?.getData(CAT_DRAG) || e.dataTransfer?.getData("text/plain") || "";
-		const fromId = raw.startsWith("cat:") ? raw.slice(4) : raw;
+		const fromId = raw.startsWith("cat:") ? raw.slice(4) : "";
 		clearDropMarks(host);
 		if (!fromId) return;
 		e.preventDefault();
@@ -78,83 +71,12 @@ function bindTreeScrollAndDnD(host) {
 		const place = e.clientY < box.top + box.height / 2 ? "before" : "after";
 		void catalog.moveCategoryTo(fromId, row.dataset.id, place).then(() => {
 			editorUi.dragCategoryId = null;
-			renderEditor();
 			setStatus("Category moved.", "ok");
 		});
 	});
 	host.addEventListener("dragleave", e => {
 		if (!host.contains(e.relatedTarget)) clearDropMarks(host);
 	});
-}
-
-/**
- * @param {string} label
- * @param {string} value
- * @param {string} field
- * @param {(v: string) => void} onCommit
- */
-function textField(label, value, field, onCommit) {
-	const wrap = document.createElement("label");
-	wrap.className = "basi-ed-field";
-	const span = document.createElement("span");
-	span.className = "basi-ed-label";
-	span.textContent = label;
-	const input = document.createElement(field === "textarea" ? "textarea" : "input");
-	if (field !== "textarea") {
-		input.type = "text";
-	} else {
-		input.rows = 3;
-	}
-	input.className = "basi-ed-input";
-	input.value = value || "";
-	input.addEventListener("blur", () => onCommit(input.value));
-	input.addEventListener("keydown", e => {
-		if (e.key === "Enter" && field !== "textarea") {
-			e.preventDefault();
-			input.blur();
-		}
-	});
-	wrap.append(span, input);
-	return wrap;
-}
-
-function colorField(label, value, onCommit) {
-	const wrap = document.createElement("label");
-	wrap.className = "basi-ed-field basi-ed-color-field";
-	const span = document.createElement("span");
-	span.className = "basi-ed-label";
-	span.textContent = label;
-	const input = document.createElement("input");
-	input.type = "color";
-	input.className = "basi-ed-color";
-	input.value = hex6(value);
-	input.addEventListener("change", () => onCommit(input.value));
-	wrap.append(span, input);
-	return wrap;
-}
-
-function dangerBtn(label, title, onClick) {
-	const btn = document.createElement("button");
-	btn.type = "button";
-	btn.className = "basi-btn secondary basi-ed-danger";
-	btn.textContent = label;
-	btn.title = title;
-	btn.addEventListener("click", onClick);
-	return btn;
-}
-
-function iconBtn(label, title, onClick, disabled = false) {
-	const btn = document.createElement("button");
-	btn.type = "button";
-	btn.className = "basi-ed-icon-btn";
-	btn.textContent = label;
-	btn.title = title;
-	btn.disabled = disabled;
-	btn.addEventListener("click", e => {
-		stop(e);
-		onClick();
-	});
-	return btn;
 }
 
 function nodeRow({ kind, id, name, meta, color, collapsed, depth, onToggle, onClick, categoryId, draggable }) {
@@ -287,9 +209,7 @@ export function renderEditorTree() {
 				depth: 0,
 				draggable: true,
 				onToggle: () => {
-					void catalog
-						.setCategoryCollapsed(group.category.id, !group.category.collapsed)
-						.then(() => renderEditor());
+					void catalog.setCategoryCollapsed(group.category.id, !group.category.collapsed);
 				},
 				onClick: () => select("category", group.category.id)
 			})
@@ -307,9 +227,7 @@ export function renderEditorTree() {
 					depth: 1,
 					categoryId: group.category.id,
 					onToggle: () => {
-						void catalog
-							.setCatalogEntryCollapsed(entry.id, !entry.collapsed)
-							.then(() => renderEditor());
+						void catalog.setCatalogEntryCollapsed(entry.id, !entry.collapsed);
 					},
 					onClick: () => select("entry", entry.id)
 				})
@@ -388,213 +306,4 @@ export function renderEditorToolbar() {
 	});
 
 	host.append(addCat, addEntry, features);
-}
-
-export function renderEditorInspector() {
-	const host = els.editorInspector;
-	if (!host) return;
-	host.replaceChildren();
-	const sel = editorUi.selected;
-	if (!sel || sel.kind === "uncategorized") {
-		const hint = document.createElement("p");
-		hint.className = "basi-ed-hint";
-		hint.textContent = sel?.kind === "uncategorized"
-			? "Uncategorized structures have not been assigned to an entry yet. Select one, then pick an entry."
-			: "Select a category, entry, or structure to edit it.";
-		host.appendChild(hint);
-		return;
-	}
-
-	if (sel.kind === "category") {
-		const cat = catalog.getCategory(sel.id);
-		if (!cat) return;
-		const h = document.createElement("h3");
-		h.className = "basi-ed-inspect-title";
-		h.textContent = "Category";
-		host.appendChild(h);
-		host.appendChild(textField("Name", cat.name, "text", v => {
-			void catalog.patchCategory(cat.id, { name: v }).then(() => renderEditor());
-		}));
-		host.appendChild(textField("Description", cat.description, "textarea", v => {
-			void catalog.patchCategory(cat.id, { description: v });
-		}));
-		host.appendChild(colorField("Color", cat.color, v => {
-			void catalog.patchCategory(cat.id, { color: v }).then(() => renderEditor());
-		}));
-		const actions = document.createElement("div");
-		actions.className = "basi-ed-actions";
-		actions.append(
-			iconBtn("↑", "Move up", () => {
-				void catalog.reorderCategory(cat.id, -1).then(() => renderEditor());
-			}),
-			iconBtn("↓", "Move down", () => {
-				void catalog.reorderCategory(cat.id, 1).then(() => renderEditor());
-			}),
-			dangerBtn("Delete category", "Entries are deleted; structures become Uncategorized", async () => {
-				if (!confirm(`Delete category “${cat.name}”? Entries inside it are removed and their structures move to Uncategorized.`)) return;
-				await catalog.removeCategory(cat.id);
-				editorUi.selected = null;
-				renderEditor();
-				setStatus(`Category “${cat.name}” removed.`, "ok");
-			})
-		);
-		host.appendChild(actions);
-		return;
-	}
-
-	if (sel.kind === "entry") {
-		const ent = catalog.getCatalogEntry(sel.id);
-		if (!ent) return;
-		const h = document.createElement("h3");
-		h.className = "basi-ed-inspect-title";
-		h.textContent = "Entry";
-		host.appendChild(h);
-		host.appendChild(textField("Name", ent.name, "text", v => {
-			void catalog.patchCatalogEntry(ent.id, { name: v }).then(() => renderEditor());
-		}));
-		host.appendChild(textField("Description", ent.description, "textarea", v => {
-			void catalog.patchCatalogEntry(ent.id, { description: v });
-		}));
-		const parent = document.createElement("label");
-		parent.className = "basi-ed-field";
-		const pLabel = document.createElement("span");
-		pLabel.className = "basi-ed-label";
-		pLabel.textContent = "Category";
-		const pSel = document.createElement("select");
-		pSel.className = "basi-ed-input";
-		for (const c of catalog.listCategories()) {
-			const opt = document.createElement("option");
-			opt.value = c.id;
-			opt.textContent = c.name;
-			pSel.appendChild(opt);
-		}
-		pSel.value = ent.categoryId;
-		pSel.addEventListener("change", () => {
-			void catalog.patchCatalogEntry(ent.id, { categoryId: pSel.value }).then(() => renderEditor());
-		});
-		parent.append(pLabel, pSel);
-		host.appendChild(parent);
-		const assign = document.createElement("label");
-		assign.className = "basi-ed-field";
-		const aLabel = document.createElement("span");
-		aLabel.className = "basi-ed-label";
-		aLabel.textContent = "Assign structure";
-		const aSel = document.createElement("select");
-		aSel.className = "basi-ed-input";
-		const placeholder = document.createElement("option");
-		placeholder.value = "";
-		placeholder.textContent = "Choose a structure…";
-		aSel.appendChild(placeholder);
-		for (const s of catalog.list()) {
-			const opt = document.createElement("option");
-			opt.value = s.id;
-			const parentEnt = s.entryId ? catalog.getCatalogEntry(s.entryId) : null;
-			opt.textContent = parentEnt ? `${s.name} (${parentEnt.name})` : s.name;
-			aSel.appendChild(opt);
-		}
-		aSel.addEventListener("change", async () => {
-			const id = aSel.value;
-			if (!id) return;
-			await catalog.setStructureEntry(id, ent.id);
-			select("structure", id);
-			setStatus("Structure assigned.", "ok");
-		});
-		assign.append(aLabel, aSel);
-		host.appendChild(assign);
-		const actions = document.createElement("div");
-		actions.className = "basi-ed-actions";
-		actions.append(
-			iconBtn("↑", "Move up", () => {
-				void catalog.reorderCatalogEntry(ent.id, -1).then(() => renderEditor());
-			}),
-			iconBtn("↓", "Move down", () => {
-				void catalog.reorderCatalogEntry(ent.id, 1).then(() => renderEditor());
-			}),
-			dangerBtn("Delete entry", "Structures become Uncategorized", async () => {
-				if (!confirm(`Delete entry “${ent.name}”? Structures move to Uncategorized.`)) return;
-				await catalog.removeCatalogEntry(ent.id);
-				editorUi.selected = null;
-				renderEditor();
-				setStatus(`Entry “${ent.name}” removed.`, "ok");
-			})
-		);
-		host.appendChild(actions);
-		return;
-	}
-
-	if (sel.kind === "structure") {
-		const s = catalog.get(sel.id);
-		if (!s) return;
-		const h = document.createElement("h3");
-		h.className = "basi-ed-inspect-title";
-		h.textContent = "Structure";
-		host.appendChild(h);
-		host.appendChild(textField("Name", s.name, "text", v => {
-			void catalog.patch(s.id, { name: v }).then(() => renderEditor());
-		}));
-		const parent = document.createElement("label");
-		parent.className = "basi-ed-field";
-		const pLabel = document.createElement("span");
-		pLabel.className = "basi-ed-label";
-		pLabel.textContent = "Entry";
-		const pSel = document.createElement("select");
-		pSel.className = "basi-ed-input";
-		const none = document.createElement("option");
-		none.value = "";
-		none.textContent = "Uncategorized";
-		pSel.appendChild(none);
-		for (const c of catalog.listCategories()) {
-			const group = document.createElement("optgroup");
-			group.label = c.name;
-			for (const e of catalog.listCatalogEntries(c.id)) {
-				const opt = document.createElement("option");
-				opt.value = e.id;
-				opt.textContent = e.name;
-				group.appendChild(opt);
-			}
-			pSel.appendChild(group);
-		}
-		pSel.value = s.entryId || "";
-		pSel.addEventListener("change", () => {
-			void catalog.setStructureEntry(s.id, pSel.value || null).then(() => renderEditor());
-		});
-		parent.append(pLabel, pSel);
-		host.appendChild(parent);
-		host.appendChild(textField("Creator", s.creator, "text", v => {
-			void catalog.patch(s.id, { creator: v });
-		}));
-		host.appendChild(textField("Credits", s.credits, "text", v => {
-			void catalog.patch(s.id, { credits: v });
-		}));
-		host.appendChild(textField("Source", s.sourceLink, "text", v => {
-			void catalog.patch(s.id, { sourceLink: v });
-		}));
-
-		const featLabel = document.createElement("div");
-		featLabel.className = "basi-ed-label";
-		featLabel.textContent = "Features";
-		host.appendChild(featLabel);
-		const chips = document.createElement("div");
-		chips.className = "basi-feature-chips";
-		const assigned = catalog.listFeaturesForStructure(s.id);
-		renderFeatureChips(chips, assigned, {
-			onClick: feature => {
-				void catalog.toggleStructureFeature(s.id, feature.id).then(() => renderEditor());
-			}
-		});
-		if (!assigned.length) {
-			chips.classList.add("is-empty");
-			chips.textContent = "None yet";
-		}
-		host.appendChild(chips);
-		const manage = document.createElement("button");
-		manage.type = "button";
-		manage.className = "basi-btn secondary";
-		manage.textContent = editorUi.featuresOpen ? "Hide feature library" : "Add / edit features";
-		manage.addEventListener("click", () => {
-			editorUi.featuresOpen = !editorUi.featuresOpen;
-			renderEditor();
-		});
-		host.appendChild(manage);
-	}
 }

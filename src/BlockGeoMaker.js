@@ -112,7 +112,7 @@ export default class BlockGeoMaker {
 		}
 		return polyMeshTemplatePalette.map((faces, i) => {
 			const shape = String(blockPalette?.[i]?.basi_block_shape ?? "");
-			if (shape.startsWith("chest_double")) {
+			if (shape.startsWith("chest_large") || shape.startsWith("chest_double")) {
 				return faces;
 			}
 			return this.#scaleFaces(structuredClone(faces), centersOfMass[i]);
@@ -1129,12 +1129,13 @@ export default class BlockGeoMaker {
 				this.#applyFaceCropping(face, imageUv["crop"]);
 			}
 			let vertices = tuple([face["vertices"][0], face["vertices"][1], face["vertices"][3], face["vertices"][2]]); // go around in a square
-			// Half-texel inset so NearestFilter never samples the empty atlas pixel at a tile edge (white sparkle).
-			const inset = 0.5;
+			const uw = Math.abs(imageUv["uv_size"][0]);
+			const vh = Math.abs(imageUv["uv_size"][1]);
+			const inset = Math.min(0.5, 0.25 * Math.min(uw, vh, 16));
 			const u0 = imageUv["uv"][0] + inset;
 			const v0 = imageUv["uv"][1] + inset;
-			const uSize = Math.max(imageUv["uv_size"][0] - inset * 2, 0.01);
-			const vSize = Math.max(imageUv["uv_size"][1] - inset * 2, 0.01);
+			const uSize = Math.max(uw - inset * 2, 0.01);
+			const vSize = Math.max(vh - inset * 2, 0.01);
 			return {
 				"normal": face["normal"],
 				"transparency": imageUv["transparency"],

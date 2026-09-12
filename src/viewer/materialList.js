@@ -1,3 +1,5 @@
+import { readMcstructure } from "./api/structure.js";
+
 /**
  * Build a grouped material list (item counts) from structure NBT.
  * Groups variants; sorts most → least; partitions into shulkers / stacks / loose
@@ -402,13 +404,6 @@ export function buildMaterialListFromNbt(data) {
  * @returns {Promise<MaterialRow[]>}
  */
 export async function buildMaterialListFromFile(structureFile) {
-	const NBT = await import("nbtify-readonly-typeless");
-	const ab = await structureFile.arrayBuffer();
-	let data;
-	try {
-		data = (await NBT.read(ab, { endian: "little", strict: false })).data;
-	} catch {
-		data = (await NBT.read(ab)).data;
-	}
+	const { nbt: data } = await readMcstructure(structureFile);
 	return buildMaterialListFromNbt(data);
 }

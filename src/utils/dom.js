@@ -1,11 +1,17 @@
 import { symbolPatch } from "./meta.js";
 
-export const selectEl = symbolPatch([Element.prototype, DocumentFragment.prototype], function selectEl(query) {
-	return this.querySelector(query);
-}, document.querySelector.bind(document));
-export const selectEls = symbolPatch([Element.prototype, DocumentFragment.prototype], function selectEls(query) {
-	return this.querySelectorAll(query);
-}, document.querySelectorAll.bind(document));
+const hasDom = typeof Element !== "undefined" && typeof DocumentFragment !== "undefined";
+
+export const selectEl = hasDom
+	? symbolPatch([Element.prototype, DocumentFragment.prototype], function selectEl(query) {
+		return this.querySelector(query);
+	}, document.querySelector.bind(document))
+	: function selectEl() { return null; };
+export const selectEls = hasDom
+	? symbolPatch([Element.prototype, DocumentFragment.prototype], function selectEls(query) {
+		return this.querySelectorAll(query);
+	}, document.querySelectorAll.bind(document))
+	: function selectEls() { return []; };
 /** @type {unique symbol} */
 // @ts-expect-error
 export const onEvent = symbolPatch(EventTarget.prototype, EventTarget.prototype.addEventListener);

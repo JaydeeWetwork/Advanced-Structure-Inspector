@@ -5,9 +5,9 @@
 import { setEditorRender, renderEditor } from "./editorRender.js";
 import {
 	renderEditorTree,
-	renderEditorToolbar,
-	renderEditorInspector
+	renderEditorToolbar
 } from "./editorTree.js";
+import { renderEditorInspector } from "./editorInspector.js";
 import { addFeatureFromEditor, renderEditorFeatures } from "./editorFeatures.js";
 import { renderEditorDbBar } from "./editorDatabases.js";
 import { editorUi, els } from "../app/state.js";
