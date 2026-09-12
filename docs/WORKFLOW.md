@@ -31,7 +31,7 @@ Local-only repo: no `origin` / HoloPrint `upstream` required. Branches: **dev** 
 
 - Bump `?v=…` on `src/index.html` (script + CSS) when shipping user-visible JS/CSS.
 - Prefer also busting deep imports that browsers cache aggressively (e.g. `itemIconLoader.js?v=…`, `systems/index.js?v=…`).
-- Pattern in tree: `judoN` (increment on user-facing drops).
+- Pattern in tree: `buildN` (increment on user-facing drops). The header shows this as the build number.
 
 ## 5. Backup without a remote
 

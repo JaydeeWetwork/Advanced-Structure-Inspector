@@ -1,9 +1,9 @@
 /**
  * Named catalog registry (localStorage) + which IndexedDB is active.
- * The original `structure-db-viewer` DB is the default catalog so existing data stays.
+ * Default catalog IndexedDB is `asi-db-viewer`; boot remaps the legacy name.
  */
 
-import { DEFAULT_DB_NAME } from "./db.js";
+import { DEFAULT_DB_NAME, LEGACY_DEFAULT_DB_NAME } from "./db.js";
 
 export { DEFAULT_DB_NAME };
 export const DEFAULT_CATALOG_ID = "default";
@@ -81,6 +81,24 @@ export function loadRegistry() {
 export function saveRegistry(reg) {
 	store().setItem(REGISTRY_KEY, JSON.stringify(reg));
 	return reg;
+}
+
+/** Point registry rows still using the old default IDB name at `asi-db-viewer`. */
+export function remapLegacyDefaultDbNames() {
+	const r = loadRegistry();
+	let changed = false;
+	for (const item of r.items) {
+		if (item.dbName === LEGACY_DEFAULT_DB_NAME) {
+			item.dbName = DEFAULT_DB_NAME;
+			changed = true;
+		}
+	}
+	if (changed) saveRegistry(r);
+	return r;
+}
+
+export function registryUsesDbName(name) {
+	return loadRegistry().items.some(i => i.dbName === name);
 }
 
 export function getActiveCatalog() {

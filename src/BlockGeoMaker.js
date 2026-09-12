@@ -1124,11 +1124,21 @@ export default class BlockGeoMaker {
 	static resolveTemplateFaceUvs(faces, textureAtlas) {
 		return faces.map(face => {
 			let imageUv = textureAtlas.uvs[face["textureRefI"]];
+			// Corner-sort for UVs can reverse spatial winding (UV flips, 180° block
+			// rotations). FrontSide preview then culls those faces — droppers facing
+			// up/down and observers' flipped east face were the obvious cases.
+			const origWinding = this.#quadWinding(face["vertices"]);
 			face["vertices"].sort((a, b) => a["corner"] - b["corner"]);
 			if("crop" in imageUv) {
 				this.#applyFaceCropping(face, imageUv["crop"]);
 			}
 			let vertices = tuple([face["vertices"][0], face["vertices"][1], face["vertices"][3], face["vertices"][2]]); // go around in a square
+			if(this.#dot3(this.#quadWinding(vertices), origWinding) < 0) {
+				vertices = tuple([vertices[0], vertices[3], vertices[2], vertices[1]]);
+			}
+			if(face["flipWinding"]) {
+				vertices = tuple([vertices[0], vertices[3], vertices[2], vertices[1]]);
+			}
 			const uw = Math.abs(imageUv["uv_size"][0]);
 			const vh = Math.abs(imageUv["uv_size"][1]);
 			const inset = Math.min(0.5, 0.25 * Math.min(uw, vh, 16));
@@ -1148,6 +1158,25 @@ export default class BlockGeoMaker {
 				}))
 			};
 		});
+	}
+	/**
+	 * Cross product of (v1-v0) × (v2-v0) for a 4-vertex face.
+	 * @param {{ pos: Vec3 }[]} vertices
+	 * @returns {Vec3}
+	 */
+	static #quadWinding(vertices) {
+		return vec3.crossProduct(
+			vec3.sub(vertices[1]["pos"], vertices[0]["pos"]),
+			vec3.sub(vertices[2]["pos"], vertices[0]["pos"])
+		);
+	}
+	/**
+	 * @param {Vec3} a
+	 * @param {Vec3} b
+	 * @returns {number}
+	 */
+	static #dot3(a, b) {
+		return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 	}
 	/**
 	 * Crops a face, modifying the input object.

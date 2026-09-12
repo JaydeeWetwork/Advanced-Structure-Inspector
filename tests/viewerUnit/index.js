@@ -181,6 +181,7 @@ describe("catalogRegistry", async () => {
 	const {
 		loadRegistry,
 		DEFAULT_CATALOG_ID,
+		DEFAULT_DB_NAME,
 		addCatalogRecord,
 		renameCatalog,
 		setRegistryStorage
@@ -204,6 +205,8 @@ describe("catalogRegistry", async () => {
 		assert.ok(r.items.length >= 1);
 		assert.ok(r.items.some(i => i.id === DEFAULT_CATALOG_ID));
 		assert.equal(typeof r.items[0].name, "string");
+		assert.equal(DEFAULT_DB_NAME, "asi-db-viewer");
+		assert.equal(r.items.find(i => i.id === DEFAULT_CATALOG_ID).dbName, DEFAULT_DB_NAME);
 	});
 
 	it("adds and renames records in isolated storage", () => {
@@ -212,6 +215,77 @@ describe("catalogRegistry", async () => {
 		assert.match(rec.dbName, /^basi-catalog-/);
 		const renamed = renameCatalog(rec.id, "Farm pack");
 		assert.equal(renamed.name, "Farm pack");
+	});
+});
+
+describe("default IndexedDB rename", async () => {
+	const {
+		DEFAULT_DB_NAME,
+		LEGACY_DEFAULT_DB_NAME,
+		canonicalDefaultDbName,
+		decideDefaultCatalogMigration
+	} = await import("../../src/viewer/db.js");
+	const {
+		DEFAULT_CATALOG_ID,
+		loadRegistry,
+		remapLegacyDefaultDbNames,
+		saveRegistry,
+		setRegistryStorage
+	} = await import("../../src/viewer/catalogRegistry.js");
+
+	it("maps the legacy default name to asi-db-viewer", () => {
+		assert.equal(DEFAULT_DB_NAME, "asi-db-viewer");
+		assert.equal(LEGACY_DEFAULT_DB_NAME, "structure-db-viewer");
+		assert.equal(canonicalDefaultDbName(LEGACY_DEFAULT_DB_NAME), DEFAULT_DB_NAME);
+		assert.equal(canonicalDefaultDbName("basi-catalog-x"), "basi-catalog-x");
+	});
+
+	it("clones only when dest is empty and source has rows", () => {
+		assert.deepEqual(
+			decideDefaultCatalogMigration({ destCount: 0, sourceCount: 3, legacyStillInUse: false }),
+			{ clone: true, deleteLegacy: true }
+		);
+		assert.deepEqual(
+			decideDefaultCatalogMigration({ destCount: 5, sourceCount: 3, legacyStillInUse: false }),
+			{ clone: false, deleteLegacy: true }
+		);
+		assert.deepEqual(
+			decideDefaultCatalogMigration({ destCount: 0, sourceCount: 3, legacyStillInUse: true }),
+			{ clone: true, deleteLegacy: false }
+		);
+		assert.deepEqual(
+			decideDefaultCatalogMigration({ destCount: 0, sourceCount: 0, legacyKnownMissing: true }),
+			{ clone: false, deleteLegacy: false }
+		);
+	});
+
+	it("remaps registry dbName from the legacy default", () => {
+		const mem = {
+			_d: new Map(),
+			getItem(k) {
+				return this._d.has(k) ? this._d.get(k) : null;
+			},
+			setItem(k, v) {
+				this._d.set(k, String(v));
+			},
+			removeItem(k) {
+				this._d.delete(k);
+			}
+		};
+		setRegistryStorage(mem);
+		saveRegistry({
+			activeId: DEFAULT_CATALOG_ID,
+			items: [
+				{
+					id: DEFAULT_CATALOG_ID,
+					name: "Database",
+					dbName: LEGACY_DEFAULT_DB_NAME,
+					updatedAt: 1
+				}
+			]
+		});
+		remapLegacyDefaultDbNames();
+		assert.equal(loadRegistry().items[0].dbName, DEFAULT_DB_NAME);
 	});
 });
 
@@ -2325,6 +2399,82 @@ describe("mcstructureCodec", async () => {
 		v.setUint32(4, 8, true);
 		buf[8] = 0x0a;
 		assert.throws(() => gateMcstructureBytes(buf), e => e.code === "STRUCTURE_LEVEL_DAT");
+	});
+});
+
+describe("preview face winding (FrontSide)", () => {
+	async function loadJsonc(rel) {
+		const stripJsonComments = (await import("strip-json-comments")).default;
+		return JSON.parse(stripJsonComments(readFileSync(join(root, rel), "utf8")));
+	}
+
+	function stubAtlas(n) {
+		return {
+			textureWidth: 16,
+			textureHeight: 16,
+			uvs: Array.from({ length: Math.max(n, 1) }, () => ({
+				uv: [0, 0],
+				uv_size: [16, 16],
+				transparency: 0
+			}))
+		};
+	}
+
+	/** After Z-flip + reversed indices, winding should point away from the cube center. */
+	function inwardCount(faces) {
+		const center = [8, 8, 8];
+		let inward = 0;
+		for (const face of faces) {
+			const flipped = face.vertices.map(v => [v.pos[0], v.pos[1], 16 - v.pos[2]]);
+			const v0 = flipped[0], v1 = flipped[1], v2 = flipped[2];
+			const a = [v1[0] - v2[0], v1[1] - v2[1], v1[2] - v2[2]];
+			const b = [v0[0] - v2[0], v0[1] - v2[1], v0[2] - v2[2]];
+			const n = [
+				a[1] * b[2] - a[2] * b[1],
+				a[2] * b[0] - a[0] * b[2],
+				a[0] * b[1] - a[1] * b[0]
+			];
+			const mid = flipped.reduce(
+				(acc, p) => [acc[0] + p[0] / 4, acc[1] + p[1] / 4, acc[2] + p[2] / 4],
+				[0, 0, 0]
+			);
+			const out = [mid[0] - center[0], mid[1] - center[1], mid[2] - center[2]];
+			if (n[0] * out[0] + n[1] * out[1] + n[2] * out[2] <= 1e-6) inward++;
+		}
+		return inward;
+	}
+
+	it("keeps dropper and observer faces outward after UV corner-sort", async () => {
+		const BlockGeoMaker = (await import("../../src/BlockGeoMaker.js")).default;
+		const maker = new BlockGeoMaker(
+			{ SCALE: 1, IGNORED_BLOCKS: [] },
+			{ entityModelToCubes: async () => [] },
+			await loadJsonc("src/data/blockShapes.json"),
+			await loadJsonc("src/data/blockShapeGeos.json"),
+			await loadJsonc("src/data/blockStateDefinitions.json"),
+			await loadJsonc("src/data/blockEigenvariants.json")
+		);
+		const palette = [
+			...[0, 1, 2, 3, 4, 5].map(fd => ({
+				name: "dropper",
+				states: { facing_direction: fd, triggered_bit: 0 }
+			})),
+			...["down", "up", "north", "south", "east", "west"].map(d => ({
+				name: "observer",
+				states: { "minecraft:facing_direction": d, powered_bit: 0 }
+			})),
+			{ name: "stone", states: {} }
+		];
+		const { templates } = await maker.makePolyMeshTemplates(palette);
+		const atlas = stubAtlas(maker.textureRefs.size);
+		for (let i = 0; i < templates.length; i++) {
+			const resolved = BlockGeoMaker.resolveTemplateFaceUvs(structuredClone(templates[i]), atlas);
+			assert.equal(
+				inwardCount(resolved),
+				0,
+				`palette ${i} (${palette[i].name}) has inward faces after UV resolve`
+			);
+		}
 	});
 });
 

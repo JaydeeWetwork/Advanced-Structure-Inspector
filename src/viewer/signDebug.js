@@ -8,6 +8,7 @@ import {
 	kindOfSign,
 	signPlaneInstanceVerts
 } from "./signPlacement.js";
+import { BUILD_ID } from "../buildId.js";
 
 const STORAGE_KEY = "basi.signTweaks.v1";
 const RECIPE_KEY = "basi.signTweakRecipe.last";
@@ -325,7 +326,7 @@ export function formatSignTweakRecipe(extra = {}) {
 	const t = extra.tweaks || signTweaks;
 	const lines = [
 		"---SIGN_TWEAK---",
-		"judo33",
+		BUILD_ID,
 		`note: ${t.note || extra.note || "(none)"}`,
 		`applyTo: ${t.applyTo}`,
 		`liftAdd: ${t.liftAdd}`,

@@ -110,7 +110,7 @@ Viewer unit tests live in `tests/viewerUnit/` and use Node’s test runner.
 
 | Storage | Purpose |
 |---------|---------|
-| **IndexedDB** (`structure-db-viewer` / catalog stores) | Structure metadata + file blobs + categories |
+| **IndexedDB** (`asi-db-viewer` / catalog stores; copies from legacy `structure-db-viewer` once) | Structure metadata + file blobs + categories |
 | **localStorage** | UI pins / small prefs (if used) |
 | **In-memory** | Preview park LRU (max 2 WebGL sessions), icon blob URLs |
 

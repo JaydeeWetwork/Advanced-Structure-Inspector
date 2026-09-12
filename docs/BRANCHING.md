@@ -101,7 +101,7 @@ git branch -d hotfix/short-name
   - `fix: lil-gui guard so preview still loads`
   - `feat: sparse inspect index for large structures`
   - `perf: skip redundant layer rebuild after init`
-- Bump `?v=judoN` (or similar) in `index.html` when shipping user-visible module changes so the browser doesn’t keep stale ES modules.
+- Bump `?v=buildN` in `index.html` (and `src/buildId.js`) when shipping user-visible module changes so the browser doesn’t keep stale ES modules. The header shows this as the build number.
 
 ### What to test before `staging` → `main`
 

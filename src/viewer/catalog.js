@@ -24,6 +24,9 @@ import {
 	dbGetMeta,
 	dbPutMeta,
 	DEFAULT_DB_NAME,
+	LEGACY_DEFAULT_DB_NAME,
+	canonicalDefaultDbName,
+	migrateDefaultCatalogIfNeeded,
 	setActiveDbName
 } from "./db.js";
 import { TAXONOMY_SEED_STATE_KEY, TAXONOMY_SEED_VERSION } from "../data/taxonomy.js";
@@ -38,7 +41,7 @@ import {
 	renameActiveCatalog,
 	saveCatalogAs
 } from "./catalogSwitch.js";
-import { getActiveCatalog } from "./catalogRegistry.js";
+import { getActiveCatalog, remapLegacyDefaultDbNames, registryUsesDbName } from "./catalogRegistry.js";
 
 /**
  * @typedef {object} StructureCatalogEntry
@@ -157,6 +160,7 @@ export default class StructureCatalog {
 	}
 
 	async bootFromRegistry() {
+		remapLegacyDefaultDbNames();
 		await activateCatalog(this, getActiveCatalog().id);
 		return this.list().length;
 	}
@@ -942,8 +946,11 @@ export default class StructureCatalog {
 			if (Array.isArray(meta?.applied)) return new Set(meta.applied);
 			if (typeof localStorage === "undefined") return new Set();
 			let raw = localStorage.getItem(`${TAXONOMY_SEED_STATE_KEY}::${this.#dbName}`);
-			if (!raw && this.#dbName === DEFAULT_DB_NAME) {
+			if (!raw && (this.#dbName === DEFAULT_DB_NAME || this.#dbName === LEGACY_DEFAULT_DB_NAME)) {
 				raw = localStorage.getItem(TAXONOMY_SEED_STATE_KEY);
+			}
+			if (!raw && this.#dbName === DEFAULT_DB_NAME) {
+				raw = localStorage.getItem(`${TAXONOMY_SEED_STATE_KEY}::${LEGACY_DEFAULT_DB_NAME}`);
 			}
 			if (!raw) return new Set();
 			const o = JSON.parse(raw);
@@ -972,6 +979,7 @@ export default class StructureCatalog {
 	async reloadFromDb(dbName) {
 		const gen = ++this.#hydrateGen;
 		if (dbName) this.#dbName = dbName;
+		this.#dbName = canonicalDefaultDbName(this.#dbName);
 		setActiveDbName(this.#dbName);
 		this.#entries.clear();
 		this.#categories.clear();
@@ -1004,6 +1012,18 @@ export default class StructureCatalog {
 	 */
 	async hydrateFromDb(gen = this.#hydrateGen) {
 		clearLegacyLocalStorageIndex();
+		if (this.#persistEnabled) {
+			remapLegacyDefaultDbNames();
+			this.#dbName = canonicalDefaultDbName(this.#dbName);
+			setActiveDbName(this.#dbName);
+			try {
+				await migrateDefaultCatalogIfNeeded({
+					legacyStillInUse: registryUsesDbName(LEGACY_DEFAULT_DB_NAME)
+				});
+			} catch (e) {
+				console.warn("[basi] default IndexedDB migrate failed:", e);
+			}
+		}
 		const dbName = this.#dbName;
 		try {
 			const [rows, cats, ents, feats] = await Promise.all([

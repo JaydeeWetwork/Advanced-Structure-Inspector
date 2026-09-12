@@ -3,7 +3,7 @@
  */
 
 import {
-	DEFAULT_DB_NAME,
+	isProtectedDefaultDbName,
 	dbClearAll,
 	dbCloneCatalog,
 	dbDeleteCatalog
@@ -69,7 +69,7 @@ export async function deleteActiveCatalog(catalog) {
 	const others = listCatalogs().filter(i => i.id !== active.id);
 	if (!others.length) throw new Error("Cannot delete the last catalog");
 	const next = others[0];
-	if (active.dbName === DEFAULT_DB_NAME) {
+	if (isProtectedDefaultDbName(active.dbName)) {
 		await dbClearAll(active.dbName);
 	} else {
 		await dbDeleteCatalog(active.dbName);
