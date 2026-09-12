@@ -8,6 +8,7 @@ import {
 	extractLecternBook,
 	readRedstoneSignal
 } from "./inspectStructure.js";
+import { largeChestTitle } from "./doubleChest.js";
 import { describeSignPlacement } from "./signPlacement.js";
 import {
 	formatSignInspectDump,
@@ -49,7 +50,7 @@ export function shortItemLabel(name) {
 
 /**
  * Resolve container UI kind from block/entity name + block entity id.
- * @param {{ name?: string, blockEntityId?: string|null, identifier?: string }} src
+ * @param {{ name?: string, blockEntityId?: string|null, identifier?: string, doubleChest?: { half?: string }|null }} src
  * @returns {string}
  */
 export function resolveContainerKind(src) {
@@ -78,6 +79,7 @@ export function resolveContainerKind(src) {
 	if (id === "lectern" || name === "lectern") return "lectern";
 	if (id === "sign" || id === "hangingsign" || name.includes("sign")) return "sign";
 	if (id === "enderchest" || name === "ender_chest" || name.includes("ender_chest")) return "ender_chest";
+	if (src.doubleChest) return "double_chest";
 	if (id === "trappedchest" || name.includes("trapped_chest") || name.includes("trappedchest")) return "chest";
 	if (id === "chest" || name === "chest" || name.endsWith("_chest") || name.includes("chest")) return "chest";
 	// Redstone wire — power readout, no inventory
@@ -88,10 +90,12 @@ export function resolveContainerKind(src) {
 /**
  * Slot layout config per kind.
  * @param {string} kind
- * @returns {{ title: string, rows: number, cols: number, slotCount: number, layout: "grid"|"furnace"|"brewing"|"hopper"|"composter", resultSlot?: boolean }}
+ * @returns {{ title: string, rows: number, cols: number, slotCount: number, layout: "grid"|"furnace"|"brewing"|"hopper"|"composter"|"double_chest", resultSlot?: boolean }}
  */
 export function layoutForKind(kind) {
 	switch (kind) {
+		case "double_chest":
+			return { title: kindTitle(kind), rows: 6, cols: 9, slotCount: 54, layout: "double_chest" };
 		case "chest":
 		case "barrel":
 		case "shulker":
@@ -130,6 +134,7 @@ export function layoutForKind(kind) {
 function kindTitle(kind) {
 	const map = {
 		chest: "Chest",
+		double_chest: "Large Chest",
 		barrel: "Barrel",
 		shulker: "Shulker Box",
 		ender_chest: "Ender Chest",
@@ -271,12 +276,20 @@ export function renderContainerUi(hit) {
 
 	if (hit.kind === "block" && hit.block) {
 		const b = hit.block;
-		titleSource = { name: b.name, blockEntityId: b.blockEntityId };
-		// Prefer live re-parse from block entity NBT so we pick up nested shapes
-		const fromBe = b.blockEntity ? extractInventoryItems(b.blockEntity) : [];
-		items = fromBe.length ? fromBe : (b.items || []);
+		titleSource = {
+			name: b.name,
+			blockEntityId: b.blockEntityId,
+			doubleChest: b.doubleChest || null
+		};
 		blockEntity = b.blockEntity;
 		blockStates = b.states && typeof b.states === "object" ? b.states : null;
+		if (b.doubleChest && Array.isArray(b.doubleItems)) {
+			items = b.doubleItems;
+		} else {
+			// Prefer live re-parse from block entity NBT so we pick up nested shapes
+			const fromBe = b.blockEntity ? extractInventoryItems(b.blockEntity) : [];
+			items = fromBe.length ? fromBe : (b.items || []);
+		}
 		// Hopper lock from block states (Bedrock: toggle_bit)
 		if (String(b.name || "").replace(/^minecraft:/, "") === "hopper") {
 			const tb = b.states?.toggle_bit;
@@ -304,6 +317,9 @@ export function renderContainerUi(hit) {
 
 	const kind = resolveContainerKind(titleSource);
 	const layout = layoutForKind(kind);
+	if (kind === "double_chest") {
+		layout.title = largeChestTitle(titleSource.name);
+	}
 	const disabled = kind === "crafter" ? parseDisabledSlots(blockEntity) : new Set();
 	const slots = fillSlots(items, layout.slotCount);
 
@@ -328,6 +344,17 @@ export function renderContainerUi(hit) {
 		title.textContent = `Sign · ${d.kind}`;
 	}
 	header.appendChild(title);
+	if (kind === "double_chest") {
+		root.classList.add("double-chest");
+		const half = hit.block?.doubleChest?.half;
+		if (half === "left" || half === "right") {
+			const halfBadge = document.createElement("span");
+			halfBadge.className = "mc-inv-badge";
+			halfBadge.textContent = half === "left" ? "Left" : "Right";
+			halfBadge.title = "Half you clicked (same 54-slot inventory either side)";
+			header.appendChild(halfBadge);
+		}
+	}
 	const badgeText = lockedHint || compostHint;
 	if (badgeText) {
 		const badge = document.createElement("span");
@@ -371,6 +398,8 @@ export function renderContainerUi(hit) {
 		body.appendChild(renderLecternLayout(blockEntity));
 	} else if (layout.layout === "redstone") {
 		body.appendChild(renderRedstoneLayout(blockStates));
+	} else if (layout.layout === "double_chest") {
+		body.appendChild(renderDoubleChestLayout(slots));
 	} else {
 		const gridWrap = document.createElement("div");
 		gridWrap.className = "mc-inv-row-wrap";
@@ -471,6 +500,22 @@ async function applyCrafterResult(root, resultSlot, slots, disabled) {
  * @param {Set<number>} disabled
  * @param {string} kind
  */
+/**
+ * Large chest: top 3 rows = player-left half, bottom 3 = player-right.
+ * @param {(ItemStack|null)[]} slots length 54
+ */
+function renderDoubleChestLayout(slots) {
+	const wrap = document.createElement("div");
+	wrap.className = "mc-inv-double";
+	const empty = new Set();
+	const top = renderSlotGrid(slots.slice(0, 27), 3, 9, empty, "double_chest");
+	top.classList.add("double-top");
+	const bot = renderSlotGrid(slots.slice(27, 54), 3, 9, empty, "double_chest");
+	bot.classList.add("double-bot");
+	wrap.append(top, bot);
+	return wrap;
+}
+
 function renderSlotGrid(slots, rows, cols, disabled, kind) {
 	const grid = document.createElement("div");
 	grid.className = `mc-inv-grid cols-${cols}`;

@@ -7,9 +7,18 @@ export {
 	dbPutStructure,
 	dbDeleteStructure,
 	dbClearAll,
+	dbClearStructures,
 	dbLoadAll,
 	dbPutCategory,
 	dbPutCategories,
 	dbDeleteCategory,
-	dbLoadCategories
+	dbLoadCategories,
+	dbPutEntry,
+	dbPutEntries,
+	dbDeleteEntry,
+	dbLoadEntries,
+	dbPutFeature,
+	dbPutFeatures,
+	dbDeleteFeature,
+	dbLoadFeatures
 } from "../db.js";

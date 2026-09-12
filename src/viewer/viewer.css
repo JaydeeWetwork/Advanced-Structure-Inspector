@@ -1861,6 +1861,20 @@ body.basi-no-selection .basi-float-left::after {
 	grid-template-columns: repeat(3, 40px);
 }
 
+.mc-inv.double-chest {
+	min-width: 392px;
+}
+
+.mc-inv-double {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.mc-inv-double .double-bot {
+	margin-top: 2px;
+}
+
 .mc-slot {
 	width: 40px;
 	height: 40px;

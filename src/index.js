@@ -18,11 +18,12 @@ import {
 	setStatus,
 	initFloatPins
 } from "./app/dom.js";
+import { initTheme } from "./app/theme.js";
 import {
 	bindCatalogHandlers,
-	renderList,
-	onAddCategory
+	renderList
 } from "./ui/catalogList.js";
+import { bindEditor, renderEditor } from "./ui/editorPage.js";
 import {
 	syncDetailCollapsibles,
 	saveMetaField,
@@ -43,8 +44,15 @@ import {
 	removeSelected
 } from "./app/previewLifecycle.js";
 import { handleFiles } from "./app/importExport.js";
+import { BUILD_ID } from "./buildId.js";
 
 setEls(createEls());
+
+const buildLabel = document.getElementById("buildLabel");
+if (buildLabel) {
+	buildLabel.textContent = BUILD_ID;
+	buildLabel.title = `Build ${BUILD_ID}`;
+}
 
 bindCatalogHandlers({ selectEntry });
 
@@ -52,16 +60,49 @@ function openFilePicker() {
 	els.importInput?.click();
 }
 
+function isEditorView() {
+	return location.hash.replace(/^#\/?/, "") === "editor";
+}
+
+function applyView() {
+	const editor = isEditorView();
+	document.body.classList.toggle("basi-view-editor", editor);
+	document.body.classList.toggle("basi-view-viewer", !editor);
+	els.editorStage?.classList.toggle("hidden", !editor);
+	els.appStage?.classList.toggle("hidden", editor);
+	els.viewViewerBtn?.classList.toggle("is-active", !editor);
+	els.viewEditorBtn?.classList.toggle("is-active", editor);
+	if (editor) renderEditor();
+	else renderList();
+}
+
+function goView(view) {
+	const next = view === "editor" ? "#/editor" : "#/";
+	if (location.hash === next || (view !== "editor" && (location.hash === "" || location.hash === "#/"))) {
+		applyView();
+		return;
+	}
+	location.hash = next;
+}
+
 function wireUi() {
+	initTheme();
 	initFloatPins();
 	initInspectWindow();
 	els.importInput?.addEventListener("change", () => {
 		handleFiles(els.importInput.files);
 	});
 	els.importBtn?.addEventListener("click", openFilePicker);
-	els.addCategoryBtn?.addEventListener("click", () => {
-		void onAddCategory();
+	bindEditor();
+	els.viewViewerBtn?.addEventListener("click", () => goView("viewer"));
+	els.viewEditorBtn?.addEventListener("click", () => goView("editor"));
+	els.openEditorBtn?.addEventListener("click", () => goView("editor"));
+	window.addEventListener("hashchange", applyView);
+	catalog.subscribe(() => {
+		if (isEditorView()) renderEditor();
+		else renderList();
 	});
+	applyView();
 
 	els.defaultCamSelect?.addEventListener("change", () => {
 		if (!getSelectedId()) return;
@@ -207,6 +248,9 @@ function wireUi() {
 }
 
 async function boot() {
+	void import("./viewer/preloadVanilla.js").then(m => m.preloadVanillaAssets()).catch(e => {
+		console.warn("[basi] vanilla preload failed", e);
+	});
 	wireUi();
 	renderList();
 	selectEntry(null);
@@ -214,7 +258,7 @@ async function boot() {
 		els.bootBadge.textContent = "Loading…";
 	}
 	const n = await catalog.hydrateFromDb();
-	renderList();
+	applyView();
 	if (n > 0) {
 		setStatus(`Restored ${n} structure(s) from IndexedDB.`, "ok");
 	}

@@ -9,3 +9,4 @@ export * from "./catalog.js";
 export * from "./previewSession.js";
 export * from "./build.js";
 export * from "./ingest.js";
+export * from "./version.js";

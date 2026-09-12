@@ -195,7 +195,8 @@ describe("StructureCatalog", () => {
 			file
 		});
 		assert.ok(e.id);
-		assert.equal(e.categoryId, null);
+		assert.equal(e.entryId, null);
+		assert.deepEqual(e.featureIds, []);
 		assert.equal(cat.list().length, 1);
 		assert.equal(cat.search({ query: "stone" }).length, 1);
 		assert.equal(cat.search({ query: "minecart" }).length, 0);
@@ -204,13 +205,14 @@ describe("StructureCatalog", () => {
 		assert.equal(cat.list().length, 0);
 	});
 
-	it("supports categories: create, move, reorder, collapse, delete", async () => {
-		const cat = new StructureCatalog();
-		cat.setPersistEnabled(false);
-		const file = new File([new Uint8Array([0])], "a.mcstructure");
-		const e1 = await cat.add({
-			name: "alpha",
-			sourceName: "a.mcstructure",
+	function stubFile(name) {
+		return new File([new Uint8Array([0])], name);
+	}
+
+	function stubStructure(name, extra = {}) {
+		return {
+			name,
+			sourceName: `${name}.mcstructure`,
 			sourceKind: "mcstructure",
 			size: [1, 1, 1],
 			worldOrigin: null,
@@ -218,29 +220,28 @@ describe("StructureCatalog", () => {
 			blockCount: 1,
 			blockNames: ["stone"],
 			entityCount: 0,
-			file
-		});
-		const e2 = await cat.add({
-			name: "beta",
-			sourceName: "b.mcstructure",
-			sourceKind: "mcstructure",
-			size: [1, 1, 1],
-			worldOrigin: null,
-			paletteSize: 1,
-			blockCount: 1,
-			blockNames: ["dirt"],
-			entityCount: 0,
-			file
-		});
+			file: stubFile(`${name}.mcstructure`),
+			...extra
+		};
+	}
+
+	it("supports categories: create, move, reorder, collapse, delete", async () => {
+		const cat = new StructureCatalog();
+		cat.setPersistEnabled(false);
+		const e1 = await cat.add(stubStructure("alpha"));
+		const e2 = await cat.add(stubStructure("beta", { blockNames: ["dirt"] }));
 
 		const c1 = await cat.addCategory("Farms");
 		const c2 = await cat.addCategory("Redstone");
 		assert.equal(cat.listCategories().length, 2);
 		assert.equal(cat.listCategories()[0].name, "Farms");
+		assert.ok(c1.color);
+		assert.equal(c1.description, "");
 
-		await cat.setEntryCategory(e1.id, c1.id);
-		assert.equal(cat.get(e1.id).categoryId, c1.id);
-		assert.equal(cat.get(e2.id).categoryId, null);
+		const clocks = await cat.addCatalogEntry({ categoryId: c1.id, name: "Clocks" });
+		await cat.setStructureEntry(e1.id, clocks.id);
+		assert.equal(cat.get(e1.id).entryId, clocks.id);
+		assert.equal(cat.get(e2.id).entryId, null);
 
 		await cat.reorderCategory(c2.id, -1);
 		assert.equal(cat.listCategories()[0].id, c2.id);
@@ -248,18 +249,78 @@ describe("StructureCatalog", () => {
 		await cat.setCategoryCollapsed(c1.id, true);
 		assert.equal(cat.getCategory(c1.id).collapsed, true);
 
-		const groups = cat.listGrouped();
-		assert.equal(groups[0].isUncategorized, true);
-		assert.equal(groups[0].entries.some(x => x.id === e2.id), true);
-		const farmGroup = groups.find(g => g.categoryId === c1.id);
-		assert.ok(farmGroup);
-		assert.equal(farmGroup.entries.length, 1);
-		assert.equal(farmGroup.entries[0].id, e1.id);
-		assert.equal(farmGroup.collapsed, true);
+		const tree = cat.listTree();
+		assert.equal(tree.uncategorized.structures.some(x => x.id === e2.id), true);
+		const farm = tree.categories.find(g => g.category.id === c1.id);
+		assert.ok(farm);
+		assert.equal(farm.entries.length, 1);
+		assert.equal(farm.entries[0].structures[0].id, e1.id);
+		assert.equal(farm.category.collapsed, true);
 
 		await cat.removeCategory(c1.id);
-		assert.equal(cat.get(e1.id).categoryId, null);
+		assert.equal(cat.get(e1.id).entryId, null);
 		assert.equal(cat.listCategories().length, 1);
+		assert.equal(cat.listCatalogEntries().length, 0);
+	});
+
+	it("seeds default taxonomy and features idempotently", async () => {
+		const cat = new StructureCatalog();
+		cat.setPersistEnabled(false);
+		const first = await cat.ensureSeedTaxonomy();
+		assert.ok(first.categories >= 12);
+		assert.ok(first.entries >= 70);
+		assert.equal(first.features, 11);
+		const circuitry = cat.listCategories().find(c => c.slug === "circuitry");
+		assert.ok(circuitry);
+		assert.equal(circuitry.name, "Circuitry");
+		const clocks = cat.listCatalogEntries(circuitry.id).find(e => e.slug === "clocks");
+		assert.ok(clocks);
+		assert.equal(clocks.name, "Clocks");
+		const silent = cat.listFeatures().find(f => f.slug === "silent");
+		assert.ok(silent);
+		assert.match(silent.description, /doesn't make noise/);
+		assert.ok(silent.categoryIds.includes(circuitry.id));
+		const second = await cat.ensureSeedTaxonomy();
+		assert.deepEqual(second, { categories: 0, entries: 0, features: 0 });
+		assert.equal(cat.listCategories().filter(c => c.slug === "circuitry").length, 1);
+		assert.equal(cat.listFeatures().filter(f => f.slug === "silent").length, 1);
+	});
+
+	it("assigns features, searches by entry/feature, and cascades deletes", async () => {
+		const cat = new StructureCatalog();
+		cat.setPersistEnabled(false);
+		await cat.ensureSeedTaxonomy();
+		const circuitry = cat.listCategories().find(c => c.slug === "circuitry");
+		const clocks = cat.listCatalogEntries(circuitry.id).find(e => e.slug === "clocks");
+		const silent = cat.listFeatures().find(f => f.slug === "silent");
+		const tileable = cat.listFeatures().find(f => f.slug === "tileable");
+		const s = await cat.add(stubStructure("hopper-clock"));
+		await cat.setStructureEntry(s.id, clocks.id);
+		await cat.setStructureFeatures(s.id, [silent.id, tileable.id]);
+		assert.equal(cat.get(s.id).featureIds.length, 2);
+		assert.equal(cat.search({ query: "clocks" }).length, 1);
+		assert.equal(cat.search({ query: "silent" }).length, 1);
+		assert.equal(cat.getCategoryForStructure(s.id).id, circuitry.id);
+
+		await cat.removeFeature(silent.id);
+		assert.equal(cat.get(s.id).featureIds.includes(silent.id), false);
+		assert.equal(cat.get(s.id).featureIds.includes(tileable.id), true);
+
+		await cat.removeCatalogEntry(clocks.id);
+		assert.equal(cat.get(s.id).entryId, null);
+
+		const filters = cat.listCategories().find(c => c.slug === "filters");
+		await cat.patchFeature(tileable.id, { categoryIds: [circuitry.id, filters.id] });
+		assert.equal(cat.getFeature(tileable.id).categoryIds.length, 2);
+	});
+
+	it("treats structures without entryId as uncategorized", async () => {
+		const cat = new StructureCatalog();
+		cat.setPersistEnabled(false);
+		await cat.ensureSeedTaxonomy();
+		const s = await cat.add(stubStructure("legacy"));
+		const tree = cat.listTree();
+		assert.equal(tree.uncategorized.structures.some(x => x.id === s.id), true);
 	});
 
 	it("persists acquiredMaterials, defaultCameraPreset, userDetails, creator meta via patch", async () => {
@@ -1234,6 +1295,30 @@ describe("containerUi composter + brewing", async () => {
 		assert.equal(layoutForKind("lectern").layout, "lectern");
 		assert.equal(layoutForKind("redstone_wire").layout, "redstone");
 	});
+
+	it("uses 54-slot large chest layout when the pick is a paired half", async () => {
+		assert.equal(
+			resolveContainerKind({ name: "chest", doubleChest: { half: "left", partnerKey: "1,0,0" } }),
+			"double_chest"
+		);
+		const lay = layoutForKind("double_chest");
+		assert.equal(lay.slotCount, 54);
+		assert.equal(lay.rows, 6);
+		assert.equal(lay.cols, 9);
+		assert.equal(lay.layout, "double_chest");
+		const { fillSlots } = await import("../../src/viewer/containerUi.js");
+		const slots = fillSlots(
+			[
+				{ name: "dirt", count: 1, slot: 0 },
+				{ name: "diamond", count: 2, slot: 27 }
+			],
+			54
+		);
+		assert.equal(slots.length, 54);
+		assert.equal(slots[0]?.name, "dirt");
+		assert.equal(slots[27]?.name, "diamond");
+		assert.equal(slots[1], null);
+	});
 });
 
 describe("sign / lectern / redstone extract", async () => {
@@ -1311,10 +1396,96 @@ describe("doubleChest", async () => {
 	});
 
 	it("classifies pair offset vs facing", () => {
-		const c = classifyChestPair("north", 1, 0); // pair east of north-facing
+		const c = classifyChestPair("north", 1, 0); // pair east of north-facing → this is left
 		assert.ok(c);
-		assert.ok(c.half === "a" || c.half === "b");
+		assert.equal(c.half, "left");
+		assert.equal(classifyChestPair("north", -1, 0).half, "right");
+		assert.equal(classifyChestPair("south", -1, 0).half, "left");
+		assert.equal(classifyChestPair("east", 0, 1).half, "left");
+		assert.equal(classifyChestPair("west", 0, -1).half, "left");
 		assert.equal(chestFacing({ "minecraft:cardinal_direction": "west" }), "west");
+	});
+
+	it("N/S double chests need preview instance X-mirror; E/W do not", async () => {
+		const { doubleChestNeedsPreviewXMirror } = await import(
+			"../../src/viewer/doubleChest.js"
+		);
+		assert.equal(
+			doubleChestNeedsPreviewXMirror({
+				basi_block_shape: "chest_double<x>",
+				states: { "minecraft:cardinal_direction": "north" }
+			}),
+			true
+		);
+		assert.equal(
+			doubleChestNeedsPreviewXMirror({
+				basi_block_shape: "chest_double<x>",
+				states: { "minecraft:cardinal_direction": "east" }
+			}),
+			false
+		);
+		assert.equal(doubleChestNeedsPreviewXMirror({ name: "chest", states: {} }), false);
+	});
+
+	it("palette halves use chest_double left/right and double_* textures", () => {
+		const js = readFileSync(join(root, "src/viewer/doubleChest.js"), "utf8");
+		const geo = readFileSync(join(root, "src/data/blockShapeGeos.json"), "utf8");
+		assert.match(js, /chest_double</);
+		assert.match(js, /double_normal/);
+		assert.match(geo, /"chest_double"/);
+		assert.match(geo, /basi_chest_half==left/);
+		assert.match(geo, /basi_chest_half==right/);
+		assert.match(geo, /128, 64/);
+		assert.match(geo, /"pos": \[1, 0, 1\]/);
+		assert.match(geo, /"pos": \[0, 0, 1\]/);
+		assert.doesNotMatch(geo, /sdb_chest_latch/);
+		assert.doesNotMatch(js, /basi_pair_yaw/);
+	});
+
+	it("merges half inventories into 54 slots (left 0–26, right 27–53)", async () => {
+		const { mergeDoubleChestInventories, largeChestTitle } = await import(
+			"../../src/viewer/doubleChest.js"
+		);
+		const merged = mergeDoubleChestInventories(
+			[{ name: "dirt", count: 1, slot: 0 }],
+			[{ name: "diamond", count: 2, slot: 0 }]
+		);
+		assert.equal(merged.length, 2);
+		assert.equal(merged.find(i => i.name === "dirt")?.slot, 0);
+		assert.equal(merged.find(i => i.name === "diamond")?.slot, 27);
+		const already = mergeDoubleChestInventories(
+			[{ name: "stone", count: 1, slot: 40 }],
+			[]
+		);
+		assert.equal(already[0].slot, 40);
+		assert.equal(largeChestTitle("trapped_chest"), "Large Trapped Chest");
+		assert.equal(largeChestTitle("minecraft:chest"), "Large Chest");
+		assert.equal(largeChestTitle("oxidized_copper_chest"), "Large Oxidized Copper Chest");
+	});
+
+	it("applyDoubleChestPalette remaps pairx/pairz to left/right geos", async () => {
+		const { applyDoubleChestPalette } = await import("../../src/viewer/doubleChest.js");
+		const nbt = {
+			size: [2, 1, 1],
+			structure_world_origin: [0, 0, 0],
+			structure: {
+				palette: {
+					default: {
+						block_position_data: {
+							0: { block_entity_data: { id: "Chest", x: 0, y: 0, z: 0, pairx: 1, pairz: 0 } },
+							1: { block_entity_data: { id: "Chest", x: 1, y: 0, z: 0, pairx: 0, pairz: 0 } }
+						}
+					}
+				}
+			}
+		};
+		const palette = [{ name: "minecraft:chest", states: { "minecraft:cardinal_direction": "north" } }];
+		const indices = [new Int32Array([0, 0]), new Int32Array([-1, -1])];
+		const r = applyDoubleChestPalette(nbt, palette, indices);
+		assert.equal(r.pairedCount, 2);
+		assert.equal(r.palette[r.indices[0][0]].states.basi_chest_half, "left");
+		assert.equal(r.palette[r.indices[0][1]].states.basi_chest_half, "right");
+		assert.match(r.palette[r.indices[0][0]].basi_block_shape, /chest_double</);
 	});
 });
 
@@ -1341,6 +1512,57 @@ describe("inventory extract (minecarts / nbtify shapes)", async () => {
 		normalizeItemStack,
 		asList
 	} = await import("../../src/viewer/inspectStructure.js");
+
+	it("links paired chests and merges 54-slot items on the inspect index", async () => {
+		const { buildInspectIndex } = await import("../../src/viewer/inspectStructure.js");
+		const data = {
+			size: [2, 1, 1],
+			structure_world_origin: [10, 64, 20],
+			structure: {
+				block_indices: [new Int32Array([0, 0]), new Int32Array([-1, -1])],
+				palette: {
+					default: {
+						block_palette: [
+							{ name: "minecraft:chest", states: { "minecraft:cardinal_direction": "north" } }
+						],
+						block_position_data: {
+							0: {
+								block_entity_data: {
+									id: "Chest",
+									x: 10,
+									y: 64,
+									z: 20,
+									pairx: 11,
+									pairz: 20,
+									Items: [{ Name: "minecraft:dirt", Count: 1, Slot: 0 }]
+								}
+							},
+							1: {
+								block_entity_data: {
+									id: "Chest",
+									x: 11,
+									y: 64,
+									z: 20,
+									pairx: 10,
+									pairz: 20,
+									Items: [{ Name: "minecraft:diamond", Count: 2, Slot: 0 }]
+								}
+							}
+						}
+					}
+				},
+				entities: []
+			}
+		};
+		const idx = buildInspectIndex(data);
+		const left = idx.blocks.get("0,0,0");
+		const right = idx.blocks.get("1,0,0");
+		assert.equal(left.doubleChest.half, "left");
+		assert.equal(right.doubleChest.half, "right");
+		assert.equal(left.doubleItems.find(i => i.name === "dirt")?.slot, 0);
+		assert.equal(left.doubleItems.find(i => i.name === "diamond")?.slot, 27);
+		assert.equal(right.doubleItems.find(i => i.name === "diamond")?.slot, 27);
+	});
 
 	it("asList handles arrays, value wrappers, and numeric-key maps", () => {
 		assert.equal(asList([{ Name: "a" }]).length, 1);
@@ -1729,18 +1951,39 @@ describe("materialList grouping", async () => {
 	});
 });
 
+describe("double chest pair classify", async () => {
+	const { classifyChestPair } = await import("../../src/viewer/doubleChest.js");
+
+	it("maps partner direction to left/right from the front", () => {
+		assert.equal(classifyChestPair("north", 1, 0)?.half, "left");
+		assert.equal(classifyChestPair("north", -1, 0)?.half, "right");
+		assert.equal(classifyChestPair("south", -1, 0)?.half, "left");
+		assert.equal(classifyChestPair("south", 1, 0)?.half, "right");
+		assert.equal(classifyChestPair("east", 0, 1)?.half, "left");
+		assert.equal(classifyChestPair("east", 0, -1)?.half, "right");
+		assert.equal(classifyChestPair("west", 0, -1)?.half, "left");
+		assert.equal(classifyChestPair("west", 0, 1)?.half, "right");
+		assert.equal(classifyChestPair("north", 0, 0), null);
+		assert.equal(classifyChestPair("north", 1, 1), null);
+	});
+});
+
 describe("appearance fallback", async () => {
 	const { resolveBlockShapeName } = await import("../../src/viewer/appearanceFallback.js");
 
 	it("uses table hits and unit-cube fallback", () => {
 		const individual = { chest: "chest" };
-		const patterns = [[/_stairs$/, "stairs"]];
+		const patterns = [[/_stairs$/, "stairs"], [/_planks$/, "block"]];
 		assert.deepEqual(resolveBlockShapeName("chest", individual, patterns), {
 			shape: "chest",
 			fallback: false
 		});
 		assert.deepEqual(resolveBlockShapeName("oak_stairs", individual, patterns), {
 			shape: "stairs",
+			fallback: false
+		});
+		assert.deepEqual(resolveBlockShapeName("oak_planks", individual, patterns), {
+			shape: "block",
 			fallback: false
 		});
 		assert.deepEqual(resolveBlockShapeName("completely_unknown_mod_block", individual, patterns), {
@@ -1835,6 +2078,100 @@ describe("item upgrade schemas", async () => {
 		const stack = upgradeItemStack({ name: "dye", count: 8, slot: 0, damage: 15, raw: {} }, schemas);
 		assert.equal(stack.name, "bone_meal");
 		assert.equal(stack.count, 8);
+	});
+});
+
+describe("paper theme", async () => {
+	const { getSavedTheme, resolvedTheme } = await import("../../src/app/theme.js");
+
+	it("treats missing localStorage as follow-OS", () => {
+		assert.equal(getSavedTheme(), null);
+		assert.ok(resolvedTheme() === "light" || resolvedTheme() === "dark");
+	});
+
+	it("paper stylesheet overlays peek docks, not magenta HoloPrint chrome", () => {
+		const paper = readFileSync(join(root, "src/styles/paper.css"), "utf8");
+		assert.match(paper, /--basi-float-peek/);
+		assert.doesNotMatch(paper, /grid-template-areas:\s*"nav preview detail"/);
+		assert.doesNotMatch(paper, /#D899D8|#C57CC5|#D38AD3/);
+		const html = readFileSync(join(root, "src/index.html"), "utf8");
+		assert.match(html, /themeBtn/);
+		assert.match(html, /styles\/paper\.css/);
+		assert.doesNotMatch(html, /Hover left edge/);
+	});
+});
+
+describe("preview load cache / preload", () => {
+	it("fetchers replay bytes in memory and do not copy older pins into the current cache", () => {
+		const src = readFileSync(join(root, "src/fetchers.js"), "utf8");
+		assert.match(src, /memoryEntries/);
+		assert.match(src, /replayEntry/);
+		assert.doesNotMatch(src, /previousCache/);
+	});
+
+	it("viewer preview skips hologram opacity stack and PNG-roundtrip when possible", () => {
+		const preview = readFileSync(join(root, "src/viewer/structurePreview.js"), "utf8");
+		assert.match(preview, /MULTIPLE_OPACITIES: partial\.MULTIPLE_OPACITIES \?\? false/);
+		assert.match(preview, /SKIP_TEXTURE_CROP/);
+		assert.match(preview, /atlasImageData/);
+		const atlas = readFileSync(join(root, "src/TextureAtlas.js"), "utf8");
+		assert.match(atlas, /packedAtlasCache/);
+		assert.match(atlas, /mapPool/);
+		const pool = readFileSync(join(root, "src/viewer/systems/PreviewResourcePool.js"), "utf8");
+		assert.match(pool, /materialSide === "front"/);
+		const renderer = readFileSync(join(root, "src/PreviewRenderer.js"), "utf8");
+		assert.match(renderer, /materialSide: "front"/);
+		assert.match(renderer, /logarithmicDepthBuffer: true/);
+		const geoMaker = readFileSync(join(root, "src/BlockGeoMaker.js"), "utf8");
+		assert.match(geoMaker, /#templateMemo/);
+		const layer = readFileSync(join(root, "src/viewer/systems/LayerMeshSystem.js"), "utf8");
+		assert.match(layer, /doubleChestNeedsPreviewXMirror/);
+		const geoSys = readFileSync(join(root, "src/viewer/systems/BlockGeoSystem.js"), "utf8");
+		assert.match(geoSys, /mirrorX/);
+	});
+
+	it("TextureAtlas caches decoded ImageData; ResourcePackStack caches vanilla pack JSON", () => {
+		const atlas = readFileSync(join(root, "src/TextureAtlas.js"), "utf8");
+		assert.match(atlas, /packAssetStore\.decodeTexture/);
+		const store = readFileSync(join(root, "src/viewer/appearance/PackAssetStore.js"), "utf8");
+		assert.match(store, /#decoded/);
+		assert.match(store, /texture_list\.json/);
+		const rps = readFileSync(join(root, "src/ResourcePackStack.js"), "utf8");
+		assert.match(rps, /#vanillaJsonByPath/);
+		assert.match(rps, /JSON_FILES_TO_MERGE/);
+		assert.doesNotMatch(rps, /sharedVanilla/);
+	});
+
+	it("entity kit fetches all kinds in parallel through ResourcePackStack", () => {
+		const src = readFileSync(join(root, "src/viewer/entityGeoThree.js"), "utf8");
+		assert.match(src, /Promise\.all/);
+		assert.match(src, /Object\.entries\(VANILLA_ENTITY_MODELS\)/);
+		assert.doesNotMatch(src, /vanillaTextureBlobCache/);
+		assert.doesNotMatch(src, /cdn\.jsdelivr\.net\/gh\/Mojang\/bedrock-samples/);
+	});
+
+	it("item upgrade schemas start before atlas packing", () => {
+		const src = readFileSync(join(root, "src/viewer/structurePreview.js"), "utf8");
+		const start = src.indexOf("loadItemUpgradeSchemas");
+		const atlas = src.indexOf("textureAtlas.makeAtlas");
+		assert.ok(start > 0 && atlas > start);
+		assert.doesNotMatch(src, /rps:vanilla:/);
+	});
+
+	it("boot preloads via ResourcePackStack + BlockUpdater module cache", () => {
+		const preload = readFileSync(join(root, "src/viewer/preloadVanilla.js"), "utf8");
+		assert.match(preload, /JSON_FILES_TO_MERGE/);
+		assert.match(preload, /VANILLA_ENTITY_MODELS/);
+		assert.match(preload, /loadItemUpgradeSchemas/);
+		assert.match(preload, /ensureSchemaIndex/);
+		assert.doesNotMatch(preload, /getSharedBlockUpdater|sharedVanilla/);
+		const boot = readFileSync(join(root, "src/index.js"), "utf8");
+		assert.match(boot, /preloadVanillaAssets/);
+		const updater = readFileSync(join(root, "src/BlockUpdater.js"), "utf8");
+		assert.match(updater, /const schemaLoads = new Map/);
+		assert.doesNotMatch(updater, /getSharedBlockUpdater/);
+		const palette = readFileSync(join(root, "src/viewer/palette.js"), "utf8");
+		assert.match(palette, /new BlockUpdater\s*\(/);
 	});
 });
 

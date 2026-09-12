@@ -4,8 +4,8 @@
 
 import * as NBT from "nbtify-readonly-typeless";
 
-import BlockGeoMaker from "../BlockGeoMaker.js";
-import TextureAtlas from "../TextureAtlas.js";
+import BlockGeoMaker from "../BlockGeoMaker.js?v=judo60";
+import TextureAtlas from "../TextureAtlas.js?v=judo60";
 // Single PreviewRenderer (systems-based) — used by ASI and HoloPrint pack UI
 import PreviewRenderer from "../PreviewRenderer.js";
 import ResourcePackStack from "../ResourcePackStack.js";
@@ -37,8 +37,9 @@ function defaultPreviewConfig(partial = {}) {
 	return {
 		IGNORED_BLOCKS: [...IGNORED_BLOCKS, ...(partial.IGNORED_BLOCKS ?? [])],
 		SCALE: partial.SCALE ?? 0.95,
-		OPACITY: partial.OPACITY ?? 0.9,
-		MULTIPLE_OPACITIES: partial.MULTIPLE_OPACITIES ?? true,
+		OPACITY: partial.OPACITY ?? 1,
+		MULTIPLE_OPACITIES: partial.MULTIPLE_OPACITIES ?? false,
+		SKIP_TEXTURE_CROP: partial.SKIP_TEXTURE_CROP ?? true,
 		// No blue hologram trim on blocks — cleaner structure viewer look
 		TEXTURE_OUTLINE_WIDTH: partial.TEXTURE_OUTLINE_WIDTH ?? 0,
 		TEXTURE_OUTLINE_COLOR: partial.TEXTURE_OUTLINE_COLOR ?? "#00F",
@@ -117,15 +118,11 @@ async function buildPreviewAssets(structureFile, config, resourcePackStack, sign
 	};
 
 	throwIfAborted(signal);
-	progress("Parsing NBT…");
-	const nbt = await readStructureNBT(structureFile, signal);
-	const structureSize = normalizeVec3(nbt["size"]);
-	const structure = nbt["structure"];
-	const volume = structureSize[0] * structureSize[1] * structureSize[2];
-	progress(
-		`Size ${structureSize.join("×")} (${volume.toLocaleString()} cells) — loading pack data…`
-	);
-
+	const itemSchemasPromise = loadItemUpgradeSchemas(fetchers).catch(e => {
+		console.warn("[basi] item upgrade schemas skipped:", e);
+		return [];
+	});
+	// Kick pack JSON + block-shape tables before NBT parse so CDN/cache overlap.
 	const dataPromise = loadDataFiles(
 		[
 			"textureAtlasMappings",
@@ -136,12 +133,19 @@ async function buildPreviewAssets(structureFile, config, resourcePackStack, sign
 		],
 		signal
 	);
-
 	const resourcesPromise = Promise.all([
 		resourcePackStack.fetchResource("blocks.json").then(r => jsonc(r)),
 		resourcePackStack.fetchResource("textures/terrain_texture.json").then(r => jsonc(r)),
 		resourcePackStack.fetchResource("textures/flipbook_textures.json").then(r => jsonc(r))
 	]);
+	progress("Parsing NBT…");
+	const nbt = await readStructureNBT(structureFile, signal);
+	const structureSize = normalizeVec3(nbt["size"]);
+	const structure = nbt["structure"];
+	const volume = structureSize[0] * structureSize[1] * structureSize[2];
+	progress(
+		`Size ${structureSize.join("×")} (${volume.toLocaleString()} cells) — loading pack data…`
+	);
 
 	const { palette: blockPalette, indices: structureIndices } = await tweakBlockPalette(
 		structure,
@@ -210,19 +214,30 @@ async function buildPreviewAssets(structureFile, config, resourcePackStack, sign
 	);
 	await textureAtlas.makeAtlas(Array.from(blockGeoMaker.textureRefs));
 	throwIfAborted(signal);
-	const unmapped = blockGeoMaker.unmappedBlockNames;
-	if (unmapped?.size) {
+	const missingGeo = blockGeoMaker.unmappedBlockNames;
+	const defaultCubes = blockGeoMaker.defaultCubeNames;
+	if (defaultCubes?.size) {
+		console.info(
+			`[basi] appearance: ${defaultCubes.size} palette id(s) used the default cube (planks, stone, ores, …)`
+		);
+	}
+	if (missingGeo?.size) {
 		console.warn(
-			`[basi] ${unmapped.size} unmapped block id(s) drew as unit cubes:`,
-			[...unmapped].sort()
+			`[basi] ${missingGeo.size} block id(s) named a shape with no geo and drew as unit cubes:`,
+			[...missingGeo].sort()
 		);
 	}
 
-	const fullOpacityTextureBlob = textureAtlas.imageBlobs.at(-1)[1];
+	const fullOpacityTextureBlob = textureAtlas.atlasImageData
+		?? textureAtlas.imageBlobs.at(-1)[1];
 	const unscaled = unresolvedPolyMeshTemplatePalette.map(t =>
 		BlockGeoMaker.resolveTemplateFaceUvs(t, textureAtlas)
 	);
-	const polyMeshTemplatePalette = blockGeoMaker.scalePolyMeshTemplates(unscaled, centersOfMass);
+	const polyMeshTemplatePalette = blockGeoMaker.scalePolyMeshTemplates(
+		unscaled,
+		centersOfMass,
+		mergedPalette
+	);
 
 	/** @type {Record<string, any[]>} */
 	const cargoTemplates = {};
@@ -236,12 +251,7 @@ async function buildPreviewAssets(structureFile, config, resourcePackStack, sign
 
 	// Sparse inspect index (block entities only — huge win on large volumes)
 	progress("Indexing containers & entities…");
-	let itemSchemas = [];
-	try {
-		itemSchemas = await loadItemUpgradeSchemas(fetchers);
-	} catch (e) {
-		console.warn("[basi] item upgrade schemas skipped:", e);
-	}
+	const itemSchemas = await itemSchemasPromise;
 	const inspectIndex = buildInspectIndex(nbt, { itemSchemas });
 	console.info(
 		`[basi] inspect index: ${inspectIndex.blocks.size} block-entities, ${inspectIndex.entities.length} entities`
@@ -293,7 +303,7 @@ export async function renderStructurePreview(
 	const previews = [];
 	const hostParent = previewCont.parentNode;
 	// v14: restore TGA textures (cactus etc.) + icon path maps
-	const cacheKey = `v17|pack=${VANILLA_SAMPLES_TAG}|scale=${config.SCALE}|ign=${config.IGNORED_BLOCKS.length}|ent=${config.SHOW_ENTITIES !== false ? 1 : 0}|ol=${config.TEXTURE_OUTLINE_WIDTH}|sky=${config.SHOW_PREVIEW_SKYBOX ? 1 : 0}`;
+	const cacheKey = `v27|pack=${VANILLA_SAMPLES_TAG}|scale=${config.SCALE}|ign=${config.IGNORED_BLOCKS.length}|ent=${config.SHOW_ENTITIES !== false ? 1 : 0}|ol=${config.TEXTURE_OUTLINE_WIDTH}|sky=${config.SHOW_PREVIEW_SKYBOX ? 1 : 0}`;
 
 	try {
 		for (let structureI = 0; structureI < files.length; structureI++) {

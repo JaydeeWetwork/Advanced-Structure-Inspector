@@ -13,9 +13,20 @@
 		<link rel="stylesheet" href="https://fonts.bunny.net/css?family=catamaran:400,500,700&display=swap"/>
 		<link rel="stylesheet" href="https://fonts.bunny.net/css?family=space-grotesk:400,600&display=swap"/>
 
-		<link rel="stylesheet" href="styles/base.css?v=judo45"/>
-		<link rel="stylesheet" href="styles/preview.css?v=judo45"/>
-		<link rel="stylesheet" href="viewer/viewer.css?v=judo45"/>
+		<script>
+			(function () {
+				try {
+					var t = localStorage.getItem("basi.theme.v1");
+					if (t === "light" || t === "dark") document.documentElement.dataset.theme = t;
+				} catch (e) {}
+			})();
+		</script>
+		<link rel="stylesheet" href="styles/base.css?v=judo60"/>
+		<link rel="stylesheet" href="styles/preview.css?v=judo60"/>
+		<link rel="stylesheet" href="styles/theme.css?v=judo60"/>
+		<link rel="stylesheet" href="viewer/viewer.css?v=judo60"/>
+		<link rel="stylesheet" href="styles/paper.css?v=judo60"/>
+		<link rel="stylesheet" href="styles/editor.css?v=judo60"/>
 		<script type="importmap">
 			{
 				"imports": {
@@ -33,15 +44,18 @@
 				}
 			}
 		</script>
-		<script src="index.js?v=judo45" type="module"></script>
+		<script src="index.js?v=judo60" type="module"></script>
 		<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
 		<meta http-equiv="Pragma" content="no-cache"/>
 	</head>
-	<body class="basi-app basi-no-selection">
+	<body class="basi-app basi-no-selection basi-view-viewer">
 		<header class="basi-header">
 			<div class="basi-header-brand">
-				<h1>Bedrock ASI</h1>
-				<p class="tagline" id="appTagline">Hover left edge for list · right for stats &amp; materials</p>
+				<h1>Bedrock ASI <span class="basi-build" id="buildLabel" title="Build / cache token">judo60</span></h1>
+				<nav class="basi-view-switch" aria-label="App view">
+					<button type="button" class="basi-view-link is-active" id="viewViewerBtn" data-view="viewer">Viewer</button>
+					<button type="button" class="basi-view-link" id="viewEditorBtn" data-view="editor">Editor</button>
+				</nav>
 			</div>
 
 			<!-- Shown when a structure is selected: name, source, hoppers, actions -->
@@ -67,16 +81,17 @@
 				<input id="importInput" type="file" multiple hidden
 					accept=".mcstructure,.mcworld,.mctemplate,.mcpack,.zip,application/octet-stream,*/*"/>
 				<button type="button" class="basi-btn secondary" id="clearCatalogBtn">Clear list</button>
+				<button type="button" class="basi-btn secondary basi-theme-btn" id="themeBtn" title="Switch to dark mode">Dark</button>
 				<button type="button" class="basi-btn secondary" id="creditsBtn" title="Open credits">Credits</button>
 			</div>
 		</header>
 
-		<!-- Full-stage preview with floating auto-hide docks -->
+		<!-- Full-bleed canvas; catalog / details overlay and peek on hover -->
 		<div class="basi-stage" id="appStage">
 			<main class="basi-main" id="previewMain">
 				<section class="basi-empty" id="emptyState">
 					<h2>Select a structure</h2>
-					<p>Hover the <strong>left edge</strong> for the structure list, or use <strong>Import…</strong>. Preview fills this view.</p>
+					<p>Pick one from the list, or Import…</p>
 				</section>
 
 				<section class="basi-detail hidden" id="detailPanel">
@@ -97,7 +112,7 @@
 								<span id="camTiltVal" class="basi-cam-tilt-val">67°</span>
 							</label>
 							<span class="basi-layer-badge hidden" id="layerBadge" aria-live="polite">Layer 0</span>
-							<span class="basi-preview-keys" title="Keyboard controls when preview is ready">↑↓ layer · ← all · → cam · Fly: WASD Space/Shift · drag look · dbl-click inspect</span>
+							<span class="basi-preview-keys" title="↑↓ layer · ← all · → cam · Fly: WASD Space/Shift · drag look · dbl-click inspect">↑↓ layer · ← all · → cam · Fly WASD · dbl-click inspect</span>
 						</div>
 						<div class="basi-preview-host" id="previewHost" tabindex="0"></div>
 						<div class="basi-inspect-panel basi-win hidden" id="inspectPanel" aria-live="polite">
@@ -112,20 +127,20 @@
 				</section>
 			</main>
 
-			<!-- Left: structure catalog — peeks / expands on hover near edge -->
+			<!-- Left: structure catalog -->
 			<aside class="basi-float basi-float-left" id="catalogFloat" aria-label="Structure list">
 				<div class="basi-float-hit" aria-hidden="true"></div>
 				<div class="basi-float-panel basi-sidebar">
 					<div class="basi-float-label-row">
 						<div class="basi-float-label">Structures</div>
-						<button type="button" class="basi-float-pin" id="pinCatalogBtn" title="Pin menu open" aria-pressed="false" aria-label="Pin structure list open">📌</button>
+						<button type="button" class="basi-float-pin" id="pinCatalogBtn" title="Pin — keep open" aria-pressed="false" aria-label="Pin — keep open">»</button>
 					</div>
 
 					<input class="basi-search" id="searchInput" type="search" placeholder="Filter list…" autocomplete="off"/>
 
 					<div class="basi-list-header basi-list-header-row">
 						<span id="catalogCount">0 structures</span>
-						<button type="button" class="basi-cat-btn basi-cat-add" id="addCategoryBtn" title="Create a new category">+ Category</button>
+						<button type="button" class="basi-cat-btn basi-cat-add" id="openEditorBtn" title="Open the database editor">Editor</button>
 					</div>
 
 					<ul class="basi-catalog-list" id="catalogList" role="listbox" aria-label="Imported structures"></ul>
@@ -134,13 +149,13 @@
 				</div>
 			</aside>
 
-			<!-- Right: stats + materials — peeks / expands when structure selected -->
+			<!-- Right: stats + materials -->
 			<aside class="basi-float basi-float-right" id="detailFloat" aria-label="Structure details">
 				<div class="basi-float-hit" aria-hidden="true"></div>
 				<div class="basi-float-panel basi-detail-side">
 					<div class="basi-float-label-row">
 						<div class="basi-float-label">Details</div>
-						<button type="button" class="basi-float-pin" id="pinDetailBtn" title="Pin menu open" aria-pressed="false" aria-label="Pin details panel open">📌</button>
+						<button type="button" class="basi-float-pin" id="pinDetailBtn" title="Pin — keep open" aria-pressed="false" aria-label="Pin — keep open">«</button>
 					</div>
 
 					<section class="basi-collapsible" id="detailsInfoSection" data-section="details">
@@ -183,6 +198,8 @@
 								</label>
 							</div>
 
+							<div class="basi-feature-chips" id="detailFeatureChips" aria-label="Assigned features"></div>
+
 							<div class="basi-stats" id="detailStats"></div>
 
 							<button type="button" class="basi-btn secondary basi-add-detail-btn" id="addDetailBtn">+ Add detail</button>
@@ -206,8 +223,25 @@
 			<div class="basi-status-toast hidden" id="statusToast" role="status" aria-live="polite"></div>
 		</div>
 
+		<section class="basi-editor hidden" id="editorStage" aria-label="Database editor">
+			<div class="basi-editor-left">
+				<div class="basi-editor-pane-label">Database</div>
+				<div class="basi-editor-toolbar" id="editorTreeToolbar"></div>
+				<div class="basi-editor-tree" id="editorTree" role="tree"></div>
+				<div class="basi-editor-inspector" id="editorInspector"></div>
+			</div>
+			<div class="basi-editor-right" id="editorFeatures">
+				<div class="basi-ed-feat-head">
+					<h2 class="basi-ed-pane-title">Features</h2>
+					<button type="button" class="basi-btn" id="addFeatureBtn">+ Feature</button>
+				</div>
+				<input class="basi-search basi-ed-feat-filter" id="editorFeatureFilter" type="search" placeholder="Filter features…" autocomplete="off"/>
+				<p class="basi-ed-hint" id="editorFeatureHint"></p>
+				<div class="basi-ed-feat-list" id="editorFeatureList"></div>
+			</div>
+		</section>
+
 		<footer class="basi-footer">
-			<span class="basi-footer-hint">Left edge = list · Right edge = details · 📌 pins menus open</span>
 			<span class="basi-footer-meta">
 				Adapted from <a href="https://github.com/SuperLlama88888/holoprint" rel="noopener" target="_blank">HoloPrint</a>
 				· <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" rel="noopener" target="_blank">CC BY-NC-SA 4.0</a>

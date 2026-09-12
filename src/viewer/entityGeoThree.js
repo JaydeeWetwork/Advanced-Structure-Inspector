@@ -12,10 +12,6 @@ import {
 	boxUvLayout,
 	transformEntityPoint
 } from "./entityModels.js";
-import {
-	VANILLA_SAMPLES_TAG,
-	VANILLA_SAMPLES_FALLBACK_TAGS
-} from "../data/packPins.js";
 
 async function readPackJson(res) {
 	const text = await res.text();
@@ -172,31 +168,17 @@ export function createGeometryMesh(THREE, geoBlock, texture) {
  * @returns {Promise<Blob|null>}
  */
 export async function fetchVanillaTextureBlob(rps, pathNoExt) {
-	for (const ext of [".png", ".tga"]) {
-		if (rps?.fetchResource) {
-			try {
-				const res = await rps.fetchResource(pathNoExt + ext);
-				if (res?.ok) {
-					const blob = await res.blob();
-					if (blob && blob.size > 8) return blob;
-				}
-			} catch {
-				/* try CDN tags */
-			}
+	if (!rps?.fetchResource) return null;
+	const { packAssetStore } = await import("./appearance/PackAssetStore.js");
+	const { imageRes } = await packAssetStore.fetchTexture(pathNoExt, undefined, {
+		tryLocal: pathWithExt => {
+			const file = rps.getLocalFile?.(pathWithExt);
+			return file ? new Response(file) : null;
 		}
-		for (const tag of [VANILLA_SAMPLES_TAG, ...VANILLA_SAMPLES_FALLBACK_TAGS]) {
-			try {
-				const url = `https://cdn.jsdelivr.net/gh/Mojang/bedrock-samples@${tag}/resource_pack/${pathNoExt}${ext}`;
-				const res = await fetch(url);
-				if (!res.ok) continue;
-				const blob = await res.blob();
-				if (blob && blob.size > 8) return blob;
-			} catch {
-				/* next tag */
-			}
-		}
-	}
-	return null;
+	});
+	if (!imageRes?.ok) return null;
+	const blob = await imageRes.blob();
+	return blob && blob.size > 8 ? blob : null;
 }
 
 /**
@@ -234,6 +216,8 @@ export async function loadVanillaEntityKit(THREE, rps) {
 
 	/** @type {Map<string, Promise<any>>} */
 	const geoCache = new Map();
+	/** @type {Map<string, Promise<any>>} */
+	const entCache = new Map();
 	/** @type {Map<string, Promise<import("three").Texture|null>>} */
 	const texCache = new Map();
 
@@ -246,6 +230,15 @@ export async function loadVanillaEntityKit(THREE, rps) {
 		}
 		return geoCache.get(path);
 	};
+	const loadEnt = (path) => {
+		if (!entCache.has(path)) {
+			entCache.set(path, rps.fetchResource(path).then(async res => {
+				if (!res?.ok) return null;
+				return readPackJson(res);
+			}).catch(() => null));
+		}
+		return entCache.get(path);
+	};
 	const loadTex = (path) => {
 		if (!texCache.has(path)) {
 			texCache.set(path, (async () => {
@@ -257,51 +250,55 @@ export async function loadVanillaEntityKit(THREE, rps) {
 		return texCache.get(path);
 	};
 
-	/** @type {Map<string, import("three").Mesh>} */
-	const hullByKey = new Map();
-
-	for (const [kind, def] of Object.entries(VANILLA_ENTITY_MODELS)) {
-		try {
-			let wantedIds = def.geoIds;
+	const loaded = await Promise.all(
+		Object.entries(VANILLA_ENTITY_MODELS).map(async ([kind, def]) => {
 			try {
-				const entRes = await rps.fetchResource(def.entityFile);
-				if (entRes?.ok) {
-					const entJson = await readPackJson(entRes);
+				let wantedIds = def.geoIds;
+				try {
+					const entJson = await loadEnt(def.entityFile);
 					const desc = entJson?.["minecraft:client_entity"]?.description;
 					const gid = desc?.geometry?.default;
 					if (typeof gid === "string") {
 						wantedIds = [gid, ...def.geoIds];
 					}
+				} catch {
+					/* table paths are enough */
 				}
-			} catch {
-				/* table paths are enough */
-			}
 
-			const geoFile = await loadGeo(def.geoFile);
-			const geoBlock = pickGeometry(geoFile, wantedIds);
-			if (!geoBlock) continue;
-			const texture = await loadTex(def.texture);
-			if (!texture) {
-				console.warn("[basi] minecart PNG missing for", kind, "— still meshing untextured hull");
+				const geoFile = await loadGeo(def.geoFile);
+				const geoBlock = pickGeometry(geoFile, wantedIds);
+				if (!geoBlock) return null;
+				const texture = await loadTex(def.texture);
+				if (!texture) {
+					console.warn("[basi] minecart PNG missing for", kind, "— still meshing untextured hull");
+				}
+				return { kind, def, geoBlock, texture };
+			} catch (e) {
+				console.warn("[basi] vanilla entity kit failed:", kind, e);
+				return null;
 			}
+		})
+	);
 
-			const hullKey = `${def.geoFile}|${geoBlock.description?.identifier}|${def.texture}`;
-			let hull = hullByKey.get(hullKey);
-			if (!hull) {
-				hull = createGeometryMesh(THREE, geoBlock, texture);
-				hullByKey.set(hullKey, hull);
-			}
-
-			const template = new THREE.Group();
-			template.name = `vanilla:${kind}`;
-			const hullInst = new THREE.Mesh(hull.geometry, hull.material);
-			hullInst.name = hull.name;
-			hullInst.frustumCulled = false;
-			template.add(hullInst);
-			kit.set(kind, { template, texture, cargo: def.cargo });
-		} catch (e) {
-			console.warn("[basi] vanilla entity kit failed:", kind, e);
+	/** @type {Map<string, import("three").Mesh>} */
+	const hullByKey = new Map();
+	for (const item of loaded) {
+		if (!item) continue;
+		const { kind, def, geoBlock, texture } = item;
+		const hullKey = `${def.geoFile}|${geoBlock.description?.identifier}|${def.texture}`;
+		let hull = hullByKey.get(hullKey);
+		if (!hull) {
+			hull = createGeometryMesh(THREE, geoBlock, texture);
+			hullByKey.set(hullKey, hull);
 		}
+
+		const template = new THREE.Group();
+		template.name = `vanilla:${kind}`;
+		const hullInst = new THREE.Mesh(hull.geometry, hull.material);
+		hullInst.name = hull.name;
+		hullInst.frustumCulled = false;
+		template.add(hullInst);
+		kit.set(kind, { template, texture, cargo: def.cargo });
 	}
 	return kit;
 }

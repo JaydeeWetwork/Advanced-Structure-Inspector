@@ -59,7 +59,7 @@ export default class PreviewRenderer extends AsyncFactory {
 		directionalLightShadowMapResolution: 1,
 		enableDamping: false,
 		instanceMergeThreshold: 1,
-		materialSide: "double",
+		materialSide: "front",
 		canvasScale: 0.65,
 		showSkybox: false,
 		showEntities: true,
@@ -108,7 +108,7 @@ export default class PreviewRenderer extends AsyncFactory {
 		maxPixelRatio: 2,
 		enableDamping: true,
 		instanceMergeThreshold: 3,
-		materialSide: "double",
+		materialSide: "front",
 		canvasScale: 0.8,
 		showEntities: true,
 		backgroundColor: 0x121214,
@@ -335,7 +335,9 @@ export default class PreviewRenderer extends AsyncFactory {
 			this.structureSize[1] * 8,
 			-this.structureSize[2] * 8
 		);
-		ctx.imageBlobData = await toImageData(this.#imageBlob);
+		ctx.imageBlobData = this.#imageBlob instanceof ImageData
+			? this.#imageBlob
+			: await toImageData(this.#imageBlob);
 		if (this.#initAborted()) return;
 
 		ctx.renderer = new THREE.WebGLRenderer({
@@ -344,7 +346,8 @@ export default class PreviewRenderer extends AsyncFactory {
 			antialias: this.options.antialias,
 			powerPreference: "high-performance",
 			stencil: false,
-			depth: true
+			depth: true,
+			logarithmicDepthBuffer: true
 		});
 
 		if (isWeakGpu(ctx.renderer)) {

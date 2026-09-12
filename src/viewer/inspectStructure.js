@@ -7,6 +7,7 @@
 
 import { describeSignPlacement } from "./signPlacement.js";
 import { upgradeItemStack } from "./itemUpgrade.js";
+import { linkInspectDoubleChests } from "./doubleChest.js";
 
 /**
  * @param {unknown} v
@@ -288,6 +289,8 @@ function stripBlockEntityCoords(be) {
  * @property {any|null} blockEntity
  * @property {{ name: string, count: number, slot: number|null, damage: number|null }[]} items
  * @property {string|null} waterlogName
+ * @property {{ half: "left"|"right", partnerKey: string }} [doubleChest]
+ * @property {{ name: string, count: number, slot: number|null, damage: number|null }[]} [doubleItems]
  */
 
 /**
@@ -459,6 +462,11 @@ export function buildInspectIndex(data, opts = {}) {
 					: (x * sy + y) * sz + z;
 			addBlock(x, y, z, flat, beRaw);
 		}
+	}
+
+	const paired = linkInspectDoubleChests(index.blocks, ox, oz);
+	if (paired) {
+		console.info(`[basi] inspect: ${paired} double-chest halves linked`);
 	}
 
 	// Entities (minecarts, etc.)

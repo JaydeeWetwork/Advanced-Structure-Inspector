@@ -28,8 +28,12 @@ export default class BlockGeoMaker {
 	#blockNameBlockStateTextureVariants;
 	
 	#cachedBlockShapes = new Map();
-	/** @type {Set<string>} ids that had no shape table hit (rendered as unit cube) */
+	/** @type {Set<string>} ids whose named shape is missing from blockShapeGeos */
 	unmappedBlockNames = new Set();
+	/** @type {Set<string>} vanilla-style solids that use the default 16³ cube */
+	defaultCubeNames = new Set();
+	/** @type {Map<string, { faces: PolyMeshTemplateFace[], centerOfMass: Vec3 }>} */
+	#templateMemo = new Map();
 	
 	/**
 	 * @param {AsiPreviewConfig} config
@@ -43,6 +47,7 @@ export default class BlockGeoMaker {
 		this.config = config;
 		this.#entityGeoMaker = entityGeoMaker;
 		this.unmappedBlockNames = new Set();
+		this.defaultCubeNames = new Set();
 		
 		this.#individualBlockShapes = blockShapes["individual_blocks"];
 		this.#blockShapePatterns = Object.entries(blockShapes["patterns"]).map(([rule, blockShape]) => [new RegExp(rule), blockShape]); // store regular expressions from the start to avoid recompiling them every time
@@ -78,7 +83,15 @@ export default class BlockGeoMaker {
 	 * @returns {Promise<{ templates: PolyMeshTemplateFace[][], centersOfMass: Vec3[] }>}
 	 */
 	async makePolyMeshTemplates(blockPalette) {
-		let results = await Promise.all(blockPalette.map(block => this.#makePolyMeshTemplate(block)));
+		const results = [];
+		const batch = 24;
+		for (let i = 0; i < blockPalette.length; i += batch) {
+			const slice = blockPalette.slice(i, i + batch);
+			results.push(...await Promise.all(slice.map(block => this.#makePolyMeshTemplate(block))));
+			if (i + batch < blockPalette.length) {
+				await new Promise(r => setTimeout(r, 0));
+			}
+		}
 		return {
 			templates: results.map(result => result.faces),
 			centersOfMass: results.map(result => result.centerOfMass)
@@ -86,13 +99,24 @@ export default class BlockGeoMaker {
 	}
 	/**
 	 * Scales poly mesh template faces (with resolved UVs) towards their respective center of mass.
+	 * Joined pairs (double chests) stay unscaled so the seam stays flush.
 	 * @template {PolyMeshTemplateFace | PolyMeshTemplateFaceWithUvs} T
 	 * @param {T[][]} polyMeshTemplatePalette
 	 * @param {Vec3[]} centersOfMass
+	 * @param {Block[]} [blockPalette]
 	 * @returns {T[][]}
 	 */
-	scalePolyMeshTemplates(polyMeshTemplatePalette, centersOfMass) {
-		return polyMeshTemplatePalette.map((faces, i) => this.#scaleFaces(structuredClone(faces), centersOfMass[i]));
+	scalePolyMeshTemplates(polyMeshTemplatePalette, centersOfMass, blockPalette) {
+		if (this.config.SCALE === 1) {
+			return polyMeshTemplatePalette;
+		}
+		return polyMeshTemplatePalette.map((faces, i) => {
+			const shape = String(blockPalette?.[i]?.basi_block_shape ?? "");
+			if (shape.startsWith("chest_double")) {
+				return faces;
+			}
+			return this.#scaleFaces(structuredClone(faces), centersOfMass[i]);
+		});
 	}
 	/**
 	 * Makes a poly mesh template (i.e. an array of poly mesh template faces) from a block. Texture UVs are unresolved, and are indices for the textureRefs property.
@@ -100,6 +124,26 @@ export default class BlockGeoMaker {
 	 * @returns {Promise<{ faces: PolyMeshTemplateFace[], centerOfMass: Vec3 }>}
 	 */
 	async #makePolyMeshTemplate(block) {
+		const memoKey = `${block["name"]}|${block["basi_block_shape"] ?? ""}|${JSON.stringify(block["states"] ?? {})}`;
+		const hit = this.#templateMemo.get(memoKey);
+		if (hit) {
+			return {
+				faces: structuredClone(hit.faces),
+				centerOfMass: /** @type {Vec3} */ ([...hit.centerOfMass])
+			};
+		}
+		const made = await this.#makePolyMeshTemplateUncached(block);
+		this.#templateMemo.set(memoKey, {
+			faces: structuredClone(made.faces),
+			centerOfMass: /** @type {Vec3} */ ([...made.centerOfMass])
+		});
+		return made;
+	}
+	/**
+	 * @param {Block} block
+	 * @returns {Promise<{ faces: PolyMeshTemplateFace[], centerOfMass: Vec3 }>}
+	 */
+	async #makePolyMeshTemplateUncached(block) {
 		let blockName = block["name"];
 		// ASI synthetic shapes (e.g. double-chest halves) override name lookup
 		let blockShape = block["basi_block_shape"] || this.#getBlockShape(blockName);
@@ -112,11 +156,6 @@ export default class BlockGeoMaker {
 			blockShape = blockShape.slice(0, blockShape.indexOf("<"));
 		}
 		let rotation = this.#getBlockRotation(block, blockShape);
-		// Extra yaw for double-chest half so open face points at pair
-		const pairYaw = Number(block?.states?.basi_pair_yaw ?? 0);
-		if(pairYaw) {
-			rotation = rotation ? [rotation[0], rotation[1] + pairYaw, rotation[2]] : [0, pairYaw, 0];
-		}
 		if(rotation) {
 			faces.forEach(face => {
 				face["normal"] = this.#applyEulerRotation(face["normal"], rotation, [0, 0, 0]);
@@ -151,7 +190,7 @@ export default class BlockGeoMaker {
 			this.#blockShapePatterns
 		);
 		if(fallback) {
-			this.unmappedBlockNames.add(blockName);
+			this.defaultCubeNames.add(blockName);
 		}
 		this.#cachedBlockShapes.set(blockName, shape);
 		return shape;
@@ -295,18 +334,15 @@ export default class BlockGeoMaker {
 		cubes.forEach(cube => {
 			let uv = this.#calculateUv(cube);
 			
-			// When the size of a cube in a direction is 0, we can remove all faces but 1. Because we have DisableCulling in the material, this single face will render from the back as well.
-			// On a side note, if there wasn't the DisableCulling material state and we rendered both faces on opposite sides, the texture wouldn't be mirrored on the other side, so this is another bug fix ig
+			// 0-size in an axis: keep one face. Preview materials are FrontSide, so
+			// that face must wind toward the usual view (up for floors, not down).
 			if(cube.w == 0) {
-				// 0 width: only render west
 				["east", "down", "up", "north", "south"].forEach(faceName => delete uv[faceName]);
 			}
 			if(cube.h == 0) {
-				// 0 height: only render down
-				["west", "east", "up", "north", "south"].forEach(faceName => delete uv[faceName]);
+				["west", "east", "down", "north", "south"].forEach(faceName => delete uv[faceName]);
 			}
 			if(cube.d == 0) {
-				// 0 depth: only render north
 				["west", "east", "down", "up", "south"].forEach(faceName => delete uv[faceName]);
 			}
 			
@@ -433,6 +469,7 @@ export default class BlockGeoMaker {
 			if(faces.length == 1 && !("culled_faces" in cube)) {
 				if(faces[0]["normal"][1] < 0) {
 					faces[0]["normal"] = vec3.mul(faces[0]["normal"], -1);
+					faces[0]["flipWinding"] = true;
 				}
 			} else {
 				allCubesAreFlat = false;
@@ -943,6 +980,9 @@ export default class BlockGeoMaker {
 			}
 			let dataObject = block[dataObjectName];
 			if(blockStateOperator != "??" && !(blockStateName in dataObject)) {
+				if(blockStateName.startsWith("basi_") || blockStateName.startsWith("sdb_")) {
+					return false;
+				}
 				console.error(`Cannot find ${dataObjectName} ${blockStateName} on block ${block["name"]}`);
 				return true;
 			}
@@ -1089,12 +1129,21 @@ export default class BlockGeoMaker {
 				this.#applyFaceCropping(face, imageUv["crop"]);
 			}
 			let vertices = tuple([face["vertices"][0], face["vertices"][1], face["vertices"][3], face["vertices"][2]]); // go around in a square
+			// Half-texel inset so NearestFilter never samples the empty atlas pixel at a tile edge (white sparkle).
+			const inset = 0.5;
+			const u0 = imageUv["uv"][0] + inset;
+			const v0 = imageUv["uv"][1] + inset;
+			const uSize = Math.max(imageUv["uv_size"][0] - inset * 2, 0.01);
+			const vSize = Math.max(imageUv["uv_size"][1] - inset * 2, 0.01);
 			return {
 				"normal": face["normal"],
 				"transparency": imageUv["transparency"],
 				"vertices": vertices.map(vertex => ({
 					"pos": vertex["pos"],
-					"uv": tuple([+((imageUv["uv"][0] + imageUv["uv_size"][0] * (vertex["corner"] & 1)) / textureAtlas.textureWidth).toFixed(4), +(1 - (imageUv["uv"][1] + imageUv["uv_size"][1] * (vertex["corner"] >> 1)) / textureAtlas.textureHeight).toFixed(4)])
+					"uv": tuple([
+						+((u0 + uSize * (vertex["corner"] & 1)) / textureAtlas.textureWidth).toFixed(4),
+						+(1 - (v0 + vSize * (vertex["corner"] >> 1)) / textureAtlas.textureHeight).toFixed(4)
+					])
 				}))
 			};
 		});

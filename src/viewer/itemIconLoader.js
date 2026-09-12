@@ -9,16 +9,7 @@
  *  5. Heuristic path guesses (planks_oak, log_oak, chest_front, …)
  */
 
-import { VANILLA_SAMPLES_TAG } from "../data/packPins.js";
-
-// Match main preview pack tag (fetchers.js vanilla samples).
-const VANILLA_TAG = VANILLA_SAMPLES_TAG;
-const VANILLA_RP =
-	`https://cdn.jsdelivr.net/gh/Mojang/bedrock-samples@${VANILLA_TAG}/resource_pack/`;
-// Older tag still has some PNG-only assets
-const VANILLA_TAG_FALLBACK = "v1.21.50.7";
-const VANILLA_RP_FALLBACK =
-	`https://cdn.jsdelivr.net/gh/Mojang/bedrock-samples@${VANILLA_TAG_FALLBACK}/resource_pack/`;
+import { packAssetStore } from "./appearance/PackAssetStore.js";
 
 /** @type {Promise<void>|null} */
 let initPromise = null;
@@ -46,31 +37,6 @@ const ownedObjectUrls = new Set();
 export function stripItemNs(id) {
 	if (!id || typeof id !== "string") return "";
 	return id.replace(/^minecraft:/i, "").trim();
-}
-
-/**
- * Decode a TGA blob → PNG object URL for <img> use.
- * @param {Blob} blob
- * @returns {Promise<string|null>}
- */
-async function tgaBlobToObjectUrl(blob) {
-	try {
-		const TGALoader = (await import("tga-js")).default;
-		const loader = new TGALoader();
-		loader.load(new Uint8Array(await blob.arrayBuffer()));
-		const imageData = loader.getImageData();
-		if (!imageData) return null;
-		const can = document.createElement("canvas");
-		can.width = imageData.width;
-		can.height = imageData.height;
-		can.getContext("2d").putImageData(imageData, 0, 0);
-		const pngBlob = await new Promise(resolve => can.toBlob(resolve, "image/png"));
-		if (!pngBlob) return null;
-		return URL.createObjectURL(pngBlob);
-	} catch (e) {
-		console.debug("[basi] TGA icon decode failed", e);
-		return null;
-	}
 }
 
 /**
@@ -141,20 +107,11 @@ export async function ensureItemIconLoader() {
 			buildIconMaps({});
 		}
 
-		// Parallel vanilla pack JSONs
+		await packAssetStore.prewarm();
 		const [itemTex, terrainTex, blocks] = await Promise.all([
-			fetchJson(`${VANILLA_RP}textures/item_texture.json`).catch(e => {
-				console.warn("[basi] item_texture.json failed", e);
-				return {};
-			}),
-			fetchJson(`${VANILLA_RP}textures/terrain_texture.json`).catch(e => {
-				console.warn("[basi] terrain_texture.json failed", e);
-				return {};
-			}),
-			fetchJson(`${VANILLA_RP}blocks.json`).catch(e => {
-				console.warn("[basi] blocks.json failed", e);
-				return {};
-			})
+			packAssetStore.getJson("resource_pack/textures/item_texture.json"),
+			packAssetStore.getJson("resource_pack/textures/terrain_texture.json"),
+			packAssetStore.getJson("resource_pack/blocks.json")
 		]);
 
 		itemTextureData = itemTex?.texture_data ?? {};
@@ -540,35 +497,6 @@ function collectPackPaths(bareName) {
  * @param {string} packPath
  * @returns {string[]}
  */
-/** Session-wide failed absolute URLs — avoid re-requesting known 404s (console spam). */
-const failedUrls = new Set();
-
-/**
- * Absolute CDN URLs for a pack-relative texture path.
- * Prefer .png then .tga on the primary tag only; fallback tag only if primary fails later.
- * @param {string} packPath
- * @returns {string[]}
- */
-function textureUrls(packPath) {
-	let p = String(packPath).replace(/^\//, "").replace(/\\/g, "/");
-	if (!p.startsWith("textures/")) {
-		if (p.startsWith("items/") || p.startsWith("blocks/")) p = `textures/${p}`;
-		// Prefer items for short names that look like items
-		else if (/boat|book|sign|banner|egg|ingot|nugget|dye|bucket|potion|sword|axe|pick|hoe|shovel|helmet|chestplate|leggings|boots/i.test(p)) {
-			p = `textures/items/${p}`;
-		} else {
-			p = `textures/blocks/${p}`;
-		}
-	}
-	p = p.replace(/\.(png|tga)$/i, "");
-	// Primary tag first (png then tga); only one fallback png (legacy)
-	return [
-		`${VANILLA_RP}${p}.png`,
-		`${VANILLA_RP}${p}.tga`,
-		`${VANILLA_RP_FALLBACK}${p}.png`
-	];
-}
-
 /**
  * @param {string} itemName
  * @returns {Promise<string|null>}
@@ -589,46 +517,11 @@ export async function getItemIconUrl(itemName) {
 
 		const packPaths = collectPackPaths(bare);
 		for (const path of packPaths) {
-			for (const url of textureUrls(path)) {
-				if (failedUrls.has(url)) continue;
-				try {
-					const res = await fetch(url, { mode: "cors" });
-					if (!res.ok) {
-						failedUrls.add(url);
-						continue;
-					}
-					const blob = await res.blob();
-					if (!blob || blob.size < 16) {
-						failedUrls.add(url);
-						continue;
-					}
-					// TGA needs decode — Image() cannot load raw TGA
-					if (url.endsWith(".tga")) {
-						const objectUrl = await tgaBlobToObjectUrl(blob);
-						if (!objectUrl) {
-							failedUrls.add(url);
-							continue;
-						}
-						ownedObjectUrls.add(objectUrl);
-						return objectUrl;
-					}
-					const objectUrl = URL.createObjectURL(blob);
-					const ok = await new Promise(resolve => {
-						const im = new Image();
-						im.onload = () => resolve(true);
-						im.onerror = () => resolve(false);
-						im.src = objectUrl;
-					});
-					if (!ok) {
-						URL.revokeObjectURL(objectUrl);
-						failedUrls.add(url);
-						continue;
-					}
-					ownedObjectUrls.add(objectUrl);
-					return objectUrl;
-				} catch {
-					failedUrls.add(url);
-				}
+			try {
+				const objectUrl = await packAssetStore.getIconObjectUrl(path);
+				if (objectUrl) return objectUrl;
+			} catch {
+				/* next path */
 			}
 		}
 
@@ -648,7 +541,6 @@ export async function getItemIconUrl(itemName) {
 export function resetItemIconCache() {
 	urlCache.clear();
 	failedIds.clear();
-	failedUrls.clear();
 	for (const u of ownedObjectUrls) {
 		try {
 			URL.revokeObjectURL(u);

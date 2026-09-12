@@ -1,8 +1,8 @@
 /**
  * Bedrock double chests: two block entities with pairx/pairz (and optional pairlead).
  * Palette only stores name+facing, so both halves share one single-chest template.
- * We expand the palette so each paired half gets a dedicated "chest_half" shape
- * rotated so the open face points toward its partner.
+ * We expand the palette so each paired half gets chest_double left/right geo
+ * (128×64 double_* entity texture). No extra yaw — 180° would flip the latch.
  */
 
 /**
@@ -39,46 +39,38 @@ export function chestFacing(states) {
 }
 
 /**
- * Which local +X should point to the pair after block rotation is applied.
- * BlockGeoMaker rotates by cardinal; we encode extra yaw in basi_pair_yaw.
+ * Left/right from a player looking at the chest front (latch).
+ * Partner to the right of this block → this is the left half.
  *
  * @param {"north"|"south"|"east"|"west"} facing
  * @param {number} dx pairx - x
  * @param {number} dz pairz - z
- * @returns {{ half: "a"|"b", latch: 0|1, yawExtra: number }|null}
+ * @returns {{ half: "left"|"right" }|null}
  */
 export function classifyChestPair(facing, dx, dz) {
-	if ((dx === 0 && dz === 0) || (Math.abs(dx) + Math.abs(dz) !== 1)) return null;
-	// Partner direction in structure space
-	/** @type {"north"|"south"|"east"|"west"} */
-	let toward;
-	if (dx === 1) toward = "east";
-	else if (dx === -1) toward = "west";
-	else if (dz === 1) toward = "south";
-	else toward = "north";
-
-	// chest_half is open on local +X (east before block rotation).
-	// After cardinal rotation (from blockStateDefinitions):
-	//   north: identity → open east
-	//   south: 180 → open west
-	//   east: 90 → open south
-	//   west: -90 → open north
-	// We need open face toward partner. Compute extra yaw (multiples of 180) to flip.
-	const openAfterFacing = {
-		north: "east",
-		south: "west",
-		east: "south",
-		west: "north"
+	if (Math.abs(dx) + Math.abs(dz) !== 1) return null;
+	const right = {
+		north: [1, 0],
+		south: [-1, 0],
+		east: [0, 1],
+		west: [0, -1]
 	}[facing];
+	if (!right) return null;
+	const towardRight = dx === right[0] && dz === right[1];
+	return { half: towardRight ? "left" : "right" };
+}
 
-	const needFlip = openAfterFacing !== toward;
-	// Latch on the "lead" or westward/northward half for a single latch look
-	const latch = (dx + dz < 0 ? 1 : 0);
-	return {
-		half: needFlip ? "b" : "a",
-		latch: /** @type {0|1} */ (latch),
-		yawExtra: needFlip ? 180 : 0
-	};
+/**
+ * Preview instances negate X (`-16*x`) but already flip Z in BufferGeometry.
+ * North/south pairs sit on X, so those meshes need instance scale.x = -1.
+ * East/west pairs sit on Z and already meet.
+ *
+ * @param {any} block palette entry
+ */
+export function doubleChestNeedsPreviewXMirror(block) {
+	if (!String(block?.basi_block_shape ?? "").startsWith("chest_double")) return false;
+	const s = String(chestFacing(block.states)).toLowerCase();
+	return s === "north" || s === "south";
 }
 
 /**
@@ -162,8 +154,8 @@ export function applyDoubleChestPalette(nbt, palette, indices) {
 		const cls = classifyChestPair(facing, dx, dz);
 		if (!cls) continue;
 
-		const texPath = chestTexturePath(name);
-		const halfKey = `${name}|${facing}|${cls.half}|${cls.latch}|${texPath}`;
+		const texPath = chestTexturePath(name, true);
+		const halfKey = `${name}|${facing}|${cls.half}|${texPath}`;
 		let newPi = halfPalette.get(halfKey);
 		if (newPi == null) {
 			newPi = newPalette.length;
@@ -172,13 +164,9 @@ export function applyDoubleChestPalette(nbt, palette, indices) {
 				name: block.name,
 				states: {
 					...(block.states || {}),
-					// Synthetic states consumed by block shape / rotation
-					basi_chest_half: cls.half,
-					basi_chest_latch: cls.latch,
-					basi_pair_yaw: cls.yawExtra
+					basi_chest_half: cls.half
 				},
-				// Hint for BlockGeoMaker shape override
-				basi_block_shape: `chest_half<${texPath}>`
+				basi_block_shape: `chest_double<${texPath}>`
 			});
 		}
 		layer0[flat] = newPi;
@@ -201,15 +189,120 @@ export function applyDoubleChestPalette(nbt, palette, indices) {
 
 /**
  * @param {string} name without minecraft:
+ * @param {boolean} [isDouble]
  */
-function chestTexturePath(name) {
+function chestTexturePath(name, isDouble = false) {
 	const n = name.toLowerCase();
-	if (n === "trapped_chest") return "textures/entity/chest/trapped";
-	if (n.includes("copper")) {
-		if (n.includes("oxidized")) return "textures/entity/chest/copper_oxidized";
-		if (n.includes("weathered")) return "textures/entity/chest/copper_weathered";
-		if (n.includes("exposed")) return "textures/entity/chest/copper_exposed";
-		return "textures/entity/chest/copper_default";
+	if (n === "trapped_chest") {
+		return isDouble ? "textures/entity/chest/trapped_double" : "textures/entity/chest/trapped";
 	}
-	return "textures/entity/chest/normal";
+	if (n.includes("copper")) {
+		let base = "copper_default";
+		if (n.includes("oxidized")) base = "copper_oxidized";
+		else if (n.includes("weathered")) base = "copper_weathered";
+		else if (n.includes("exposed")) base = "copper_exposed";
+		return `textures/entity/chest/${base}${isDouble ? "_double" : ""}`;
+	}
+	return isDouble ? "textures/entity/chest/double_normal" : "textures/entity/chest/normal";
+}
+
+/**
+ * In-game large-chest title from a block id.
+ * @param {string} name
+ */
+export function largeChestTitle(name) {
+	const n = String(name || "").replace(/^minecraft:/, "").toLowerCase();
+	if (n === "trapped_chest") return "Large Trapped Chest";
+	if (n.includes("copper") && n.endsWith("_chest")) {
+		const words = n
+			.replace(/_chest$/, "")
+			.split("_")
+			.filter(Boolean)
+			.map(w => w[0].toUpperCase() + w.slice(1));
+		return `Large ${words.join(" ")} Chest`;
+	}
+	return "Large Chest";
+}
+
+/**
+ * Combine two 27-slot halves into the 54-slot large-chest order:
+ * player-left = rows 0–2 (slots 0–26), player-right = rows 3–5 (slots 27–53).
+ * If one half already stores slots ≥ 27, treat that list as the full chest.
+ *
+ * @param {{ name: string, count: number, slot: number|null }[]} leftItems
+ * @param {{ name: string, count: number, slot: number|null }[]} rightItems
+ */
+export function mergeDoubleChestInventories(leftItems, rightItems) {
+	const left = Array.isArray(leftItems) ? leftItems.filter(Boolean) : [];
+	const right = Array.isArray(rightItems) ? rightItems.filter(Boolean) : [];
+	const maxSlot = Math.max(
+		-1,
+		...left.map(it => Number(it.slot)),
+		...right.map(it => Number(it.slot))
+	);
+	if (maxSlot >= 27) {
+		const source = left.some(it => Number(it.slot) >= 27) ? left : right;
+		return source.map(it => ({ ...it }));
+	}
+	/** @param {{ name: string, count: number, slot: number|null }[]} items @param {number} offset */
+	const shift = (items, offset) => {
+		let auto = 0;
+		const used = new Set();
+		return items.map(it => {
+			let s = it.slot;
+			if (s == null || !Number.isFinite(s) || s < 0 || s > 26 || used.has(s)) {
+				while (used.has(auto) && auto < 27) auto++;
+				s = auto++;
+			}
+			used.add(s);
+			return { ...it, slot: s + offset };
+		});
+	};
+	return [...shift(left, 0), ...shift(right, 27)];
+}
+
+/**
+ * After inspect blocks are indexed, pair Bedrock chests (pairx/pairz) and
+ * attach combined 54-slot inventories to both halves.
+ *
+ * @param {Map<string, any>} blocks
+ * @param {number} ox structure_world_origin x
+ * @param {number} oz structure_world_origin z
+ * @returns {number} pair count (halves)
+ */
+export function linkInspectDoubleChests(blocks, ox, oz) {
+	if (!blocks?.size) return 0;
+	let n = 0;
+	for (const block of blocks.values()) {
+		if (block.doubleChest) continue;
+		const be = block.blockEntity;
+		if (!be || be.pairx == null || be.pairz == null) continue;
+		if (be.forceunpair === 1 || be.forceunpair === true) continue;
+		if (!isChestBlockName(block.name)) continue;
+
+		const pairx = Number(be.pairx?.value ?? be.pairx);
+		const pairz = Number(be.pairz?.value ?? be.pairz);
+		if (!Number.isFinite(pairx) || !Number.isFinite(pairz)) continue;
+		const px = Math.floor(pairx - Number(ox || 0));
+		const pz = Math.floor(pairz - Number(oz || 0));
+		const partner = blocks.get(`${px},${block.y},${pz}`);
+		if (!partner?.blockEntity) continue;
+
+		const dx = px - block.x;
+		const dz = pz - block.z;
+		const cls = classifyChestPair(chestFacing(block.states), dx, dz);
+		if (!cls) continue;
+
+		const left = cls.half === "left" ? block : partner;
+		const right = cls.half === "left" ? partner : block;
+		const doubleItems = mergeDoubleChestInventories(left.items || [], right.items || []);
+		const leftKey = `${left.x},${left.y},${left.z}`;
+		const rightKey = `${right.x},${right.y},${right.z}`;
+		left.doubleChest = { half: "left", partnerKey: rightKey };
+		right.doubleChest = { half: "right", partnerKey: leftKey };
+		left.doubleItems = doubleItems;
+		right.doubleItems = doubleItems;
+		n += 2;
+	}
+	return n;
 }

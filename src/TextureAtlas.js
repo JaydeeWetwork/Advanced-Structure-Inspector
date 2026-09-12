@@ -1,7 +1,51 @@
-import { ceil, floor, fnv1a, getPixelBytesInSquare, hexColorToClampedTriplet, JSONSet, max, range, stringToImageData, toImage, toImageData, tuple, vec2 } from "./utils.js";
-import TGALoader from "tga-js"; // We could use dynamic import as this isn't used all the time but it's so small it won't matter
 import potpack from "potpack";
+import { ceil, floor, fnv1a, getPixelBytesInSquare, hexColorToClampedTriplet, JSONSet, max, range, tuple, vec2 } from "./utils.js";
 import ResourcePackStack from "./ResourcePackStack.js";
+import { packAssetStore } from "./viewer/appearance/PackAssetStore.js";
+
+/** @type {Map<string, { uvs: ImageUv[], atlasImageData: ImageData|null, imageBlobs: [string, Blob|null][], textureWidth: number, textureHeight: number, textureFillEfficiency: number }>} */
+const packedAtlasCache = new Map();
+const PACKED_ATLAS_CACHE_MAX = 8;
+
+/**
+ * Bounded parallel map — keeps CDN/decode under the browser connection cap.
+ * @template T, R
+ * @param {T[]} items
+ * @param {number} limit
+ * @param {(item: T, i: number) => Promise<R>} fn
+ * @returns {Promise<R[]>}
+ */
+function mapPool(items, limit, fn) {
+	if (!items.length) return Promise.resolve([]);
+	const out = new Array(items.length);
+	let next = 0;
+	const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+		while (next < items.length) {
+			const i = next++;
+			out[i] = await fn(items[i], i);
+		}
+	});
+	return Promise.all(workers).then(() => out);
+}
+
+/**
+ * @param {ResourcePackStack} resourcePackStack
+ * @param {string} texturePath
+ */
+function decodeTextureFromPack(resourcePackStack, texturePath) {
+	/** @type {(pathWithExt: string) => Promise<Response|null>|Response|null} */
+	let tryLocal;
+	if(resourcePackStack?.hasResourcePacks) {
+		tryLocal = pathWithExt => {
+			const file = resourcePackStack.getLocalFile(pathWithExt);
+			return file ? new Response(file) : null;
+		};
+	}
+	return packAssetStore.decodeTexture(texturePath, {
+		placeholder: true,
+		tryLocal
+	});
+}
 
 export default class TextureAtlas {
 	#blocksDotJsonPatches;
@@ -35,6 +79,8 @@ export default class TextureAtlas {
 	textureHeight;
 	/** @type {number} */
 	textureFillEfficiency; // how much of the texture atlas is filled with images
+	/** Packed atlas pixels — skip PNG encode/decode on the viewer path. @type {ImageData|null} */
+	atlasImageData = null;
 	
 	/**
 	 * Creates a texture atlas for loading images from texture references and stitching them together.
@@ -70,6 +116,24 @@ export default class TextureAtlas {
 	 */
 	async makeAtlas(textureRefs) {
 		console.log("Texture references:", textureRefs);
+		const packedKey = JSON.stringify({
+			refs: [...textureRefs],
+			outline: this.config.TEXTURE_OUTLINE_WIDTH,
+			opacity: this.config.OPACITY,
+			multi: this.config.MULTIPLE_OPACITIES,
+			crop: !!this.config.SKIP_TEXTURE_CROP
+		});
+		const packedHit = packedAtlasCache.get(packedKey);
+		if (packedHit) {
+			this.uvs = packedHit.uvs;
+			this.atlasImageData = packedHit.atlasImageData;
+			this.imageBlobs = packedHit.imageBlobs;
+			this.textureWidth = packedHit.textureWidth;
+			this.textureHeight = packedHit.textureHeight;
+			this.textureFillEfficiency = packedHit.textureFillEfficiency;
+			console.info("[basi] texture atlas cache hit");
+			return;
+		}
 		
 		let textureImageIndices = [];
 		
@@ -140,6 +204,17 @@ export default class TextureAtlas {
 		console.log("Image UVs:", imageUvs);
 		
 		this.uvs = textureImageIndices.map(i => imageUvs[i]);
+		packedAtlasCache.set(packedKey, {
+			uvs: this.uvs,
+			atlasImageData: this.atlasImageData,
+			imageBlobs: this.imageBlobs,
+			textureWidth: this.textureWidth,
+			textureHeight: this.textureHeight,
+			textureFillEfficiency: this.textureFillEfficiency
+		});
+		if (packedAtlasCache.size > PACKED_ATLAS_CACHE_MAX) {
+			packedAtlasCache.delete(packedAtlasCache.keys().next().value);
+		}
 	}
 	
 	/**
@@ -269,37 +344,10 @@ export default class TextureAtlas {
 	 * @returns {Promise<ImageFragment[]>}
 	 */
 	async #loadImages(textureFragments) {
-		let tgaLoader = new TGALoader();
 		let allTexturePathsWithDuplicates = Array.from(textureFragments).map(textureFragment => textureFragment.texturePath);
 		let allTexturePaths = Array.from(new Set(allTexturePathsWithDuplicates));
 		console.log(`Loading ${allTexturePaths.length} images for ${textureFragments.size} texture fragments`);
-		let allImageData = await Promise.all(allTexturePaths.map(async texturePath => {
-			let imageRes = await this.resourcePackStack.fetchResource(`${texturePath}.png`);
-			let imageData;
-			let imageIsTga = false;
-			let imageNotFound = false;
-			if(imageRes.ok) {
-				let image = await toImage(imageRes);
-				imageData = await toImageData(image);
-			} else {
-				// Modern bedrock-samples often ship TGA only (cactus, some metals, …).
-				// Always try TGA after PNG miss — skipping this caused missing block maps.
-				imageRes = await this.resourcePackStack.fetchResource(`${texturePath}.tga`);
-				if(imageRes.ok) {
-					console.debug(`Fetched TGA texture ${texturePath}.tga`);
-					imageIsTga = true;
-					// tga-js is not re-entrant for concurrent loads — clone path per call
-					const loader = new TGALoader();
-					loader.load(new Uint8Array(await imageRes.arrayBuffer()));
-					imageData = loader.getImageData();
-				} else {
-					console.warn(`No texture found at ${texturePath} (.png/.tga)`);
-					imageData = stringToImageData(texturePath);
-					imageNotFound = true;
-				}
-			}
-			return { imageData, imageIsTga, imageNotFound };
-		}));
+		let allImageData = await mapPool(allTexturePaths, 12, texturePath => decodeTextureFromPack(this.resourcePackStack, texturePath));
 		let imageDataByTexturePath = new Map(allTexturePaths.map((texturePath, i) => [texturePath, allImageData[i]]));
 		return await Promise.all(Array.from(textureFragments).map(async ({ texturePath, tint, tint_like_png: tintLikePng, opacity, uv: sourceUv, uv_size: uvSize }) => {
 			let { imageData, imageIsTga, imageNotFound } = imageDataByTexturePath.get(texturePath);
@@ -326,7 +374,7 @@ export default class TextureAtlas {
 			let w = uvSize[0] * imageW;
 			let h = uvSize[1] * imageH;
 			let crop = null;
-			if(Number.isInteger(sourceX) && Number.isInteger(sourceY) && Number.isInteger(w) && Number.isInteger(h)) { // textures with non-integral dimensions are wacky so I'm just going to say they can't be cropped... there aren't many blocks like this fortunately
+			if(!this.config.SKIP_TEXTURE_CROP && Number.isInteger(sourceX) && Number.isInteger(sourceY) && Number.isInteger(w) && Number.isInteger(h)) { // textures with non-integral dimensions are wacky so I'm just going to say they can't be cropped... there aren't many blocks like this fortunately
 				let old = { sourceX, sourceY, w, h };
 				let extremePixels = this.#findMostExtremePixels(imageData, sourceX, sourceY, w, h);
 				sourceX = extremePixels["minX"];
@@ -450,14 +498,21 @@ export default class TextureAtlas {
 		// ctx.fillRect(0, 0, can.width, can.height);
 		if(this.config.TEXTURE_OUTLINE_WIDTH != 0) {
 			can = TextureAtlas.addTextureOutlines(can, packedImageFragments, this.config, canImageData);
+			canImageData = can.getContext("2d").getImageData(0, 0, can.width, can.height);
 		}
-		
+
+		const opacity = this.config.OPACITY ?? 1;
 		if(this.config.MULTIPLE_OPACITIES) {
 			let opacities = range(4, 10).map(x => x / 10); // lowest is 40% opacity. note that we do division after to avoid floating-point errors.
 			this.imageBlobs = await Promise.all(opacities.map(async opacity => [`hologram_opacity_${opacity}`, await this.#setCanvasOpacity(can, opacity).convertToBlob()], 42)); // the custom definitions for .map() in globalPatches.d.ts mess it up because it's uses promises. I've tried to exclude promises from them but it doesn't work. however, adding a second parameter makes it fall back to the native definition. (it's supposed to change the this value, but arrow functions don't have their own this value.)
-		} else {
-			can = this.#setCanvasOpacity(can, this.config.OPACITY);
+			this.atlasImageData = null;
+		} else if(opacity != 1) {
+			can = this.#setCanvasOpacity(can, opacity);
+			this.atlasImageData = can.getContext("2d").getImageData(0, 0, can.width, can.height);
 			this.imageBlobs = [["hologram", await can.convertToBlob()]];
+		} else {
+			this.atlasImageData = canImageData;
+			this.imageBlobs = [["hologram", null]];
 		}
 		
 		// document.body.appendChild(await toImage(this.imageBlobs.at(-1)[1]));

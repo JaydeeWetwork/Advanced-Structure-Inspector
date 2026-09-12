@@ -9,6 +9,7 @@ import {
 	uiFlags
 } from "../app/state.js";
 import { setStatus, formatSize, escapeHtml, stat } from "../app/dom.js";
+import { renderFeatureChips } from "./featureChips.js";
 
 function $(id) {
 	return document.getElementById(id);
@@ -21,11 +22,9 @@ function $(id) {
 export function updateSelectionHeader(entry) {
 	if (!entry) {
 		els.selectionBar?.classList.add("hidden");
-		els.appTagline?.classList.remove("hidden");
 		return;
 	}
 	els.selectionBar?.classList.remove("hidden");
-	els.appTagline?.classList.add("hidden");
 	if (els.headerName) els.headerName.textContent = entry.name || "—";
 	if (els.headerSource) {
 		els.headerSource.textContent = entry.parseError
@@ -267,6 +266,26 @@ export function syncMetaFields(entry) {
 		els.metaSourceLink.classList.remove("is-invalid");
 	}
 	els.metaSourceLinkError?.classList.add("hidden");
+	renderAssignedFeatures(entry);
+}
+
+/**
+ * Read-only assigned feature chips for the viewer detail dock.
+ * @param {any|null} entry
+ */
+export function renderAssignedFeatures(entry) {
+	const host = els.detailFeatureChips;
+	if (!host) return;
+	if (!entry) {
+		host.replaceChildren();
+		host.classList.add("is-empty");
+		return;
+	}
+	const features = catalog.listFeaturesForStructure(entry.id);
+	renderFeatureChips(host, features);
+	if (!features.length) {
+		host.classList.add("is-empty");
+	}
 }
 
 /**

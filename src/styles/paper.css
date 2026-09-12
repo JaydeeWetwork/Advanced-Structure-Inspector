@@ -1,0 +1,613 @@
+/**
+ * Paper chrome over a full-bleed 3D canvas.
+ * Side docks peek from the edges and expand on hover (viewer.css).
+ * Loaded after viewer.css. Inventory slot grids stay Minecraft-styled.
+ */
+
+body.basi-app {
+	font-family: var(--basi-font);
+	background: var(--basi-page);
+	color: var(--text-col);
+}
+
+body.basi-app .basi-header {
+	border-bottom: 1px solid var(--basi-border);
+	padding: 8px 14px;
+}
+
+body.basi-app .basi-header h1 {
+	display: flex;
+	align-items: baseline;
+	gap: 0.45rem;
+	font-family: var(--basi-font-brand);
+	font-size: 1.05rem;
+	font-weight: 600;
+	letter-spacing: -0.02em;
+}
+
+body.basi-app .basi-build {
+	font-family: var(--basi-font);
+	font-size: 0.68rem;
+	font-weight: 600;
+	letter-spacing: 0.02em;
+	color: var(--basi-muted);
+	user-select: all;
+}
+
+body.basi-app .basi-header .tagline {
+	display: none;
+}
+
+body.basi-app .basi-selection-bar {
+	background: var(--basi-chip);
+	border: 1px solid transparent;
+	border-radius: var(--basi-radius);
+	padding: 4px 10px;
+}
+
+body.basi-app .basi-hopper-chip {
+	background: var(--basi-chip);
+	border-color: var(--basi-border);
+	border-radius: var(--basi-radius);
+}
+
+body.basi-app .basi-hopper-chip.has-pct {
+	background: color-mix(in srgb, var(--hopper-lock-color, var(--basi-border)) 16%, var(--basi-panel));
+}
+
+body.basi-app .basi-boot {
+	background: var(--basi-chip);
+	border-color: var(--basi-border);
+	color: var(--basi-muted);
+}
+
+body.basi-app .basi-boot.ok {
+	background: color-mix(in srgb, var(--success-green) 14%, var(--basi-panel));
+	color: var(--success-green);
+}
+
+body.basi-app .basi-boot.error {
+	background: color-mix(in srgb, var(--error-red) 14%, var(--basi-panel));
+	color: var(--error-red);
+}
+
+body.basi-app .basi-btn {
+	border-radius: 6px;
+	border: 1px solid transparent;
+	background: var(--basi-accent);
+	color: var(--basi-accent-text);
+	font-weight: 600;
+	padding: 6px 12px;
+}
+
+body.basi-app .basi-btn:hover {
+	background: var(--basi-accent-hover);
+}
+
+body.basi-app .basi-btn.secondary {
+	background: transparent;
+	color: var(--text-col);
+	border-color: var(--basi-border);
+}
+
+body.basi-app .basi-btn.secondary:hover {
+	background: var(--basi-row-hover);
+}
+
+body.basi-app .basi-theme-btn {
+	min-width: 3.4rem;
+	font-size: 0.78rem;
+}
+
+/* —— Full-bleed canvas; chrome overlays —— */
+body.basi-app {
+	--basi-chrome-top: 3.4rem;
+	--basi-chrome-bottom: 1.55rem;
+}
+
+body.basi-app:has(#selectionBar:not(.hidden)) {
+	--basi-chrome-top: 5.1rem;
+}
+
+body.basi-app .basi-header {
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 0;
+	z-index: 50;
+	background: color-mix(in srgb, var(--basi-panel) 88%, transparent);
+	backdrop-filter: blur(14px);
+	-webkit-backdrop-filter: blur(14px);
+}
+
+body.basi-app .basi-footer {
+	position: absolute;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	z-index: 45;
+	background: color-mix(in srgb, var(--basi-panel) 82%, transparent);
+	backdrop-filter: blur(10px);
+	-webkit-backdrop-filter: blur(10px);
+}
+
+body.basi-app .basi-stage {
+	display: block;
+	position: relative;
+	flex: 1 1 auto;
+	min-height: 0;
+	height: 100%;
+	padding: 0;
+	gap: 0;
+	background: var(--basi-well);
+	overflow: hidden;
+}
+
+body.basi-app .basi-main {
+	position: absolute;
+	inset: 0;
+	z-index: 1;
+	background: var(--basi-well);
+	border: none;
+	border-radius: 0;
+	overflow: hidden;
+	box-shadow: none;
+}
+
+/* Do not steal transform/position from viewer.css hover docks */
+body.basi-app .basi-float {
+	top: var(--basi-chrome-top);
+	bottom: var(--basi-chrome-bottom);
+	max-height: none;
+	z-index: 30;
+}
+
+body.basi-app.basi-no-selection .basi-float-right {
+	visibility: hidden;
+	pointer-events: none;
+}
+
+/* Catalog also auto-hides when nothing is selected (hover / pin to open) */
+body.basi-app.basi-no-selection .basi-float-left {
+	transform: translateX(calc(-100% + var(--basi-float-peek)));
+	opacity: 0.55;
+}
+
+body.basi-app.basi-no-selection .basi-float-left:hover,
+body.basi-app.basi-no-selection .basi-float-left:focus-within,
+body.basi-app.basi-no-selection .basi-float-left.basi-float-open,
+body.basi-app.basi-no-selection .basi-float-left.basi-float-pinned {
+	transform: translateX(0);
+	opacity: 1;
+}
+
+body.basi-app.basi-no-selection .basi-float-left::after {
+	opacity: 0.55;
+}
+
+body.basi-app.basi-no-selection .basi-float-left:hover::after,
+body.basi-app.basi-no-selection .basi-float-left:focus-within::after,
+body.basi-app.basi-no-selection .basi-float-left.basi-float-pinned::after,
+body.basi-app.basi-no-selection .basi-float-left.basi-float-open::after {
+	opacity: 0;
+}
+
+body.basi-app .basi-float-panel {
+	background: var(--basi-panel);
+	border: 1px solid var(--basi-border);
+	border-radius: var(--basi-radius-lg);
+	box-shadow: var(--basi-shadow);
+	padding: 12px;
+}
+
+body.basi-app .basi-float-left .basi-float-panel {
+	border-radius: 0 var(--basi-radius-lg) var(--basi-radius-lg) 0;
+	border-left: none;
+}
+
+body.basi-app .basi-float-right .basi-float-panel {
+	border-radius: var(--basi-radius-lg) 0 0 var(--basi-radius-lg);
+	border-right: none;
+}
+
+body.basi-app .basi-float-label,
+body.basi-app .basi-float .basi-list-header,
+body.basi-app .basi-float .basi-material-header,
+body.basi-app .basi-float .basi-layer-toolbar,
+body.basi-app .basi-default-cam-label,
+body.basi-app .basi-meta-field-label,
+body.basi-app .basi-collapse-header {
+	background: transparent;
+	color: var(--text-col);
+	border: none;
+	text-shadow: none;
+	text-transform: none;
+	letter-spacing: -0.01em;
+	font-size: 0.82rem;
+	font-weight: 650;
+	padding: 4px 2px;
+	border-radius: 4px;
+}
+
+body.basi-app .basi-float-label {
+	font-size: 0.92rem;
+}
+
+body.basi-app .basi-float .basi-list-header #catalogCount,
+body.basi-app .basi-collapse-title {
+	color: var(--text-col);
+	text-transform: none;
+	letter-spacing: 0;
+}
+
+body.basi-app .basi-collapse-header:hover {
+	background: var(--basi-row-hover);
+}
+
+body.basi-app .basi-float-pin {
+	background: transparent;
+	border: 1px solid var(--basi-border);
+	color: var(--basi-muted);
+	border-radius: 6px;
+}
+
+body.basi-app .basi-float-pin:hover,
+body.basi-app .basi-float-pin[aria-pressed="true"],
+body.basi-app .basi-float-pinned .basi-float-pin {
+	background: var(--basi-row-hover);
+	color: var(--text-col);
+	border-color: var(--basi-border);
+	box-shadow: none;
+}
+
+body.basi-app .basi-search,
+body.basi-app .basi-meta-input,
+body.basi-app .basi-default-cam-select {
+	background: var(--basi-input);
+	border: 1px solid var(--basi-border);
+	color: var(--text-col);
+	border-radius: 6px;
+}
+
+body.basi-app .basi-default-cam-select {
+	border-radius: 6px;
+}
+
+body.basi-app .basi-meta-input:focus,
+body.basi-app .basi-default-cam-select:focus,
+body.basi-app .basi-search:focus {
+	outline: 2px solid color-mix(in srgb, var(--basi-accent) 45%, transparent);
+	outline-offset: 0;
+}
+
+body.basi-app .basi-meta-input.is-invalid {
+	background: color-mix(in srgb, var(--error-red) 10%, var(--basi-panel));
+}
+
+body.basi-app .basi-catalog-list,
+body.basi-app .basi-user-details,
+body.basi-app .basi-material-list,
+body.basi-app .basi-stat {
+	background: var(--basi-row);
+	border-color: var(--basi-border);
+}
+
+body.basi-app .basi-list-row {
+	background: transparent;
+	border-bottom-color: var(--basi-border);
+}
+
+body.basi-app .basi-list-row:hover {
+	background: var(--basi-row-hover);
+}
+
+body.basi-app .basi-list-row.selected {
+	background: var(--basi-selected);
+	box-shadow: inset 3px 0 0 var(--basi-accent);
+}
+
+body.basi-app .basi-list-row:focus-visible {
+	outline-color: var(--basi-accent);
+}
+
+body.basi-app .basi-cat-group {
+	border-bottom-color: var(--basi-border);
+}
+
+body.basi-app .basi-cat-header {
+	background: var(--basi-chip);
+	color: var(--text-col);
+	border-bottom-color: var(--basi-border);
+}
+
+body.basi-app .basi-cat-header:hover {
+	background: var(--basi-row-hover);
+}
+
+body.basi-app .basi-cat-header:focus-visible {
+	outline-color: var(--basi-accent);
+}
+
+body.basi-app .basi-cat-count {
+	background: var(--basi-input);
+	color: var(--basi-muted);
+}
+
+body.basi-app .basi-cat-body {
+	background: var(--basi-panel);
+}
+
+body.basi-app .basi-cat-btn {
+	background: var(--basi-chip);
+	border-color: var(--basi-border);
+	color: var(--text-col);
+}
+
+body.basi-app .basi-cat-btn:hover:not(:disabled) {
+	background: var(--basi-row-hover);
+}
+
+body.basi-app .basi-float .basi-list-header .basi-cat-btn {
+	background: var(--basi-chip);
+	border-color: var(--basi-border);
+	color: var(--text-col);
+}
+
+body.basi-app .basi-float .basi-list-header .basi-cat-btn:hover {
+	background: var(--basi-row-hover);
+}
+
+body.basi-app .basi-float .basi-stat .label {
+	color: var(--basi-muted);
+}
+
+body.basi-app .basi-float .basi-stat .value {
+	color: var(--text-col);
+}
+
+body.basi-app .basi-material-list li {
+	border-bottom-color: var(--basi-border);
+}
+
+body.basi-app .basi-material-list li.basi-mat-row.is-acquired {
+	background: var(--basi-chip);
+}
+
+body.basi-app .basi-material-list li.basi-mat-row.is-acquired .basi-mat-name {
+	text-decoration-color: var(--basi-muted);
+}
+
+body.basi-app .basi-mat-check input[type="checkbox"] {
+	accent-color: var(--basi-accent);
+}
+
+body.basi-app .basi-detail-note {
+	border-bottom-color: var(--basi-border);
+}
+
+body.basi-app .basi-layer-badge {
+	background: var(--basi-accent);
+	border-color: transparent;
+	color: var(--basi-accent-text);
+}
+
+body.basi-app .basi-empty {
+	color: var(--basi-muted);
+	background: color-mix(in srgb, var(--basi-panel) 90%, transparent);
+	border: 1px solid var(--basi-border);
+	box-shadow: var(--basi-shadow);
+	backdrop-filter: blur(12px);
+	pointer-events: none;
+}
+
+body.basi-app .basi-empty.hidden {
+	display: none;
+}
+
+body.basi-app .basi-empty h2 {
+	color: var(--text-col);
+	font-family: var(--basi-font-brand);
+}
+
+/* Preview well — canvas fills the stage */
+body.basi-app .basi-preview-host {
+	background: var(--basi-well);
+	border-radius: 0;
+}
+
+body.basi-app .basi-cam-bar {
+	top: calc(var(--basi-chrome-top) + 8px);
+	background: color-mix(in srgb, var(--basi-panel) 82%, transparent);
+	border: 1px solid var(--basi-border);
+	box-shadow: var(--basi-shadow);
+	backdrop-filter: blur(12px);
+	color: var(--text-col);
+}
+
+body.basi-app .basi-cam-btn {
+	background: transparent;
+	border: 1px solid transparent;
+	color: var(--text-col);
+}
+
+body.basi-app .basi-cam-btn:hover {
+	background: var(--basi-row-hover);
+}
+
+body.basi-app .basi-cam-btn.active {
+	background: var(--basi-accent);
+	border-color: transparent;
+	color: var(--basi-accent-text);
+}
+
+body.basi-app .basi-cam-tilt,
+body.basi-app .basi-cam-tilt-val {
+	color: var(--basi-muted);
+}
+
+body.basi-app .basi-cam-tilt input[type="range"] {
+	accent-color: var(--basi-accent);
+}
+
+body.basi-app .basi-preview-keys {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	clip: rect(0 0 0 0);
+	white-space: nowrap;
+}
+
+body.basi-app .basi-cam-bar:hover .basi-preview-keys,
+body.basi-app .basi-cam-bar:focus-within .basi-preview-keys {
+	position: static;
+	width: auto;
+	height: auto;
+	overflow: visible;
+	clip: auto;
+	white-space: normal;
+	color: var(--basi-muted);
+	margin-left: 6px;
+	max-width: 22rem;
+}
+
+/* Inspect: Notion card chrome; slot grid inside stays MC */
+body.basi-app .basi-inspect-panel.basi-win {
+	box-shadow: 0 12px 40px rgba(15, 15, 15, 0.18);
+}
+
+body.basi-app .basi-win-bar {
+	background: var(--basi-panel);
+	color: var(--text-col);
+	border: 1px solid var(--basi-border);
+	border-bottom: 1px solid var(--basi-border);
+	border-radius: var(--basi-radius) var(--basi-radius) 0 0;
+}
+
+body.basi-app .basi-win-collapsed .basi-win-bar {
+	border-radius: var(--basi-radius);
+}
+
+body.basi-app .basi-win-collapse,
+body.basi-app .basi-win-close {
+	background: var(--basi-chip);
+	border: 1px solid var(--basi-border);
+	color: var(--text-col);
+}
+
+body.basi-app .basi-win-collapse:hover,
+body.basi-app .basi-win-close:hover {
+	background: var(--basi-row-hover);
+}
+
+body.basi-app .basi-sign-tweaks {
+	background: var(--basi-chip);
+	border-color: var(--basi-border);
+	color: var(--text-col);
+}
+
+body.basi-app .basi-sign-tweaks-title,
+body.basi-app .basi-sign-tweak-val {
+	color: var(--text-col);
+}
+
+body.basi-app .basi-sign-tweak-label,
+body.basi-app .basi-sign-tweak-hint {
+	color: var(--basi-muted);
+}
+
+body.basi-app .basi-sign-tweaks select,
+body.basi-app .basi-sign-tweaks input[type="text"] {
+	background: var(--basi-input);
+	color: var(--text-col);
+	border-color: var(--basi-border);
+}
+
+body.basi-app .basi-sign-tweak-actions button {
+	background: var(--basi-chip);
+	color: var(--text-col);
+	border-color: var(--basi-border);
+}
+
+body.basi-app .basi-sign-tweak-actions button:hover {
+	background: var(--basi-row-hover);
+}
+
+body.basi-app .mc-sign-debug {
+	background: var(--basi-input);
+	color: var(--text-col);
+	border-color: var(--basi-border);
+}
+
+body.basi-app .basi-status {
+	background: var(--basi-chip);
+	border-color: var(--basi-border);
+	color: var(--text-col);
+}
+
+body.basi-app .basi-status-toast {
+	background: color-mix(in srgb, var(--basi-panel) 92%, transparent);
+	color: var(--text-col);
+	border: 1px solid var(--basi-border);
+}
+
+body.basi-app .basi-footer {
+	background: var(--basi-page);
+	border-top: 1px solid var(--basi-border);
+	color: var(--basi-muted);
+}
+
+body.basi-app .basi-footer-hint {
+	display: none;
+}
+
+body.basi-app .basi-footer a,
+body.basi-app .basi-footer-link {
+	color: var(--basi-accent);
+}
+
+body.basi-app .basi-footer-link:hover {
+	color: var(--basi-accent-hover);
+}
+
+body.basi-app .basi-credits-dialog {
+	background: var(--basi-panel);
+	border-color: var(--basi-border);
+	color: var(--text-col);
+}
+
+body.basi-app .basi-preview-host .previewCont lil-gui {
+	bottom: calc(var(--basi-chrome-bottom) + 10px) !important;
+	color: var(--text-col);
+	filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.25));
+}
+
+@media (max-width: 720px) {
+	body.basi-app {
+		--basi-chrome-top: 4.6rem;
+		--basi-chrome-bottom: 1.8rem;
+	}
+
+	body.basi-app .basi-float {
+		top: auto;
+		bottom: 0;
+	}
+
+	body.basi-app.basi-no-selection .basi-float-left {
+		transform: translateY(calc(100% - var(--basi-float-peek)));
+	}
+
+	body.basi-app.basi-no-selection .basi-float-left:hover,
+	body.basi-app.basi-no-selection .basi-float-left:focus-within,
+	body.basi-app.basi-no-selection .basi-float-left.basi-float-open,
+	body.basi-app.basi-no-selection .basi-float-left.basi-float-pinned {
+		transform: translateY(0);
+	}
+
+	body.basi-app .basi-float-left .basi-float-panel,
+	body.basi-app .basi-float-right .basi-float-panel {
+		border-radius: var(--basi-radius-lg) var(--basi-radius-lg) 0 0;
+		border: 1px solid var(--basi-border);
+		border-bottom: none;
+	}
+}

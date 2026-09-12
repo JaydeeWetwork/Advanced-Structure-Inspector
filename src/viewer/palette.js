@@ -35,21 +35,21 @@ export async function tweakBlockPalette(structure, ignoredBlocks = IGNORED_BLOCK
 	let indices = cloneBlockIndices(structure?.block_indices);
 
 	const blockUpdater = new BlockUpdater();
-	for (const [i, block] of Object.entries(palette)) {
-		if (!block) continue;
+	await Promise.all(Object.entries(palette).map(async ([i, block]) => {
+		if (!block) return;
 		if (blockUpdater.blockNeedsUpdating(block)) {
 			await blockUpdater.update(block);
 		}
 		block["name"] = String(block["name"] ?? "").replace(/^minecraft:/, "");
 		if (ignoredBlocks.includes(block["name"])) {
 			delete palette[i];
-			continue;
+			return;
 		}
 		delete block["version"];
 		if (block["states"] && !Object.keys(block["states"]).length) {
 			delete block["states"];
 		}
-	}
+	}));
 
 	/** @type {JSONMap<any, number>} */
 	const newIndexCache = new JSONMap();

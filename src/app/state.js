@@ -45,6 +45,15 @@ export const uiFlags = {
 	materialsSectionCollapsed: false
 };
 
+/** Database editor selection (not the viewer preview selection). */
+export const editorUi = {
+	/** @type {{ kind: "category"|"entry"|"structure"|"uncategorized", id: string }|null} */
+	selected: null,
+	featureFilter: "",
+	expandedFeatureId: /** @type {string|null} */ (null),
+	uncategorizedCollapsed: false
+};
+
 /** Single-flight import */
 export const importState = {
 	inFlight: false,
@@ -74,6 +83,7 @@ export function createEls() {
 		importBtn: $("importBtn"),
 		clearCatalogBtn: $("clearCatalogBtn"),
 		creditsBtn: $("creditsBtn"),
+		themeBtn: $("themeBtn"),
 		creditsFooterBtn: $("creditsFooterBtn"),
 		creditsDialog: /** @type {HTMLDialogElement|null} */ ($("creditsDialog")),
 		searchInput: /** @type {HTMLInputElement|null} */ ($("searchInput")),
@@ -115,11 +125,23 @@ export function createEls() {
 		headerSource: $("headerSource"),
 		hopperStatsLabel: $("hopperStatsLabel"),
 		hopperStatsDetail: $("hopperStatsDetail"),
-		appTagline: $("appTagline"),
-		addCategoryBtn: $("addCategoryBtn"),
 		pinCatalogBtn: /** @type {HTMLButtonElement|null} */ ($("pinCatalogBtn")),
 		pinDetailBtn: /** @type {HTMLButtonElement|null} */ ($("pinDetailBtn")),
 		catalogFloat: $("catalogFloat"),
-		detailFloat: $("detailFloat")
+		detailFloat: $("detailFloat"),
+		viewViewerBtn: $("viewViewerBtn"),
+		viewEditorBtn: $("viewEditorBtn"),
+		openEditorBtn: $("openEditorBtn"),
+		editorStage: $("editorStage"),
+		appStage: $("appStage"),
+		editorTree: $("editorTree"),
+		editorTreeToolbar: $("editorTreeToolbar"),
+		editorInspector: $("editorInspector"),
+		editorFeatures: $("editorFeatures"),
+		editorFeatureList: $("editorFeatureList"),
+		editorFeatureFilter: /** @type {HTMLInputElement|null} */ ($("editorFeatureFilter")),
+		editorFeatureHint: $("editorFeatureHint"),
+		addFeatureBtn: $("addFeatureBtn"),
+		detailFeatureChips: $("detailFeatureChips")
 	};
 }

@@ -12,6 +12,9 @@ export default class PreviewResourcePool {
 	transparentMat = null;
 	/** @type {import("three").MeshLambertMaterial|null} */
 	solidFloorMat = null;
+	/** DoubleSide clone for N/S double chests (instance scale.x = -1). */
+	/** @type {import("three").MeshLambertMaterial|null} */
+	chestMirrorMat = null;
 	/** @type {Map<number, import("three").BufferGeometry>} */
 	geoByPalette = new Map();
 	/** @type {import("three").Texture|null} */
@@ -66,9 +69,16 @@ export default class PreviewResourcePool {
 			});
 		}
 
+		if (this.chestMirrorMat) {
+			this.chestMirrorMat.map = atlasTexture;
+			this.chestMirrorMat.side = THREE.DoubleSide;
+			this.chestMirrorMat.alphaTest = alphaTest;
+			this.chestMirrorMat.needsUpdate = true;
+		}
+
 		if (this.solidFloorMat) {
 			this.solidFloorMat.map = atlasTexture;
-			this.solidFloorMat.side = THREE.DoubleSide;
+			this.solidFloorMat.side = side;
 			this.solidFloorMat.alphaTest = 0.5;
 			this.solidFloorMat.transparent = false;
 			this.solidFloorMat.opacity = 1;
@@ -77,13 +87,25 @@ export default class PreviewResourcePool {
 		} else {
 			this.solidFloorMat = new THREE.MeshLambertMaterial({
 				map: atlasTexture,
-				side: THREE.DoubleSide,
+				side,
 				alphaTest: 0.5,
 				transparent: false,
 				opacity: 1,
 				depthWrite: true
 			});
 		}
+	}
+
+	/**
+	 * Negative-X instances invert FrontSide; DoubleSide keeps the shell outside-out.
+	 * @param {typeof import("three")} THREE
+	 */
+	ensureChestMirrorMat(THREE) {
+		if (this.chestMirrorMat) return this.chestMirrorMat;
+		if (!this.regularMat || !THREE) return null;
+		this.chestMirrorMat = this.regularMat.clone();
+		this.chestMirrorMat.side = THREE.DoubleSide;
+		return this.chestMirrorMat;
 	}
 
 	/** @param {import("three").BufferGeometry} geo */
@@ -113,6 +135,7 @@ export default class PreviewResourcePool {
 		if (mat === this.regularMat
 			|| mat === this.transparentMat
 			|| mat === this.solidFloorMat
+			|| mat === this.chestMirrorMat
 			|| mat === this.cargoMat) return true;
 		if (this.entityModelKit) {
 			for (const entry of this.entityModelKit.values()) {
@@ -202,6 +225,11 @@ export default class PreviewResourcePool {
 			/* ignore */
 		}
 		try {
+			this.chestMirrorMat?.dispose?.();
+		} catch {
+			/* ignore */
+		}
+		try {
 			this.atlasTexture?.dispose?.();
 		} catch {
 			/* ignore */
@@ -265,9 +293,15 @@ export default class PreviewResourcePool {
 			/* ignore */
 		}
 
+		try {
+			this.chestMirrorMat?.dispose?.();
+		} catch {
+			/* ignore */
+		}
 		this.regularMat = null;
 		this.transparentMat = null;
 		this.solidFloorMat = null;
+		this.chestMirrorMat = null;
 		this.atlasTexture = null;
 		this.minecartTexture = null;
 		this.entityModelKit = null;

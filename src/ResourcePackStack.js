@@ -5,10 +5,29 @@ import { all as mergeObjects } from "deepmerge";
 
 import LocalResourcePack from "./LocalResourcePack.js";
 import { jsonc, removeFalsies } from "./utils.js";
-import fetchers from "./fetchers.js";
+import { packAssetStore } from "./viewer/appearance/PackAssetStore.js";
 
 export default class ResourcePackStack {
-	static #JSON_FILES_TO_MERGE = ["blocks.json", "textures/terrain_texture.json", "textures/flipbook_textures.json"];
+	static JSON_FILES_TO_MERGE = ["blocks.json", "textures/terrain_texture.json", "textures/flipbook_textures.json"];
+	/** @type {Map<string, Promise<any>>} */
+	static #vanillaJsonByPath = new Map();
+	
+	/**
+	 * @param {string} resourcePath
+	 * @returns {Promise<any>}
+	 */
+	static #loadVanillaJson(resourcePath) {
+		if(!this.#vanillaJsonByPath.has(resourcePath)) {
+			this.#vanillaJsonByPath.set(resourcePath, packAssetStore.getJson(`resource_pack/${resourcePath}`).then(json => {
+				if(!json) throw new Error(`Missing vanilla JSON ${resourcePath}`);
+				return json;
+			}).catch(err => {
+				this.#vanillaJsonByPath.delete(resourcePath);
+				throw err;
+			}));
+		}
+		return this.#vanillaJsonByPath.get(resourcePath);
+	}
 	
 	/** Whether or not there are any resource packs attached (apart from vanilla ofc) @type {boolean} */
 	hasResourcePacks;
@@ -31,26 +50,35 @@ export default class ResourcePackStack {
 	 */
 	async fetchResource(resourcePath) {
 		let filePath = `resource_pack/${resourcePath}`;
-		if(ResourcePackStack.#JSON_FILES_TO_MERGE.includes(resourcePath)) {
-			let vanillaRes = await fetchers.vanillaData(filePath);
-			let vanillaJson = await jsonc(vanillaRes.clone()); // clone it so it can be read later if need be (responses can only be read once)
+		if(ResourcePackStack.JSON_FILES_TO_MERGE.includes(resourcePath)) {
+			let vanillaJson = await ResourcePackStack.#loadVanillaJson(resourcePath);
+			if(!this.hasResourcePacks) {
+				return new Response(JSON.stringify(vanillaJson));
+			}
 			let resourcePackFiles = this.localResourcePacks.map(resourcePack => resourcePack.getFile(resourcePath));
 			let resourcePackJsons = await Promise.all(removeFalsies(resourcePackFiles).map(file => jsonc(file)));
 			resourcePackJsons.reverse(); // start with the lowest priority pack, so that they get overwritten by higher priority packs
-			let allJsons = [vanillaJson, ...resourcePackJsons];
-			if(allJsons.length == 1) { // if only the vanilla resources had this file, use that response
-				return vanillaRes;
-			}
-			let mergedJson = mergeObjects(allJsons);
-			console.debug(`Merged JSON file ${resourcePath}:`, mergedJson, "From:", allJsons);
+			let mergedJson = mergeObjects([vanillaJson, ...resourcePackJsons]);
+			console.debug(`Merged JSON file ${resourcePath}:`, mergedJson, "From:", [vanillaJson, ...resourcePackJsons]);
 			return new Response(JSON.stringify(mergedJson));
 		}
+		const local = this.getLocalFile(resourcePath);
+		if(local) {
+			return new Response(local);
+		}
+		return packAssetStore.fetchVanillaResponse(filePath);
+	}
+
+	/**
+	 * Overlay pack file only (no vanilla CDN).
+	 * @param {string} resourcePath
+	 * @returns {File|Blob|null}
+	 */
+	getLocalFile(resourcePath) {
 		for(let localResourcePack of this.localResourcePacks) {
 			let resource = localResourcePack.getFile(resourcePath);
-			if(resource) {
-				return new Response(resource);
-			}
+			if(resource) return resource;
 		}
-		return await fetchers.vanillaData(filePath);
+		return null;
 	}
 }

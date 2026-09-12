@@ -1,12 +1,15 @@
 /**
- * IndexedDB persistence for structure catalog (metadata + file blobs + categories).
+ * IndexedDB persistence for structure catalog
+ * (metadata + file blobs + categories + entries + features).
  */
 
 // Keep legacy DB name so existing IndexedDB catalogs still open after the Bedrock ASI rebrand
 const DB_NAME = "structure-db-viewer";
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 const STORE = "structures";
 const CATEGORIES_STORE = "categories";
+const ENTRIES_STORE = "entries";
+const FEATURES_STORE = "features";
 
 /**
  * @typedef {object} StoredStructure
@@ -22,7 +25,8 @@ const CATEGORIES_STORE = "categories";
  * @property {number} entityCount
  * @property {{ id: string, label: string, count: number }[]} [materials]
  * @property {import("./hopperStats.js").HopperStats|null} [hopperStats]
- * @property {string|null} [categoryId]
+ * @property {string|null} [entryId]
+ * @property {string[]} [featureIds]
  * @property {string[]} [acquiredMaterials]
  * @property {string} [defaultCameraPreset]
  * @property {{ id: string, text: string, addedAt?: number }[]} [userDetails]
@@ -38,9 +42,38 @@ const CATEGORIES_STORE = "categories";
 /**
  * @typedef {object} StoredCategory
  * @property {string} id
+ * @property {string} [slug]
  * @property {string} name
+ * @property {string} [description]
+ * @property {string} [color]
  * @property {number} sortOrder
  * @property {boolean} collapsed
+ * @property {boolean} [isDefault]
+ */
+
+/**
+ * @typedef {object} StoredCatalogEntry
+ * @property {string} id
+ * @property {string} slug
+ * @property {string} categoryId
+ * @property {string} name
+ * @property {string} [description]
+ * @property {number} sortOrder
+ * @property {boolean} collapsed
+ * @property {boolean} [isDefault]
+ */
+
+/**
+ * @typedef {object} StoredFeature
+ * @property {string} id
+ * @property {string} slug
+ * @property {string} name
+ * @property {string} [description]
+ * @property {string} [useCases]
+ * @property {string} color
+ * @property {string[]} categoryIds
+ * @property {number} sortOrder
+ * @property {boolean} [isDefault]
  */
 
 /**
@@ -63,6 +96,12 @@ function openDb() {
 			if (!db.objectStoreNames.contains(CATEGORIES_STORE)) {
 				db.createObjectStore(CATEGORIES_STORE, { keyPath: "id" });
 			}
+			if (!db.objectStoreNames.contains(ENTRIES_STORE)) {
+				db.createObjectStore(ENTRIES_STORE, { keyPath: "id" });
+			}
+			if (!db.objectStoreNames.contains(FEATURES_STORE)) {
+				db.createObjectStore(FEATURES_STORE, { keyPath: "id" });
+			}
 		};
 	});
 }
@@ -76,13 +115,11 @@ function idbReq(req) {
 	return new Promise((resolve, reject) => {
 		req.onsuccess = () => resolve(req.result);
 		req.onerror = () => reject(req.error ?? new Error("IDB request failed"));
-		// Without onabort, aborted requests hang the Promise forever
 		req.onabort = () => reject(req.error ?? new Error("IDB request aborted"));
 	});
 }
 
 /**
- * Wait for a transaction to finish (complete / error / abort).
  * @param {IDBTransaction} tx
  * @returns {Promise<void>}
  */
@@ -95,7 +132,56 @@ function idbTxDone(tx) {
 }
 
 /**
- * @param {Omit<StoredStructure, "blob"|"fileName"> & { file: File, parseError?: string, hopperStats?: import("./hopperStats.js").HopperStats|null, categoryId?: string|null }} entry
+ * @param {IDBDatabase} db
+ * @param {string[]} names
+ * @returns {string[]}
+ */
+function existingStores(db, names) {
+	return names.filter(n => db.objectStoreNames.contains(n));
+}
+
+function serializeCategory(category) {
+	return {
+		id: category.id,
+		slug: typeof category.slug === "string" ? category.slug : "",
+		name: category.name,
+		description: typeof category.description === "string" ? category.description : "",
+		color: typeof category.color === "string" && category.color ? category.color : "#64748b",
+		sortOrder: category.sortOrder ?? 0,
+		collapsed: !!category.collapsed,
+		isDefault: !!category.isDefault
+	};
+}
+
+function serializeCatalogEntry(entry) {
+	return {
+		id: entry.id,
+		slug: typeof entry.slug === "string" ? entry.slug : "",
+		categoryId: entry.categoryId,
+		name: entry.name,
+		description: typeof entry.description === "string" ? entry.description : "",
+		sortOrder: entry.sortOrder ?? 0,
+		collapsed: !!entry.collapsed,
+		isDefault: !!entry.isDefault
+	};
+}
+
+function serializeFeature(feature) {
+	return {
+		id: feature.id,
+		slug: typeof feature.slug === "string" ? feature.slug : "",
+		name: feature.name,
+		description: typeof feature.description === "string" ? feature.description : "",
+		useCases: typeof feature.useCases === "string" ? feature.useCases : "",
+		color: typeof feature.color === "string" && feature.color ? feature.color : "#64748b",
+		categoryIds: Array.isArray(feature.categoryIds) ? feature.categoryIds.map(String) : [],
+		sortOrder: feature.sortOrder ?? 0,
+		isDefault: !!feature.isDefault
+	};
+}
+
+/**
+ * @param {Omit<StoredStructure, "blob"|"fileName"> & { file: File, parseError?: string, hopperStats?: import("./hopperStats.js").HopperStats|null, entryId?: string|null, featureIds?: string[] }} entry
  * @returns {Promise<void>}
  */
 export async function dbPutStructure(entry) {
@@ -114,7 +200,8 @@ export async function dbPutStructure(entry) {
 			entityCount: entry.entityCount ?? 0,
 			materials: entry.materials ?? [],
 			hopperStats: entry.hopperStats ?? null,
-			categoryId: entry.categoryId ?? null,
+			entryId: entry.entryId ?? null,
+			featureIds: Array.isArray(entry.featureIds) ? entry.featureIds : [],
 			acquiredMaterials: Array.isArray(entry.acquiredMaterials) ? entry.acquiredMaterials : [],
 			defaultCameraPreset: entry.defaultCameraPreset || "iso-north",
 			userDetails: Array.isArray(entry.userDetails) ? entry.userDetails : [],
@@ -153,9 +240,25 @@ export async function dbDeleteStructure(id) {
 export async function dbClearAll() {
 	const db = await openDb();
 	try {
-		const tx = db.transaction([STORE, CATEGORIES_STORE], "readwrite");
+		const names = existingStores(db, [STORE, CATEGORIES_STORE, ENTRIES_STORE, FEATURES_STORE]);
+		if (!names.length) return;
+		const tx = db.transaction(names, "readwrite");
+		for (const name of names) {
+			await idbReq(tx.objectStore(name).clear());
+		}
+		await idbTxDone(tx);
+	} finally {
+		db.close();
+	}
+}
+
+/** Clear structure blobs/metadata only (keep taxonomy). */
+export async function dbClearStructures() {
+	const db = await openDb();
+	try {
+		if (!db.objectStoreNames.contains(STORE)) return;
+		const tx = db.transaction(STORE, "readwrite");
 		await idbReq(tx.objectStore(STORE).clear());
-		await idbReq(tx.objectStore(CATEGORIES_STORE).clear());
 		await idbTxDone(tx);
 	} finally {
 		db.close();
@@ -183,7 +286,8 @@ export async function dbLoadAll() {
 				entityCount: row.entityCount ?? 0,
 				hopperStats: row.hopperStats ?? null,
 				materials: row.materials ?? [],
-				categoryId: row.categoryId ?? null,
+				entryId: row.entryId ?? null,
+				featureIds: Array.isArray(row.featureIds) ? row.featureIds : [],
 				acquiredMaterials: Array.isArray(row.acquiredMaterials)
 					? row.acquiredMaterials
 					: [],
@@ -207,12 +311,7 @@ export async function dbPutCategory(category) {
 	const db = await openDb();
 	try {
 		const tx = db.transaction(CATEGORIES_STORE, "readwrite");
-		await idbReq(tx.objectStore(CATEGORIES_STORE).put({
-			id: category.id,
-			name: category.name,
-			sortOrder: category.sortOrder ?? 0,
-			collapsed: !!category.collapsed
-		}));
+		await idbReq(tx.objectStore(CATEGORIES_STORE).put(serializeCategory(category)));
 		await idbTxDone(tx);
 	} finally {
 		db.close();
@@ -229,12 +328,7 @@ export async function dbPutCategories(categories) {
 		const tx = db.transaction(CATEGORIES_STORE, "readwrite");
 		const store = tx.objectStore(CATEGORIES_STORE);
 		for (const category of categories) {
-			store.put({
-				id: category.id,
-				name: category.name,
-				sortOrder: category.sortOrder ?? 0,
-				collapsed: !!category.collapsed
-			});
+			store.put(serializeCategory(category));
 		}
 		await idbTxDone(tx);
 	} finally {
@@ -263,21 +357,149 @@ export async function dbDeleteCategory(id) {
 export async function dbLoadCategories() {
 	const db = await openDb();
 	try {
-		// Older DBs may not have the store until upgrade completes
-		if (!db.objectStoreNames.contains(CATEGORIES_STORE)) {
-			return [];
-		}
+		if (!db.objectStoreNames.contains(CATEGORIES_STORE)) return [];
 		const tx = db.transaction(CATEGORIES_STORE, "readonly");
 		/** @type {StoredCategory[]} */
 		const rows = await idbReq(tx.objectStore(CATEGORIES_STORE).getAll());
 		await idbTxDone(tx);
 		return rows
-			.map(r => ({
-				id: r.id,
-				name: r.name || "Category",
-				sortOrder: Number.isFinite(r.sortOrder) ? r.sortOrder : 0,
-				collapsed: !!r.collapsed
-			}))
+			.map(r => serializeCategory(r))
+			.sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
+	} finally {
+		db.close();
+	}
+}
+
+/**
+ * @param {StoredCatalogEntry} entry
+ * @returns {Promise<void>}
+ */
+export async function dbPutEntry(entry) {
+	const db = await openDb();
+	try {
+		const tx = db.transaction(ENTRIES_STORE, "readwrite");
+		await idbReq(tx.objectStore(ENTRIES_STORE).put(serializeCatalogEntry(entry)));
+		await idbTxDone(tx);
+	} finally {
+		db.close();
+	}
+}
+
+/**
+ * @param {StoredCatalogEntry[]} entries
+ * @returns {Promise<void>}
+ */
+export async function dbPutEntries(entries) {
+	const db = await openDb();
+	try {
+		const tx = db.transaction(ENTRIES_STORE, "readwrite");
+		const store = tx.objectStore(ENTRIES_STORE);
+		for (const entry of entries) {
+			store.put(serializeCatalogEntry(entry));
+		}
+		await idbTxDone(tx);
+	} finally {
+		db.close();
+	}
+}
+
+/**
+ * @param {string} id
+ * @returns {Promise<void>}
+ */
+export async function dbDeleteEntry(id) {
+	const db = await openDb();
+	try {
+		if (!db.objectStoreNames.contains(ENTRIES_STORE)) return;
+		const tx = db.transaction(ENTRIES_STORE, "readwrite");
+		await idbReq(tx.objectStore(ENTRIES_STORE).delete(id));
+		await idbTxDone(tx);
+	} finally {
+		db.close();
+	}
+}
+
+/**
+ * @returns {Promise<StoredCatalogEntry[]>}
+ */
+export async function dbLoadEntries() {
+	const db = await openDb();
+	try {
+		if (!db.objectStoreNames.contains(ENTRIES_STORE)) return [];
+		const tx = db.transaction(ENTRIES_STORE, "readonly");
+		/** @type {StoredCatalogEntry[]} */
+		const rows = await idbReq(tx.objectStore(ENTRIES_STORE).getAll());
+		await idbTxDone(tx);
+		return rows
+			.map(r => serializeCatalogEntry(r))
+			.sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
+	} finally {
+		db.close();
+	}
+}
+
+/**
+ * @param {StoredFeature} feature
+ * @returns {Promise<void>}
+ */
+export async function dbPutFeature(feature) {
+	const db = await openDb();
+	try {
+		const tx = db.transaction(FEATURES_STORE, "readwrite");
+		await idbReq(tx.objectStore(FEATURES_STORE).put(serializeFeature(feature)));
+		await idbTxDone(tx);
+	} finally {
+		db.close();
+	}
+}
+
+/**
+ * @param {StoredFeature[]} features
+ * @returns {Promise<void>}
+ */
+export async function dbPutFeatures(features) {
+	const db = await openDb();
+	try {
+		const tx = db.transaction(FEATURES_STORE, "readwrite");
+		const store = tx.objectStore(FEATURES_STORE);
+		for (const feature of features) {
+			store.put(serializeFeature(feature));
+		}
+		await idbTxDone(tx);
+	} finally {
+		db.close();
+	}
+}
+
+/**
+ * @param {string} id
+ * @returns {Promise<void>}
+ */
+export async function dbDeleteFeature(id) {
+	const db = await openDb();
+	try {
+		if (!db.objectStoreNames.contains(FEATURES_STORE)) return;
+		const tx = db.transaction(FEATURES_STORE, "readwrite");
+		await idbReq(tx.objectStore(FEATURES_STORE).delete(id));
+		await idbTxDone(tx);
+	} finally {
+		db.close();
+	}
+}
+
+/**
+ * @returns {Promise<StoredFeature[]>}
+ */
+export async function dbLoadFeatures() {
+	const db = await openDb();
+	try {
+		if (!db.objectStoreNames.contains(FEATURES_STORE)) return [];
+		const tx = db.transaction(FEATURES_STORE, "readonly");
+		/** @type {StoredFeature[]} */
+		const rows = await idbReq(tx.objectStore(FEATURES_STORE).getAll());
+		await idbTxDone(tx);
+		return rows
+			.map(r => serializeFeature(r))
 			.sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
 	} finally {
 		db.close();
@@ -287,7 +509,6 @@ export async function dbLoadCategories() {
 /** Drop legacy localStorage metadata index from the scaffold era. */
 export function clearLegacyLocalStorageIndex() {
 	try {
-		// Legacy key from pre-rename builds
 		localStorage.removeItem("structure-db-viewer.catalog-index.v1");
 	} catch {
 		/* ignore */

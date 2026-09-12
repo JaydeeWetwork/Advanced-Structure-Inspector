@@ -9,14 +9,54 @@ import {
 
 const SCHEMA_LIST_URL = new URL("./data/blockUpgradeSchemaList.json", import.meta.url);
 
+/** Shared across every BlockUpdater instance (ASI preview + HoloPrint). */
+/** @type {Record<string, BlockUpdateSchemaSkeleton[]>} */
+const schemaIndex = {};
+/** @type {Map<string, Promise<BlockUpdateSchema>>} */
+const schemaLoads = new Map();
+/** @type {Promise<void>|null} */
+let indexPromise = null;
+
+/**
+ * Load the local schema filename index (no CDN). Safe to call at boot.
+ * @returns {Promise<void>}
+ */
+async function ensureSchemaIndex() {
+	if(Object.keys(schemaIndex).length) {
+		return;
+	}
+	indexPromise ??= (async () => {
+		/** @type {BlockUpdateSchemaSkeleton[]} */
+		let schemaList = await fetch(SCHEMA_LIST_URL).then(res => res.json());
+		schemaList.forEach(schemaSkeleton => {
+			let schemaVersion = packedSchemaVersion(schemaSkeleton);
+			schemaIndex[schemaVersion] ??= [];
+			schemaIndex[schemaVersion].push(schemaSkeleton);
+		});
+	})().catch(err => {
+		indexPromise = null;
+		throw err;
+	});
+	await indexPromise;
+}
+
+/**
+ * @param {string} schemaFilename
+ * @returns {Promise<BlockUpdateSchema>}
+ */
+function loadSchema(schemaFilename) {
+	if(!schemaLoads.has(schemaFilename)) {
+		schemaLoads.set(schemaFilename, fetchers.bedrockBlockUpgradeSchema(`nbt_upgrade_schema/${schemaFilename}`).then(res => res.json()).catch(err => {
+			schemaLoads.delete(schemaFilename);
+			throw err;
+		}));
+	}
+	return schemaLoads.get(schemaFilename);
+}
+
 /** Updates older blocks to the latest MCBE version. */
 export default class BlockUpdater {
 	static LATEST_VERSION = 18168865; // 01 15 3C 21 = 1.21.60.33 (1.21.61)
-	
-	/** @type {Record<string, BlockUpdateSchemaSkeleton[]>} */
-	#schemaIndex = {};
-	/** @type {Map<string, BlockUpdateSchema>} */
-	#schemas = new Map();
 	
 	/**
 	 * Checks if a block needs updating to the latest Minecraft version.
@@ -27,6 +67,13 @@ export default class BlockUpdater {
 		return block["version"] < BlockUpdater.LATEST_VERSION;
 	}
 	/**
+	 * Load the local schema filename index (no CDN). Safe to call at boot.
+	 * @returns {Promise<void>}
+	 */
+	ensureSchemaIndex() {
+		return ensureSchemaIndex();
+	}
+	/**
 	 * Upgrades a block from older Minecraft versions to the latest Minecraft version.
 	 * @mutating
 	 * @param {NBTBlock} block
@@ -34,24 +81,11 @@ export default class BlockUpdater {
 	 */
 	async update(block) {
 		let oldBlockStringified = BlockUpdater.stringifyBlock(block);
-		if(Object.keys(this.#schemaIndex).length == 0) {
-			/** @type {BlockUpdateSchemaSkeleton[]} */
-			let schemaList = await fetch(SCHEMA_LIST_URL).then(res => res.json());
-			schemaList.forEach(schemaSkeleton => {
-				let schemaVersion = packedSchemaVersion(schemaSkeleton);
-				this.#schemaIndex[schemaVersion] ??= [];
-				this.#schemaIndex[schemaVersion].push(schemaSkeleton);
-			});
-		}
-		let schemasToApply = schemaFilenamesToApply(this.#schemaIndex, block["version"]);
-		await Promise.all(schemasToApply.map(async schemaFilename => {
-			if(!this.#schemas.has(schemaFilename)) {
-				this.#schemas.set(schemaFilename, await fetchers.bedrockBlockUpgradeSchema(`nbt_upgrade_schema/${schemaFilename}`).then(res => res.json()));
-			}
-		}));
+		await ensureSchemaIndex();
+		let schemasToApply = schemaFilenamesToApply(schemaIndex, block["version"]);
+		let schemas = await Promise.all(schemasToApply.map(loadSchema));
 		let updated = false;
-		schemasToApply.forEach(schemaFileName => {
-			let schema = this.#schemas.get(schemaFileName);
+		schemas.forEach(schema => {
 			if(applyBlockUpdateSchema(schema, block)) {
 				updated = true;
 			}

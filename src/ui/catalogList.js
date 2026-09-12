@@ -1,5 +1,5 @@
 /**
- * Catalog list + categories UI.
+ * Catalog list: category → entry → structure tree (browse only).
  */
 
 import {
@@ -8,7 +8,7 @@ import {
 	getSelectedId,
 	uiFlags
 } from "../app/state.js";
-import { setStatus, formatSize } from "../app/dom.js";
+import { formatSize } from "../app/dom.js";
 
 /** @type { (id: string|null, opts?: object) => void } */
 let _selectEntry = () => {};
@@ -20,68 +20,19 @@ export function bindCatalogHandlers(handlers) {
 	_selectEntry = handlers.selectEntry;
 }
 
-export async function moveEntryToCategory(entryId, categoryId) {
-	const cid = categoryId === "" || categoryId === "null" ? null : categoryId;
-	await catalog.setEntryCategory(entryId, cid);
-	renderList();
-}
-
-export async function onAddCategory() {
-	const name = prompt("New category name:", "New category");
-	if (name == null) return;
-	const trimmed = name.trim();
-	if (!trimmed) return;
-	try {
-		const cat = await catalog.addCategory(trimmed);
-		setStatus(`Category “${cat.name}” created.`, "ok");
-		renderList();
-	} catch (e) {
-		setStatus(`Could not create category: ${e?.message ?? e}`, "error");
-	}
-}
-
 /**
- * @param {string} categoryId
- */
-export async function onRenameCategory(categoryId) {
-	const cat = catalog.getCategory(categoryId);
-	if (!cat) return;
-	const name = prompt("Rename category:", cat.name);
-	if (name == null) return;
-	const trimmed = name.trim();
-	if (!trimmed || trimmed === cat.name) return;
-	await catalog.renameCategory(categoryId, trimmed);
-	renderList();
-}
-
-/**
- * @param {string} categoryId
- */
-export async function onDeleteCategory(categoryId) {
-	const cat = catalog.getCategory(categoryId);
-	if (!cat) return;
-	if (!confirm(`Delete category “${cat.name}”? Structures move to Uncategorized.`)) return;
-	try {
-		await catalog.removeCategory(categoryId);
-		renderList();
-		setStatus(`Category “${cat.name}” removed.`, "ok");
-	} catch (e) {
-		setStatus(`Delete category failed: ${e?.message ?? e}`, "error");
-	}
-}
-
-/**
- * Build one structure row for the catalog list.
  * @param {any} entry
+ * @param {string|null} color
  * @returns {HTMLLIElement}
  */
-export function createStructureRow(entry) {
+export function createStructureRow(entry, color = null) {
 	const li = document.createElement("li");
 	li.className = "basi-list-row" + (entry.id === getSelectedId() ? " selected" : "");
 	li.tabIndex = 0;
 	li.setAttribute("role", "option");
 	li.setAttribute("aria-selected", entry.id === getSelectedId() ? "true" : "false");
 	li.dataset.id = entry.id;
+	if (color) li.style.setProperty("--cat-color", color);
 
 	const main = document.createElement("div");
 	main.className = "basi-list-row-main";
@@ -99,34 +50,8 @@ export function createStructureRow(entry) {
 		: `${formatSize(entry.size)} · ${Number(entry.blockCount || 0).toLocaleString()} blocks${ent}`;
 
 	main.append(title, meta);
-
-	const move = document.createElement("select");
-	move.className = "basi-list-move";
-	move.title = "Move to category";
-	move.setAttribute("aria-label", `Move ${entry.name} to category`);
-	const optUncat = document.createElement("option");
-	optUncat.value = "";
-	optUncat.textContent = "Uncategorized";
-	move.appendChild(optUncat);
-	for (const c of catalog.listCategories()) {
-		const opt = document.createElement("option");
-		opt.value = c.id;
-		opt.textContent = c.name;
-		move.appendChild(opt);
-	}
-	move.value = entry.categoryId && catalog.getCategory(entry.categoryId) ? entry.categoryId : "";
-	move.addEventListener("click", e => e.stopPropagation());
-	move.addEventListener("mousedown", e => e.stopPropagation());
-	move.addEventListener("change", e => {
-		e.stopPropagation();
-		void moveEntryToCategory(entry.id, move.value || null);
-	});
-
-	li.append(main, move);
-	li.addEventListener("click", e => {
-		if (e.target instanceof Element && e.target.closest("select")) return;
-		_selectEntry(entry.id);
-	});
+	li.append(main);
+	li.addEventListener("click", () => _selectEntry(entry.id));
 	li.addEventListener("keydown", e => {
 		if (e.key === "Enter" || e.key === " ") {
 			e.preventDefault();
@@ -134,135 +59,153 @@ export function createStructureRow(entry) {
 		}
 		if (e.key === "Delete" || e.key === "Backspace") {
 			e.preventDefault();
-			removeSelected();
+			import("../app/previewLifecycle.js").then(m => m.removeSelected());
 		}
 	});
 	return li;
 }
 
 /**
- * @param {{ categoryId: string|null, name: string, collapsed: boolean, entries: any[], isUncategorized: boolean }} group
- * @param {number} catIndex among user categories (for reorder edges)
- * @param {number} userCatCount
+ * @param {string} name
+ * @param {number} count
+ * @param {boolean} collapsed
+ * @param {string|null} color
+ * @param {() => void} onToggle
  */
-export function createCategoryGroup(group, catIndex, userCatCount) {
-	const wrap = document.createElement("li");
-	wrap.className = "basi-cat-group" + (group.collapsed ? " is-collapsed" : "");
-	wrap.dataset.categoryId = group.categoryId ?? "uncategorized";
-
+function treeHeader(name, count, collapsed, color, onToggle) {
 	const header = document.createElement("div");
 	header.className = "basi-cat-header";
 	header.setAttribute("role", "button");
 	header.tabIndex = 0;
-	header.setAttribute("aria-expanded", group.collapsed ? "false" : "true");
+	header.setAttribute("aria-expanded", collapsed ? "false" : "true");
+	if (color) header.style.setProperty("--cat-color", color);
 
 	const toggle = document.createElement("span");
 	toggle.className = "basi-cat-toggle";
-	toggle.textContent = group.collapsed ? "▸" : "▾";
+	toggle.textContent = collapsed ? "▸" : "▾";
 	toggle.setAttribute("aria-hidden", "true");
 
 	const label = document.createElement("span");
 	label.className = "basi-cat-name";
-	label.textContent = group.name;
+	label.textContent = name;
 
-	const count = document.createElement("span");
-	count.className = "basi-cat-count";
-	count.textContent = String(group.entries.length);
+	const countEl = document.createElement("span");
+	countEl.className = "basi-cat-count";
+	countEl.textContent = String(count);
 
-	const actions = document.createElement("div");
-	actions.className = "basi-cat-actions";
-
-	const stop = e => e.stopPropagation();
-
-	if (!group.isUncategorized) {
-		const up = document.createElement("button");
-		up.type = "button";
-		up.className = "basi-cat-btn";
-		up.title = "Move category up";
-		up.textContent = "↑";
-		up.disabled = catIndex <= 0;
-		up.addEventListener("click", e => {
-			stop(e);
-			void catalog.reorderCategory(group.categoryId, -1).then(() => renderList());
-		});
-
-		const down = document.createElement("button");
-		down.type = "button";
-		down.className = "basi-cat-btn";
-		down.title = "Move category down";
-		down.textContent = "↓";
-		down.disabled = catIndex >= userCatCount - 1;
-		down.addEventListener("click", e => {
-			stop(e);
-			void catalog.reorderCategory(group.categoryId, 1).then(() => renderList());
-		});
-
-		const rename = document.createElement("button");
-		rename.type = "button";
-		rename.className = "basi-cat-btn";
-		rename.title = "Rename category";
-		rename.textContent = "✎";
-		rename.addEventListener("click", e => {
-			stop(e);
-			void onRenameCategory(group.categoryId);
-		});
-
-		const del = document.createElement("button");
-		del.type = "button";
-		del.className = "basi-cat-btn basi-cat-btn-danger";
-		del.title = "Delete category";
-		del.textContent = "×";
-		del.addEventListener("click", e => {
-			stop(e);
-			void onDeleteCategory(group.categoryId);
-		});
-
-		actions.append(up, down, rename, del);
-	}
-
-	header.append(toggle, label, count, actions);
-
-	const toggleCollapse = () => {
-		if (group.isUncategorized) {
-			uiFlags.uncategorizedCollapsed = !uiFlags.uncategorizedCollapsed;
-			renderList();
-			return;
-		}
-		void catalog
-			.setCategoryCollapsed(group.categoryId, !group.collapsed)
-			.then(() => renderList());
-	};
-	header.addEventListener("click", e => {
-		if (e.target instanceof Element && e.target.closest(".basi-cat-actions")) return;
-		toggleCollapse();
-	});
+	header.append(toggle, label, countEl);
+	header.addEventListener("click", onToggle);
 	header.addEventListener("keydown", e => {
 		if (e.key === "Enter" || e.key === " ") {
 			e.preventDefault();
-			toggleCollapse();
+			onToggle();
 		}
 	});
+	return header;
+}
 
-	wrap.appendChild(header);
+/**
+ * @param {{ category: any, structureCount: number, entries: { entry: any, structures: any[] }[] }} group
+ * @param {string} query
+ */
+function createCategoryGroup(group, query) {
+	const { category, entries } = group;
+	const color = category.color || "#64748b";
+	const collapsed = !!category.collapsed && !query;
+	const wrap = document.createElement("li");
+	wrap.className = "basi-cat-group" + (collapsed ? " is-collapsed" : "");
+	wrap.dataset.categoryId = category.id;
+	wrap.style.setProperty("--cat-color", color);
 
-	if (!group.collapsed) {
+	wrap.appendChild(
+		treeHeader(category.name, group.structureCount, collapsed, color, () => {
+			void catalog.setCategoryCollapsed(category.id, !category.collapsed).then(() => renderList());
+		})
+	);
+
+	if (!collapsed) {
 		const body = document.createElement("ul");
 		body.className = "basi-cat-body";
-		if (!group.entries.length) {
+		if (!entries.length) {
 			const empty = document.createElement("li");
 			empty.className = "basi-list-empty basi-cat-empty";
-			empty.textContent = group.isUncategorized
-				? "No uncategorized structures"
-				: "Empty — move structures here";
+			empty.textContent = "No entries";
 			body.appendChild(empty);
 		} else {
-			for (const entry of group.entries) {
-				body.appendChild(createStructureRow(entry));
+			for (const { entry, structures } of entries) {
+				body.appendChild(createEntryGroup(entry, structures, color, query));
 			}
 		}
 		wrap.appendChild(body);
 	}
+	return wrap;
+}
 
+/**
+ * @param {any} entry
+ * @param {any[]} structures
+ * @param {string} color
+ * @param {string} query
+ */
+function createEntryGroup(entry, structures, color, query) {
+	const collapsed = !!entry.collapsed && !query;
+	const wrap = document.createElement("li");
+	wrap.className = "basi-entry-group" + (collapsed ? " is-collapsed" : "");
+	wrap.dataset.entryId = entry.id;
+	wrap.style.setProperty("--cat-color", color);
+
+	wrap.appendChild(
+		treeHeader(entry.name, structures.length, collapsed, color, () => {
+			void catalog.setCatalogEntryCollapsed(entry.id, !entry.collapsed).then(() => renderList());
+		})
+	);
+
+	if (!collapsed) {
+		const body = document.createElement("ul");
+		body.className = "basi-entry-body";
+		if (!structures.length) {
+			const empty = document.createElement("li");
+			empty.className = "basi-list-empty basi-cat-empty";
+			empty.textContent = "No structures";
+			body.appendChild(empty);
+		} else {
+			for (const s of structures) {
+				body.appendChild(createStructureRow(s, color));
+			}
+		}
+		wrap.appendChild(body);
+	}
+	return wrap;
+}
+
+function createUncategorizedGroup(structures, query) {
+	const collapsed = uiFlags.uncategorizedCollapsed && !query;
+	const wrap = document.createElement("li");
+	wrap.className = "basi-cat-group basi-cat-uncategorized" + (collapsed ? " is-collapsed" : "");
+	wrap.dataset.categoryId = "uncategorized";
+
+	wrap.appendChild(
+		treeHeader("Uncategorized", structures.length, collapsed, null, () => {
+			uiFlags.uncategorizedCollapsed = !uiFlags.uncategorizedCollapsed;
+			renderList();
+		})
+	);
+
+	if (!collapsed) {
+		const body = document.createElement("ul");
+		body.className = "basi-cat-body";
+		if (!structures.length) {
+			const empty = document.createElement("li");
+			empty.className = "basi-list-empty basi-cat-empty";
+			empty.textContent = "Imported files land here until assigned in Editor";
+			body.appendChild(empty);
+		} else {
+			for (const s of structures) {
+				body.appendChild(createStructureRow(s));
+			}
+		}
+		wrap.appendChild(body);
+	}
 	return wrap;
 }
 
@@ -270,14 +213,10 @@ export function renderList() {
 	if (!els.catalogList || !els.catalogCount) return;
 
 	const query = els.searchInput?.value ?? "";
-	const groups = catalog.listGrouped({ query });
-	// Apply session collapse for Uncategorized
-	for (const g of groups) {
-		if (g.isUncategorized) g.collapsed = uiFlags.uncategorizedCollapsed;
-	}
-
+	const tree = catalog.listTree({ query });
 	const total = catalog.list().length;
-	const matchCount = groups.reduce((n, g) => n + g.entries.length, 0);
+	const matchCount = tree.uncategorized.structures.length
+		+ tree.categories.reduce((n, g) => n + g.structureCount, 0);
 	const q = query.trim();
 	els.catalogCount.textContent = q
 		? `${matchCount} match${matchCount === 1 ? "" : "es"} · ${total} total`
@@ -287,14 +226,6 @@ export function renderList() {
 
 	els.catalogList.replaceChildren();
 
-	if (total === 0) {
-		const empty = document.createElement("li");
-		empty.className = "basi-list-empty";
-		empty.textContent = "No structures yet — import files above";
-		els.catalogList.appendChild(empty);
-		// Still show category headers so users can create/organize
-	}
-
 	if (q && matchCount === 0 && total > 0) {
 		const empty = document.createElement("li");
 		empty.className = "basi-list-empty";
@@ -303,15 +234,16 @@ export function renderList() {
 		return;
 	}
 
-	const userCats = groups.filter(g => !g.isUncategorized);
-	let userIdx = 0;
-	for (const group of groups) {
-		// When filtering, skip empty groups (except keep Uncategorized if nothing else)
-		if (q && !group.entries.length) continue;
-		const idx = group.isUncategorized ? -1 : userIdx++;
-		els.catalogList.appendChild(
-			createCategoryGroup(group, idx, userCats.length)
-		);
+	if (total === 0) {
+		const empty = document.createElement("li");
+		empty.className = "basi-list-empty";
+		empty.textContent = "No structures yet — import files above";
+		els.catalogList.appendChild(empty);
+	}
+
+	els.catalogList.appendChild(createUncategorizedGroup(tree.uncategorized.structures, q));
+	for (const group of tree.categories) {
+		if (q && !group.structureCount && !group.entries.length) continue;
+		els.catalogList.appendChild(createCategoryGroup(group, q));
 	}
 }
-

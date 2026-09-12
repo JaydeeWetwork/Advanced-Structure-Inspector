@@ -126,7 +126,7 @@ export default class InspectRaycaster {
 						?? this.#fallbackBlockInfo(x, y, z, obj.userData.basiPaletteI);
 					return {
 						kind: "block",
-						block,
+						block: this.#withDoubleChest(block, x, y, z),
 						structurePos: [x, y, z]
 					};
 				}
@@ -162,6 +162,27 @@ export default class InspectRaycaster {
 	 * @param {number} z
 	 * @param {number} paletteI
 	 */
+	/**
+	 * If this cell is a paired chest, use the inspect index's combined 54-slot list.
+	 * @param {any} block
+	 * @param {number} x
+	 * @param {number} y
+	 * @param {number} z
+	 */
+	#withDoubleChest(block, x, y, z) {
+		if (!block) return block;
+		if (block.doubleChest && Array.isArray(block.doubleItems)) return block;
+		const indexed = this.ctx.inspectIndex?.blocks?.get?.(`${x},${y},${z}`);
+		if (indexed?.doubleChest) {
+			return {
+				...block,
+				doubleChest: indexed.doubleChest,
+				doubleItems: indexed.doubleItems ?? indexed.items ?? []
+			};
+		}
+		return block;
+	}
+
 	#fallbackBlockInfo(x, y, z, paletteI) {
 		const b = this.ctx.blockPalette?.[paletteI];
 		return {

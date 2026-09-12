@@ -4,7 +4,7 @@
 
 import { els } from "./state.js";
 
-const PIN_LS_KEY = "basi.floatPins.v1";
+const PIN_LS_KEY = "basi.floatPins.v3";
 const _floatFlashTimers = new Map();
 
 /**
@@ -98,8 +98,11 @@ export function saveFloatPins(pins) {
 export function applyFloatPin(floatEl, btn, pinned) {
 	if (floatEl) floatEl.classList.toggle("basi-float-pinned", pinned);
 	if (btn) {
+		const isLeft = !!floatEl?.classList.contains("basi-float-left");
 		btn.setAttribute("aria-pressed", pinned ? "true" : "false");
-		btn.title = pinned ? "Unpin menu (auto-hide when not hovered)" : "Pin menu open";
+		btn.title = pinned ? "Unpin — hide until hover" : "Pin — keep open";
+		btn.setAttribute("aria-label", btn.title);
+		btn.textContent = pinned ? (isLeft ? "«" : "»") : (isLeft ? "»" : "«");
 		btn.classList.toggle("is-pinned", pinned);
 	}
 }

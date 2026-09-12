@@ -1,0 +1,472 @@
+/**
+ * Database editor — two-pane taxonomy + features.
+ */
+
+.basi-view-switch {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	margin-left: 10px;
+	padding: 2px;
+	border: 1px solid var(--basi-border);
+	border-radius: 999px;
+	background: var(--basi-chip);
+}
+
+.basi-view-link {
+	appearance: none;
+	border: 0;
+	background: transparent;
+	color: var(--basi-muted);
+	font: inherit;
+	font-size: 0.78rem;
+	font-weight: 600;
+	padding: 4px 12px;
+	border-radius: 999px;
+	cursor: pointer;
+	text-decoration: none;
+}
+
+.basi-view-link:hover {
+	color: var(--text-col);
+}
+
+.basi-view-link.is-active {
+	background: var(--basi-panel);
+	color: var(--text-col);
+	box-shadow: var(--basi-shadow);
+}
+
+body.basi-view-editor .basi-stage,
+body.basi-view-editor .basi-selection-bar {
+	display: none !important;
+}
+
+body.basi-view-viewer .basi-editor {
+	display: none;
+}
+
+.basi-editor {
+	flex: 1 1 auto;
+	min-height: 0;
+	display: grid;
+	grid-template-columns: minmax(280px, 42%) minmax(0, 1fr);
+	gap: 0;
+	background: var(--basi-page);
+}
+
+.basi-editor-left,
+.basi-editor-right {
+	min-width: 0;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+	background: var(--basi-panel);
+}
+
+.basi-editor-left {
+	border-right: 1px solid var(--basi-border);
+}
+
+.basi-editor-pane-label {
+	font-size: 0.72rem;
+	font-weight: 700;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--basi-muted);
+	padding: 12px 14px 6px;
+}
+
+.basi-editor-toolbar {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	align-items: center;
+	padding: 0 14px 10px;
+}
+
+.basi-editor-tree {
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow: auto;
+	padding: 0 8px 8px;
+}
+
+.basi-ed-node {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 5px 8px 5px calc(8px + var(--depth, 0) * 16px);
+	border-radius: 6px;
+	cursor: pointer;
+	border-left: 3px solid var(--cat-color, transparent);
+	color: var(--text-col);
+}
+
+.basi-ed-node:hover {
+	background: var(--basi-row-hover);
+}
+
+.basi-ed-node.is-selected {
+	background: var(--basi-selected);
+}
+
+.basi-ed-toggle,
+.basi-ed-icon-btn {
+	appearance: none;
+	border: 1px solid var(--basi-border);
+	background: var(--basi-chip);
+	color: var(--text-col);
+	font: inherit;
+	font-size: 0.72rem;
+	font-weight: 600;
+	line-height: 1;
+	padding: 3px 7px;
+	border-radius: 6px;
+	cursor: pointer;
+}
+
+.basi-ed-toggle {
+	width: 1.4rem;
+	padding: 3px 0;
+	text-align: center;
+}
+
+.basi-ed-toggle-spacer {
+	width: 1.4rem;
+	flex-shrink: 0;
+}
+
+.basi-ed-icon-btn:hover,
+.basi-ed-toggle:hover {
+	background: var(--basi-row-hover);
+}
+
+.basi-ed-icon-btn:disabled {
+	opacity: 0.35;
+	cursor: not-allowed;
+}
+
+.basi-ed-node-name {
+	flex: 1 1 auto;
+	min-width: 0;
+	font-size: 0.86rem;
+	font-weight: 600;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.basi-ed-node-meta {
+	flex-shrink: 0;
+	font-size: 0.72rem;
+	color: var(--basi-muted);
+	font-variant-numeric: tabular-nums;
+}
+
+.basi-ed-empty {
+	padding: 4px 8px 8px calc(28px + var(--depth, 0) * 16px);
+	font-size: 0.75rem;
+	color: var(--basi-muted);
+}
+
+.basi-editor-inspector {
+	flex: 0 0 auto;
+	max-height: 42%;
+	overflow: auto;
+	border-top: 1px solid var(--basi-border);
+	padding: 12px 14px 16px;
+	background: var(--basi-page);
+}
+
+.basi-ed-inspect-title {
+	margin: 0 0 10px;
+	font-size: 0.78rem;
+	font-weight: 700;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: var(--basi-muted);
+}
+
+.basi-ed-hint {
+	margin: 0;
+	font-size: 0.82rem;
+	color: var(--basi-muted);
+	line-height: 1.4;
+}
+
+.basi-ed-field {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	margin-bottom: 10px;
+}
+
+.basi-ed-label {
+	font-size: 0.72rem;
+	font-weight: 600;
+	color: var(--basi-muted);
+}
+
+.basi-ed-input,
+.basi-ed-color {
+	font: inherit;
+	font-size: 0.86rem;
+	color: var(--text-col);
+	background: var(--basi-input);
+	border: 1px solid var(--basi-border);
+	border-radius: 8px;
+	padding: 6px 8px;
+}
+
+.basi-ed-input:focus {
+	outline: 2px solid var(--basi-accent);
+	outline-offset: 1px;
+}
+
+.basi-ed-color {
+	width: 48px;
+	height: 32px;
+	padding: 2px;
+	cursor: pointer;
+}
+
+.basi-ed-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	align-items: center;
+	margin-top: 4px;
+}
+
+.basi-ed-danger {
+	color: var(--error-red) !important;
+}
+
+.basi-ed-assign {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 0.78rem;
+	color: var(--basi-muted);
+	margin-left: auto;
+}
+
+.basi-ed-assign .basi-ed-input {
+	min-width: 160px;
+}
+
+.basi-ed-pane-title {
+	margin: 0;
+	font-size: 1rem;
+	font-weight: 650;
+}
+
+.basi-ed-feat-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	padding: 12px 16px 8px;
+}
+
+.basi-ed-feat-filter {
+	margin: 0 16px 8px;
+	width: calc(100% - 32px);
+}
+
+.basi-editor-right .basi-ed-hint {
+	padding: 0 16px 8px;
+}
+
+.basi-ed-feat-list {
+	flex: 1 1 auto;
+	overflow: auto;
+	padding: 4px 16px 20px;
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+
+.basi-ed-feat-card {
+	border: 1px solid var(--basi-border);
+	border-radius: 12px;
+	background: var(--basi-panel);
+	box-shadow: var(--basi-shadow);
+	overflow: hidden;
+	border-left: 4px solid var(--feat-color, var(--basi-accent));
+}
+
+.basi-ed-feat-card.is-assigned {
+	box-shadow: 0 0 0 1px var(--feat-color, var(--basi-accent)), var(--basi-shadow);
+}
+
+.basi-ed-feat-main {
+	display: block;
+	width: 100%;
+	text-align: left;
+	border: 0;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	padding: 10px 12px 8px;
+	cursor: pointer;
+}
+
+.basi-ed-feat-name {
+	display: inline-block;
+	font-size: 0.78rem;
+	font-weight: 700;
+	padding: 2px 8px;
+	border-radius: 999px;
+	margin-bottom: 6px;
+}
+
+.basi-ed-feat-desc {
+	margin: 0;
+	font-size: 0.8rem;
+	line-height: 1.4;
+	color: var(--text-col);
+	display: -webkit-box;
+	-webkit-line-clamp: 3;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+}
+
+.basi-ed-feat-tags {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+	margin-top: 8px;
+}
+
+.basi-ed-cat-pill,
+.basi-ed-assigned-flag {
+	font-size: 0.68rem;
+	font-weight: 600;
+	padding: 1px 7px;
+	border-radius: 999px;
+	background: color-mix(in srgb, var(--cat-color, var(--basi-chip)) 22%, transparent);
+	color: var(--text-col);
+	border: 1px solid color-mix(in srgb, var(--cat-color, var(--basi-border)) 45%, transparent);
+}
+
+.basi-ed-assigned-flag {
+	--cat-color: var(--basi-accent);
+}
+
+.basi-ed-feat-tools {
+	display: flex;
+	gap: 4px;
+	padding: 0 10px 10px;
+}
+
+.basi-ed-feat-form {
+	padding: 0 12px 12px;
+	border-top: 1px solid var(--basi-border);
+	padding-top: 10px;
+}
+
+.basi-ed-cat-checks {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	max-height: 180px;
+	overflow: auto;
+}
+
+.basi-ed-check {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font-size: 0.82rem;
+	cursor: pointer;
+}
+
+.basi-ed-swatch {
+	width: 10px;
+	height: 10px;
+	border-radius: 999px;
+	flex-shrink: 0;
+}
+
+.basi-feature-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	margin: 8px 0 4px;
+}
+
+.basi-feature-chips.is-empty {
+	font-size: 0.78rem;
+	color: var(--basi-muted);
+}
+
+.basi-feature-chip {
+	appearance: none;
+	border: 0;
+	font: inherit;
+	font-size: 0.72rem;
+	font-weight: 700;
+	padding: 2px 8px;
+	border-radius: 999px;
+	background: var(--feat-color, var(--basi-chip));
+	cursor: default;
+}
+
+button.basi-feature-chip {
+	cursor: pointer;
+}
+
+.basi-entry-group {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+body.basi-app .basi-entry-group > .basi-cat-header {
+	background: transparent;
+	color: var(--text-col);
+	text-transform: none;
+	padding: 5px 8px 5px 16px;
+	border-left: 3px solid var(--cat-color, transparent);
+}
+
+.basi-entry-group > .basi-cat-header .basi-cat-name {
+	text-transform: none;
+	letter-spacing: 0;
+	font-weight: 650;
+	font-size: 0.8rem;
+}
+
+.basi-entry-body {
+	list-style: none;
+	margin: 0;
+	padding: 0 0 4px 8px;
+}
+
+.basi-cat-header {
+	border-left: 3px solid var(--cat-color, transparent);
+}
+
+.basi-list-row {
+	border-left: 3px solid var(--cat-color, transparent);
+}
+
+.basi-header-brand {
+	display: flex;
+	align-items: center;
+	min-width: 0;
+}
+
+@media (max-width: 860px) {
+	.basi-editor {
+		grid-template-columns: 1fr;
+		grid-template-rows: minmax(40vh, 1fr) minmax(40vh, 1fr);
+	}
+
+	.basi-editor-left {
+		border-right: 0;
+		border-bottom: 1px solid var(--basi-border);
+	}
+}

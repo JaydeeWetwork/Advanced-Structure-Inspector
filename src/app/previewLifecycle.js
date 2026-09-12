@@ -156,8 +156,8 @@ export async function loadPreview(opts = {}) {
 	if (host) host.dataset.basiPreviewBuilding = "1";
 
 	try {
-		const { renderStructurePreview } = await import("../viewer/structurePreview.js");
-		const { default: ResourcePackStack } = await import("../ResourcePackStack.js");
+		const { renderStructurePreview } = await import("../viewer/structurePreview.js?v=judo60");
+		const { default: ResourcePackStack } = await import("../ResourcePackStack.js?v=judo60");
 		if (signal.aborted || getSelectedId() !== buildForId) return;
 
 		const previewCont = document.createElement("div");

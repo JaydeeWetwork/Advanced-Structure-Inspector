@@ -183,13 +183,24 @@ export default class BlockGeoSystem {
 	 * @param {import("three").Material} material
 	 * @returns {import("three").InstancedMesh}
 	 */
-	instanceBufferGeoAtPositions(bufferGeo, positions, material) {
+	/**
+	 * @param {import("three").BufferGeometry} bufferGeo
+	 * @param {[number,number,number][]} positions
+	 * @param {import("three").Material} material
+	 * @param {{ mirrorX?: boolean }} [opts]
+	 */
+	instanceBufferGeoAtPositions(bufferGeo, positions, material, opts = {}) {
 		const THREE = this.ctx.THREE;
 		const instancedMesh = new THREE.InstancedMesh(bufferGeo, material, positions.length);
 		if (!this.#dummy) this.#dummy = new THREE.Object3D();
 		const dummy = this.#dummy;
+		const mirrorX = !!opts.mirrorX;
 		for (let i = 0; i < positions.length; i++) {
-			dummy.position.set(positions[i][0], positions[i][1], positions[i][2]);
+			const [px, py, pz] = positions[i];
+			// scale.x = -1 + origin shifted +16 undoes instance X negation so
+			// local +X meets the +X neighbor (Minecraft adjacency).
+			dummy.position.set(mirrorX ? px + 16 : px, py, pz);
+			dummy.scale.set(mirrorX ? -1 : 1, 1, 1);
 			dummy.updateMatrix();
 			instancedMesh.setMatrixAt(i, dummy.matrix);
 		}

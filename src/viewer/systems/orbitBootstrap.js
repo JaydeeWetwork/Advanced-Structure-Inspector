@@ -27,7 +27,7 @@ export function createOrbitCameraAndControls({
 	fov = DEFAULT_FOV
 }) {
 	const controlsMaxDist = (maxDimPixels / tanDeg(fov / 2)) * 5;
-	const camera = new THREE.PerspectiveCamera(fov, 1, 0.1, controlsMaxDist * 1.25);
+	const camera = new THREE.PerspectiveCamera(fov, 1, 1, controlsMaxDist * 1.25);
 	const controls = new OrbitControls(camera, canvas);
 	controls.minDistance = 10;
 	controls.maxDistance = controlsMaxDist;

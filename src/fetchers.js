@@ -1,6 +1,7 @@
 import { lazyLoadAsyncFunctionFactory, max, sleep } from "./utils.js";
 import {
 	VANILLA_SAMPLES_TAG,
+	VANILLA_SAMPLES_FALLBACK_TAGS,
 	BLOCK_UPGRADE_OWNER,
 	BLOCK_UPGRADE_REPO,
 	BLOCK_UPGRADE_TAG,
@@ -11,12 +12,18 @@ import {
 
 export {
 	VANILLA_SAMPLES_TAG,
+	VANILLA_SAMPLES_FALLBACK_TAGS,
 	BLOCK_UPGRADE_TAG,
 	ITEM_UPGRADE_TAG
 };
 
+const vanillaDataFallbacks = VANILLA_SAMPLES_FALLBACK_TAGS.map(tag =>
+	createLazyCachingFetcher("VanillaDataFetcher", "Mojang", "bedrock-samples", tag)
+);
+
 export default {
 	vanillaData: createLazyCachingFetcher("VanillaDataFetcher", "Mojang", "bedrock-samples", VANILLA_SAMPLES_TAG),
+	vanillaDataFallbacks,
 	bedrockData: createLazyCachingFetcher("BedrockData", "pmmp", "BedrockData", "6.7.0+bedrock-1.26.30"),
 	bedrockBlockUpgradeSchema: createLazyCachingFetcher(
 		"BlockUpgrader",
@@ -44,6 +51,31 @@ function createLazyCachingFetcher(...args) {
 }
 
 /**
+ * Replay a materialized response. Cache Storage and fetch bodies are one-shot;
+ * keeping the bytes in memory lets every caller (atlas, geo, schemas) share one load.
+ * @param {{ status: number, statusText: string, headers: [string, string][], buf: ArrayBuffer }} entry
+ */
+function replayEntry(entry) {
+	return new Response(entry.buf, {
+		status: entry.status,
+		statusText: entry.statusText,
+		headers: new Headers(entry.headers)
+	});
+}
+
+/**
+ * @param {Response} res
+ */
+async function materializeResponse(res) {
+	return {
+		status: res.status,
+		statusText: res.statusText,
+		headers: [...res.headers],
+		buf: await res.arrayBuffer()
+	};
+}
+
+/**
  * @param {string} name Internal cache name
  * @param {string} owner GitHub repository owner
  * @param {string} repo GitHub repository name
@@ -57,36 +89,59 @@ async function createCachingFetcher(name, owner, repo, version) {
 	let oldCacheNames = (await caches.keys()).filter(c => (c.startsWith(`${name}@`) || c.startsWith(`${name}_`)) && c != cacheName);
 	sortVersions(oldCacheNames).forEach(oldName => caches.delete(oldName));
 
+	/** @type {Map<string, Promise<{ status: number, statusText: string, headers: [string, string][], buf: ArrayBuffer }>>} */
+	let memoryEntries = new Map();
+
 	/**
-	 * Fetches a file, checking first against cache.
-	 * No holoprint-repository-tracker: cache miss always hits the CDN.
+	 * In-memory replay → current Cache Storage → CDN. Does not copy older pins
+	 * into this pin's cache.
 	 * @param {string} filename
 	 * @returns {Promise<Response>}
 	 */
 	return async filename => {
-		let fullUrl = `${baseUrl}/${filename}`;
-		let cacheLink = CACHE_URL_PREFIX + filename;
-		let res = await cache.match(cacheLink);
-		if(BAD_STATUS_CODES.includes(res?.status)) {
-			await cache.delete(cacheLink);
-			res = undefined;
-		} else if(res) {
-			return res;
+		let inflight = memoryEntries.get(filename);
+		if(inflight) {
+			return replayEntry(await inflight);
 		}
-		res = await retrieve(fullUrl);
-		let fetchAttempsLeft = 5;
-		const fetchRetryTimeout = 1000;
-		while(BAD_STATUS_CODES.includes(res.status) && fetchAttempsLeft--) {
-			console.debug(`Encountered bad HTTP status ${res.status} from ${fullUrl}, trying again in ${fetchRetryTimeout}ms`);
-			await sleep(fetchRetryTimeout);
+		let loadPromise = (async () => {
+			let fullUrl = `${baseUrl}/${filename}`;
+			let cacheLink = CACHE_URL_PREFIX + filename;
+			let res = await cache.match(cacheLink);
+			if(BAD_STATUS_CODES.includes(res?.status)) {
+				await cache.delete(cacheLink);
+				res = undefined;
+			}
+			if(res) {
+				return materializeResponse(res);
+			}
 			res = await retrieve(fullUrl);
+			let fetchAttempsLeft = 5;
+			const fetchRetryTimeout = 1000;
+			while(BAD_STATUS_CODES.includes(res.status) && fetchAttempsLeft--) {
+				console.debug(`Encountered bad HTTP status ${res.status} from ${fullUrl}, trying again in ${fetchRetryTimeout}ms`);
+				await sleep(fetchRetryTimeout);
+				res = await retrieve(fullUrl);
+			}
+			if(BAD_STATUS_CODES.includes(res.status)) {
+				console.error(`Couldn't avoid getting bad HTTP status code ${res.status} for ${fullUrl}`);
+			} else if(res.ok) {
+				let entry = await materializeResponse(res);
+				await cache.put(cacheLink, replayEntry(entry));
+				return entry;
+			}
+			return materializeResponse(res);
+		})();
+		memoryEntries.set(filename, loadPromise);
+		try {
+			let entry = await loadPromise;
+			if(BAD_STATUS_CODES.includes(entry.status)) {
+				memoryEntries.delete(filename);
+			}
+			return replayEntry(entry);
+		} catch(e) {
+			memoryEntries.delete(filename);
+			throw e;
 		}
-		if(BAD_STATUS_CODES.includes(res.status)) {
-			console.error(`Couldn't avoid getting bad HTTP status code ${res.status} for ${fullUrl}`);
-		} else if(res.ok) {
-			await cache.put(cacheLink, res.clone());
-		}
-		return res;
 	}
 }
 

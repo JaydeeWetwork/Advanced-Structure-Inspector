@@ -12,6 +12,7 @@
  * @property {number} SCALE
  * @property {number} OPACITY
  * @property {boolean} MULTIPLE_OPACITIES
+ * @property {boolean} [SKIP_TEXTURE_CROP]
  * @property {number} TEXTURE_OUTLINE_WIDTH
  * @property {string} TEXTURE_OUTLINE_COLOR
  * @property {number} TEXTURE_OUTLINE_OPACITY

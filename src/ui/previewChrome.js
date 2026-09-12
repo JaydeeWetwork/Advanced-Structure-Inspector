@@ -368,7 +368,11 @@ export async function onPreviewDblClick(e) {
 		const { renderContainerUi, resolveContainerKind } = await import("../viewer/containerUi.js");
 		const src =
 			hit.kind === "block" && hit.block
-				? { name: hit.block.name, blockEntityId: hit.block.blockEntityId }
+				? {
+					name: hit.block.name,
+					blockEntityId: hit.block.blockEntityId,
+					doubleChest: hit.block.doubleChest || null
+				}
 				: hit.kind === "entity" && hit.entity
 					? { name: hit.entity.identifier, identifier: hit.entity.identifier }
 					: null;
