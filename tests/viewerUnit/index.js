@@ -2253,6 +2253,24 @@ describe("paper theme", async () => {
 		assert.match(css, /\.basi-detail-scroll/);
 		assert.match(css, /overscroll-behavior:\s*contain/);
 	});
+
+	it("details dock uses structure name, Information, Materials, and feature picker", () => {
+		const html = readFileSync(join(root, "src/index.html"), "utf8");
+		assert.match(html, /id="detailFloatTitle"/);
+		assert.match(html, />Information</);
+		assert.match(html, />Materials</);
+		assert.doesNotMatch(html, />Materials List</);
+		assert.doesNotMatch(html, />Info</);
+		assert.match(html, /id="detailAddFeatureBtn"/);
+		assert.match(html, />\+ Add feature</);
+		assert.match(html, /id="featureDialog"/);
+		const css = readFileSync(join(root, "src/viewer/viewer.css"), "utf8");
+		assert.match(css, /\.basi-feat-dialog\[open\]/);
+		assert.match(css, /white-space:\s*normal/);
+		const actionsAt = html.indexOf('class="basi-detail-actions"');
+		const materialsAt = html.indexOf('id="materialsSection"');
+		assert.ok(materialsAt > 0 && actionsAt > materialsAt, "Reload/Download/Remove should sit below Materials");
+	});
 });
 
 describe("preview load cache / preload", () => {

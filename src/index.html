@@ -21,12 +21,12 @@
 				} catch (e) {}
 			})();
 		</script>
-		<link rel="stylesheet" href="styles/base.css?v=build78"/>
-		<link rel="stylesheet" href="styles/preview.css?v=build78"/>
-		<link rel="stylesheet" href="styles/theme.css?v=build78"/>
-		<link rel="stylesheet" href="viewer/viewer.css?v=build78"/>
-		<link rel="stylesheet" href="styles/paper.css?v=build78"/>
-		<link rel="stylesheet" href="styles/editor.css?v=build78"/>
+		<link rel="stylesheet" href="styles/base.css?v=build80"/>
+		<link rel="stylesheet" href="styles/preview.css?v=build80"/>
+		<link rel="stylesheet" href="styles/theme.css?v=build80"/>
+		<link rel="stylesheet" href="viewer/viewer.css?v=build80"/>
+		<link rel="stylesheet" href="styles/paper.css?v=build80"/>
+		<link rel="stylesheet" href="styles/editor.css?v=build80"/>
 		<script type="importmap">
 			{
 				"imports": {
@@ -44,14 +44,14 @@
 				}
 			}
 		</script>
-		<script src="index.js?v=build78" type="module"></script>
+		<script src="index.js?v=build80" type="module"></script>
 		<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
 		<meta http-equiv="Pragma" content="no-cache"/>
 	</head>
 	<body class="basi-app basi-no-selection basi-view-viewer">
 		<header class="basi-header">
 			<div class="basi-header-brand">
-				<h1>Bedrock ASI <span class="basi-build" id="buildLabel" title="Build / cache token">build78</span></h1>
+				<h1>Bedrock ASI <span class="basi-build" id="buildLabel" title="Build / cache token">build80</span></h1>
 				<nav class="basi-view-switch" aria-label="App view">
 					<button type="button" class="basi-view-link is-active" id="viewViewerBtn" data-view="viewer">Viewer</button>
 					<button type="button" class="basi-view-link" id="viewEditorBtn" data-view="editor">Editor</button>
@@ -164,20 +164,15 @@
 				<div class="basi-float-hit" aria-hidden="true"></div>
 				<div class="basi-float-panel basi-detail-side">
 					<div class="basi-float-label-row">
-						<div class="basi-float-label">Details</div>
+						<div class="basi-float-label basi-detail-title" id="detailFloatTitle">Details</div>
 						<button type="button" class="basi-float-pin" id="pinDetailBtn" title="Pin — keep open" aria-pressed="false" aria-label="Pin — keep open">«</button>
-					</div>
-					<div class="basi-detail-actions">
-						<button type="button" class="basi-btn secondary" id="previewBtn" title="Force rebuild preview">Reload</button>
-						<button type="button" class="basi-btn secondary" id="downloadBtn">Download</button>
-						<button type="button" class="basi-btn secondary" id="removeBtn">Remove</button>
 					</div>
 
 					<div class="basi-detail-scroll" id="detailScroll">
 					<section class="basi-collapsible" id="detailsInfoSection" data-section="details">
 						<button type="button" class="basi-collapse-header" id="detailsCollapseBtn" aria-expanded="true">
 							<span class="basi-collapse-toggle" aria-hidden="true">▾</span>
-							<span class="basi-collapse-title">Info</span>
+							<span class="basi-collapse-title">Information</span>
 						</button>
 						<div class="basi-collapse-body" id="detailsCollapseBody">
 							<label class="basi-default-cam" title="Camera used when this structure opens">
@@ -218,7 +213,7 @@
 
 							<div class="basi-stats" id="detailStats"></div>
 
-							<button type="button" class="basi-btn secondary basi-add-detail-btn" id="addDetailBtn">+ Add detail</button>
+							<button type="button" class="basi-btn secondary basi-add-detail-btn" id="detailAddFeatureBtn">+ Add feature</button>
 							<ul class="basi-user-details" id="userDetailsList" aria-label="Structure details"></ul>
 						</div>
 					</section>
@@ -226,13 +221,18 @@
 					<section class="basi-collapsible" id="materialsSection" data-section="materials">
 						<button type="button" class="basi-collapse-header basi-material-header" id="materialsCollapseBtn" aria-expanded="true">
 							<span class="basi-collapse-toggle" aria-hidden="true">▾</span>
-							<span class="basi-collapse-title">Materials List</span>
+							<span class="basi-collapse-title">Materials</span>
 							<span class="basi-material-hint" id="materialListHint"></span>
 						</button>
 						<div class="basi-collapse-body" id="materialsCollapseBody">
 							<ul class="basi-material-list" id="detailMaterialList" aria-label="Material list"></ul>
 						</div>
 					</section>
+					</div>
+					<div class="basi-detail-actions">
+						<button type="button" class="basi-btn secondary" id="previewBtn" title="Force rebuild preview">Reload</button>
+						<button type="button" class="basi-btn secondary" id="downloadBtn">Download</button>
+						<button type="button" class="basi-btn secondary" id="removeBtn">Remove</button>
 					</div>
 				</div>
 			</aside>
@@ -271,6 +271,22 @@
 				· <button type="button" class="basi-footer-link" id="creditsFooterBtn">Credits</button>
 			</span>
 		</footer>
+
+		<dialog class="basi-feat-dialog" id="featureDialog" aria-labelledby="featureDialogTitle">
+			<form method="dialog" class="basi-feat-dialog-panel">
+				<header class="basi-feat-dialog-head">
+					<h2 id="featureDialogTitle">Add feature</h2>
+					<button type="submit" class="basi-ed-icon-btn" value="close" title="Close" aria-label="Close">×</button>
+				</header>
+				<div class="basi-feat-dialog-new">
+					<input type="text" id="featureNewName" class="basi-meta-input" placeholder="New feature name" autocomplete="off" spellcheck="false"/>
+					<input type="color" id="featureNewColor" class="basi-ed-color" value="#64748b" title="Feature color"/>
+					<button type="button" class="basi-btn" id="featureCreateBtn">Create</button>
+				</div>
+				<p class="basi-ed-hint" id="featureDialogHint">Click a feature to assign it to this structure.</p>
+				<div class="basi-feat-dialog-list" id="featureDialogList"></div>
+			</form>
+		</dialog>
 
 		<!-- Credits dialog -->
 		<dialog class="basi-credits-dialog" id="creditsDialog" aria-labelledby="creditsTitle">

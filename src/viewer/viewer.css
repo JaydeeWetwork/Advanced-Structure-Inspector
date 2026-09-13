@@ -99,7 +99,11 @@ body.basi-app {
 }
 
 .basi-detail-actions {
-	padding: 0 10px 8px;
+	padding: 8px 4px 0;
+	flex-shrink: 0;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
 }
 
 /* Selected structure strip in top header */
@@ -392,6 +396,18 @@ body.basi-has-selection .basi-float-right {
 .basi-float-label {
 	text-transform: uppercase;
 	letter-spacing: 0.08em;
+}
+
+.basi-float-label.basi-detail-title {
+	text-transform: none;
+	letter-spacing: -0.01em;
+	font-size: 0.86rem;
+	font-weight: 700;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	min-width: 0;
+	flex: 1 1 auto;
 }
 
 /* Catalog count line inherits chip; keep uppercase for “N structures” */
@@ -2473,7 +2489,123 @@ body.basi-app:has(.basi-footer:hover) .basi-cam-slide,
 	color: var(--dark-bg);
 }
 
-/* —— Credits dialog —— */
+.basi-feat-dialog {
+	box-sizing: border-box;
+	border: 1px solid var(--basi-border, #d8b4d8);
+	border-radius: 12px;
+	padding: 0;
+	width: min(92vw, 420px);
+	max-width: calc(100vw - 24px);
+	max-height: min(80vh, 560px);
+	overflow: hidden;
+	color: var(--text-col);
+	background: var(--basi-panel-solid, #f7f0f7);
+	box-shadow: 0 16px 48px #0005;
+}
+
+.basi-feat-dialog[open] {
+	display: flex;
+	flex-direction: column;
+}
+
+.basi-feat-dialog::backdrop {
+	background: #1a101acc;
+}
+
+.basi-feat-dialog-panel {
+	margin: 0;
+	flex: 1 1 auto;
+	min-height: 0;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+}
+
+.basi-feat-dialog-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	padding: 12px 12px 8px;
+	flex-shrink: 0;
+	border-bottom: 1px solid var(--basi-border, #e8d8e8);
+}
+
+.basi-feat-dialog-head h2 {
+	margin: 0;
+	font-size: 1rem;
+	font-weight: 700;
+	color: var(--text-col);
+}
+
+.basi-feat-dialog-new {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 10px 12px;
+	flex-shrink: 0;
+}
+
+.basi-feat-dialog-new .basi-meta-input {
+	flex: 1 1 auto;
+	min-width: 0;
+	color: var(--text-col);
+	background: var(--basi-input, var(--input-bg, #f7f6f3));
+}
+
+.basi-feat-dialog-panel > .basi-ed-hint {
+	margin: 0 12px 8px;
+	flex-shrink: 0;
+	color: var(--basi-muted);
+	overflow-wrap: anywhere;
+}
+
+.basi-feat-dialog-list {
+	padding: 0 12px 12px;
+	overflow-x: hidden;
+	overflow-y: auto;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	flex: 1 1 auto;
+	min-height: 0;
+}
+
+.basi-feat-dialog-list .basi-ed-feat-card {
+	display: block;
+	width: 100%;
+	box-sizing: border-box;
+	margin: 0;
+	text-align: left;
+	cursor: pointer;
+	font: inherit;
+	line-height: 1.35;
+	color: var(--text-col);
+	background: var(--basi-panel, #fff);
+	white-space: normal;
+	overflow: visible;
+	overflow-wrap: anywhere;
+	word-break: break-word;
+	padding: 10px 12px;
+}
+
+.basi-feat-dialog-list .basi-ed-feat-name {
+	display: block;
+	max-width: 100%;
+	box-sizing: border-box;
+	white-space: normal;
+	overflow-wrap: anywhere;
+	word-break: break-word;
+}
+
+.basi-feat-dialog-list .basi-ed-feat-desc {
+	white-space: normal;
+	overflow-wrap: anywhere;
+	word-break: break-word;
+	color: var(--text-col);
+}
+
 .basi-credits-dialog {
 	border: 1px solid var(--basi-border);
 	border-radius: 12px;

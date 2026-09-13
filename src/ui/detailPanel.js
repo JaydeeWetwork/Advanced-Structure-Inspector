@@ -9,6 +9,7 @@ import {
 	uiFlags
 } from "../app/state.js";
 import { setStatus, formatSize, escapeHtml, stat } from "../app/dom.js";
+import { contrastText } from "../viewer/catalog.js";
 import { renderFeatureChips } from "./featureChips.js";
 
 function $(id) {
@@ -22,10 +23,19 @@ function $(id) {
 export function updateSelectionHeader(entry) {
 	if (!entry) {
 		els.selectionBar?.classList.add("hidden");
+		if (els.detailFloatTitle) {
+			els.detailFloatTitle.textContent = "Details";
+			els.detailFloatTitle.title = "Details";
+		}
 		return;
 	}
 	els.selectionBar?.classList.remove("hidden");
 	if (els.headerName) els.headerName.textContent = entry.name || "—";
+	if (els.detailFloatTitle) {
+		const name = entry.name || "Details";
+		els.detailFloatTitle.textContent = name;
+		els.detailFloatTitle.title = name;
+	}
 	if (els.headerSource) {
 		els.headerSource.textContent = entry.parseError
 			? `${entry.sourceName} (${entry.sourceKind}) — ${entry.parseError}`
@@ -281,10 +291,105 @@ export function renderAssignedFeatures(entry) {
 		return;
 	}
 	const features = catalog.listFeaturesForStructure(entry.id);
-	renderFeatureChips(host, features);
+	renderFeatureChips(host, features, {
+		onClick: feature => {
+			void catalog.toggleStructureFeature(entry.id, feature.id).then(() => {
+				const next = catalog.get(entry.id);
+				renderAssignedFeatures(next);
+				renderFeaturePicker();
+			});
+		}
+	});
 	if (!features.length) {
 		host.classList.add("is-empty");
 	}
+}
+
+/**
+ * Open the viewer feature picker (same idea as the editor feature library).
+ */
+export function openFeatureDialog() {
+	const dlg = els.featureDialog;
+	if (!dlg || !getSelectedId()) return;
+	renderFeaturePicker();
+	if (typeof dlg.showModal === "function") dlg.showModal();
+	else dlg.setAttribute("open", "");
+	els.featureNewName?.focus();
+}
+
+export function closeFeatureDialog() {
+	const dlg = els.featureDialog;
+	if (!dlg) return;
+	if (typeof dlg.close === "function") dlg.close();
+	else dlg.removeAttribute("open");
+}
+
+export function renderFeaturePicker() {
+	const host = els.featureDialogList;
+	if (!host) return;
+	const sid = getSelectedId();
+	const entry = sid ? catalog.get(sid) : null;
+	const assigned = new Set(entry?.featureIds || []);
+	if (els.featureDialogHint) {
+		els.featureDialogHint.textContent = entry
+			? `Click a feature to assign it to “${entry.name}”.`
+			: "Select a structure first.";
+	}
+	host.replaceChildren();
+	const list = catalog.listFeatures();
+	if (!list.length) {
+		const empty = document.createElement("p");
+		empty.className = "basi-ed-hint";
+		empty.textContent = "No features yet — create one above.";
+		host.appendChild(empty);
+		return;
+	}
+	for (const feat of list) {
+		const card = document.createElement("button");
+		card.type = "button";
+		card.className = "basi-ed-feat-card basi-feat-pick" + (assigned.has(feat.id) ? " is-assigned" : "");
+		card.style.setProperty("--feat-color", feat.color || "#64748b");
+		const name = document.createElement("div");
+		name.className = "basi-ed-feat-name";
+		name.style.background = feat.color || "#64748b";
+		name.style.color = contrastText(feat.color || "#64748b");
+		name.textContent = feat.name;
+		const desc = document.createElement("p");
+		desc.className = "basi-ed-feat-desc";
+		desc.textContent = feat.description || "No description";
+		card.append(name, desc);
+		if (assigned.has(feat.id)) {
+			const flag = document.createElement("span");
+			flag.className = "basi-ed-assigned-flag";
+			flag.textContent = "Assigned";
+			card.appendChild(flag);
+		}
+		card.addEventListener("click", () => {
+			if (!sid) return;
+			void catalog.toggleStructureFeature(sid, feat.id).then(() => {
+				renderAssignedFeatures(catalog.get(sid));
+				renderFeaturePicker();
+			});
+		});
+		host.appendChild(card);
+	}
+}
+
+/**
+ * @param {string} [rawName]
+ * @param {string} [rawColor]
+ */
+export async function createFeatureFromDialog(rawName, rawColor) {
+	const sid = getSelectedId();
+	if (!sid) return null;
+	const name = String(rawName || "").trim() || "New feature";
+	const color = String(rawColor || "#64748b");
+	const feat = await catalog.addFeature({ name, color });
+	await catalog.toggleStructureFeature(sid, feat.id);
+	if (els.featureNewName) els.featureNewName.value = "";
+	renderAssignedFeatures(catalog.get(sid));
+	renderFeaturePicker();
+	return feat;
 }
 
 /**

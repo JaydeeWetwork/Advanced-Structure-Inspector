@@ -601,6 +601,12 @@ body.basi-app .basi-footer-link:hover {
 	color: var(--basi-accent-hover);
 }
 
+body.basi-app .basi-feat-dialog {
+	background: var(--basi-panel);
+	border-color: var(--basi-border);
+	color: var(--text-col);
+}
+
 body.basi-app .basi-credits-dialog {
 	background: var(--basi-panel);
 	border-color: var(--basi-border);

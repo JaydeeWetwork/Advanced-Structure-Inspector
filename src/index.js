@@ -27,7 +27,9 @@ import { bindEditor, renderEditor } from "./ui/editorPage.js";
 import {
 	syncDetailCollapsibles,
 	saveMetaField,
-	addUserDetail
+	openFeatureDialog,
+	closeFeatureDialog,
+	createFeatureFromDialog
 } from "./ui/detailPanel.js";
 import {
 	normalizeCameraPreset,
@@ -145,11 +147,19 @@ function wireUi() {
 	wireMetaInput(els.metaCredits, "credits");
 	wireMetaInput(els.metaSourceLink, "sourceLink");
 
-	els.addDetailBtn?.addEventListener("click", () => {
-		if (!getSelectedId()) return;
-		const text = prompt("Add a detail for this structure:");
-		if (text == null) return;
-		void addUserDetail(getSelectedId(), text);
+	els.detailAddFeatureBtn?.addEventListener("click", () => {
+		openFeatureDialog();
+	});
+	els.featureCreateBtn?.addEventListener("click", () => {
+		void createFeatureFromDialog(els.featureNewName?.value, els.featureNewColor?.value);
+	});
+	els.featureNewName?.addEventListener("keydown", e => {
+		if (e.key !== "Enter") return;
+		e.preventDefault();
+		void createFeatureFromDialog(els.featureNewName?.value, els.featureNewColor?.value);
+	});
+	els.featureDialog?.addEventListener("click", e => {
+		if (e.target === els.featureDialog) closeFeatureDialog();
 	});
 
 	els.detailsCollapseBtn?.addEventListener("click", () => {
