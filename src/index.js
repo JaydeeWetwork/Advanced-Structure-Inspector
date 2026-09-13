@@ -37,6 +37,7 @@ import {
 	onPreviewDblClick,
 	initInspectWindow
 } from "./ui/previewChrome.js";
+import { initCameraCompass } from "./ui/cameraCompass.js";
 import {
 	selectEntry,
 	loadPreview,
@@ -90,6 +91,7 @@ function wireUi() {
 	initTheme();
 	initFloatPins();
 	initInspectWindow();
+	initCameraCompass();
 	els.importInput?.addEventListener("change", () => {
 		handleFiles(els.importInput.files);
 	});

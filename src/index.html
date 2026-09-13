@@ -21,12 +21,12 @@
 				} catch (e) {}
 			})();
 		</script>
-		<link rel="stylesheet" href="styles/base.css?v=build74"/>
-		<link rel="stylesheet" href="styles/preview.css?v=build74"/>
-		<link rel="stylesheet" href="styles/theme.css?v=build74"/>
-		<link rel="stylesheet" href="viewer/viewer.css?v=build74"/>
-		<link rel="stylesheet" href="styles/paper.css?v=build74"/>
-		<link rel="stylesheet" href="styles/editor.css?v=build74"/>
+		<link rel="stylesheet" href="styles/base.css?v=build78"/>
+		<link rel="stylesheet" href="styles/preview.css?v=build78"/>
+		<link rel="stylesheet" href="styles/theme.css?v=build78"/>
+		<link rel="stylesheet" href="viewer/viewer.css?v=build78"/>
+		<link rel="stylesheet" href="styles/paper.css?v=build78"/>
+		<link rel="stylesheet" href="styles/editor.css?v=build78"/>
 		<script type="importmap">
 			{
 				"imports": {
@@ -44,14 +44,14 @@
 				}
 			}
 		</script>
-		<script src="index.js?v=build74" type="module"></script>
+		<script src="index.js?v=build78" type="module"></script>
 		<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
 		<meta http-equiv="Pragma" content="no-cache"/>
 	</head>
 	<body class="basi-app basi-no-selection basi-view-viewer">
 		<header class="basi-header">
 			<div class="basi-header-brand">
-				<h1>Bedrock ASI <span class="basi-build" id="buildLabel" title="Build / cache token">build74</span></h1>
+				<h1>Bedrock ASI <span class="basi-build" id="buildLabel" title="Build / cache token">build78</span></h1>
 				<nav class="basi-view-switch" aria-label="App view">
 					<button type="button" class="basi-view-link is-active" id="viewViewerBtn" data-view="viewer">Viewer</button>
 					<button type="button" class="basi-view-link" id="viewEditorBtn" data-view="editor">Editor</button>
@@ -91,23 +91,38 @@
 
 				<section class="basi-detail hidden" id="detailPanel">
 					<section class="basi-preview-section" aria-label="Preview">
-						<div class="basi-cam-bar" id="camBar" title="Camera presets">
-							<button type="button" class="basi-cam-btn" data-cam="iso" id="camIsoBtn" title="Cycle isometric N → S → E → W">Iso N</button>
-							<button type="button" class="basi-cam-btn" data-cam="north" title="From north">N</button>
-							<button type="button" class="basi-cam-btn" data-cam="south" title="From south">S</button>
-							<button type="button" class="basi-cam-btn" data-cam="east" title="From east">E</button>
-							<button type="button" class="basi-cam-btn" data-cam="west" title="From west">W</button>
-							<button type="button" class="basi-cam-btn" data-cam="top" title="Top-down">Top</button>
-							<button type="button" class="basi-cam-btn" data-cam="layer" title="Frame current layer">Layer</button>
-							<button type="button" class="basi-cam-btn" data-cam="free" title="Free camera — no auto reframe (auto when you orbit)">Free</button>
-							<button type="button" class="basi-cam-btn" data-cam="fly" title="Fly camera — WASD move, Space up, Shift down, drag to look">Fly</button>
-							<label class="basi-cam-tilt hidden" title="Elevation for N/S/E/W in layer mode">
-								<span>Tilt</span>
-								<input type="range" id="camTilt" min="0" max="85" value="67" step="1"/>
-								<span id="camTiltVal" class="basi-cam-tilt-val">67°</span>
-							</label>
-							<span class="basi-layer-badge hidden" id="layerBadge" aria-live="polite">Layer 0</span>
-							<span class="basi-preview-keys" title="↑↓ layer · ← all · → cam · Fly: WASD Space/Shift · drag look · dbl-click inspect">↑↓ layer · ← all · → cam · Fly WASD · dbl-click inspect</span>
+						<div class="basi-cam-dock" id="camDock" aria-label="Camera controls" aria-expanded="false">
+							<div class="basi-cam-hit" aria-hidden="true"></div>
+							<div class="basi-cam-slide">
+							<div class="basi-cam-bar" id="camBar" title="Camera presets — hover the bottom edge or press C">
+								<button type="button" class="basi-cam-btn" data-cam="iso" id="camIsoBtn" title="Cycle isometric N → S → E → W">Iso N</button>
+								<button type="button" class="basi-cam-btn" data-cam="north" title="From north">N</button>
+								<button type="button" class="basi-cam-btn" data-cam="south" title="From south">S</button>
+								<button type="button" class="basi-cam-btn" data-cam="east" title="From east">E</button>
+								<button type="button" class="basi-cam-btn" data-cam="west" title="From west">W</button>
+								<button type="button" class="basi-cam-btn" data-cam="top" title="Top-down">Top</button>
+								<button type="button" class="basi-cam-btn" data-cam="layer" title="Frame current layer">Layer</button>
+								<button type="button" class="basi-cam-btn" data-cam="free" title="Free camera — no auto reframe (auto when you orbit)">Free</button>
+								<button type="button" class="basi-cam-btn" data-cam="fly" title="Fly camera — WASD move, Space up, Shift down, drag to look">Fly</button>
+								<label class="basi-cam-tilt hidden" title="Elevation for N/S/E/W in layer mode">
+									<span>Tilt</span>
+									<input type="range" id="camTilt" min="0" max="85" value="67" step="1"/>
+									<span id="camTiltVal" class="basi-cam-tilt-val">67°</span>
+								</label>
+								<span class="basi-layer-badge hidden" id="layerBadge" aria-live="polite">Layer 0</span>
+								<span class="basi-preview-keys" title="C camera bar · ↑↓ layer · ← all · → cam · Fly: WASD Space/Shift · drag look · dbl-click inspect">C cam · ↑↓ layer · ← all · → cam · Fly WASD · dbl-click inspect</span>
+							</div>
+							</div>
+						</div>
+						<div class="basi-compass" id="camCompass" aria-label="Camera facing">
+							<div class="basi-compass-dial">
+								<span class="basi-compass-mark n">N</span>
+								<span class="basi-compass-mark e">E</span>
+								<span class="basi-compass-mark s">S</span>
+								<span class="basi-compass-mark w">W</span>
+								<div class="basi-compass-needle" id="camCompassNeedle" aria-hidden="true"></div>
+							</div>
+							<span class="basi-compass-label" id="camCompassLabel">N</span>
 						</div>
 						<div class="basi-preview-host" id="previewHost" tabindex="0"></div>
 						<div class="basi-inspect-panel basi-win hidden" id="inspectPanel" aria-live="polite">

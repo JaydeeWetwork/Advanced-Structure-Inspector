@@ -14,6 +14,8 @@ export default class CameraController {
 	orbitSnapshot = null;
 	/** @type {FlyController} */
 	#fly;
+	/** @type {import("three").Vector3|null} */
+	#facingDir = null;
 
 	/**
 	 * @param {import("./PreviewContext.js").default} ctx
@@ -31,6 +33,25 @@ export default class CameraController {
 		return this.#fly.isActive;
 	}
 
+	emitFacing() {
+		const camera = this.ctx.camera;
+		const THREE = this.ctx.THREE;
+		if (!camera || !THREE) return;
+		this.#facingDir ??= new THREE.Vector3();
+		camera.getWorldDirection(this.#facingDir);
+		const d = this.#facingDir;
+		try {
+			this.ctx.eventTarget?.dispatchEvent?.(
+				new CustomEvent("basi-camera-facing", {
+					bubbles: true,
+					detail: { x: d.x, y: d.y, z: d.z }
+				})
+			);
+		} catch {
+			/* ignore */
+		}
+	}
+
 	/** @param {string} preset */
 	emitPreset(preset) {
 		try {
@@ -44,6 +65,7 @@ export default class CameraController {
 		} catch {
 			/* ignore */
 		}
+		this.emitFacing();
 	}
 
 	enterFreeCamera() {

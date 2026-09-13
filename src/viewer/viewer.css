@@ -10,6 +10,7 @@
 	--basi-material-width: 280px;
 	--basi-float-peek: 10px;
 	--basi-float-hit: 28px;
+	--basi-cam-peek: 4px;
 	--basi-panel-bg: #fff9ffee;
 	--basi-panel-solid: #f7f0f7;
 	--basi-float-bg: #f7f0f7;
@@ -1404,13 +1405,43 @@ body.basi-no-selection .basi-float-left::after {
 	position: relative;
 }
 
-/* Camera bar overlays top of preview (above absolute full-bleed host/canvas) */
-.basi-cam-bar {
+/* Camera bar: hit strip stays on the bottom edge; the bar pops up from below */
+.basi-cam-dock {
 	position: absolute;
-	top: 10px;
-	left: 50%;
-	transform: translateX(-50%);
-	z-index: 40;
+	top: auto;
+	bottom: 0;
+	left: 0;
+	right: 0;
+	z-index: 36;
+	display: flex;
+	justify-content: center;
+	align-items: flex-end;
+	pointer-events: none;
+}
+
+.basi-cam-hit {
+	position: absolute;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	height: 56px;
+	pointer-events: auto;
+}
+
+.basi-cam-slide {
+	position: relative;
+	z-index: 1;
+	display: flex;
+	justify-content: center;
+	pointer-events: none;
+	padding-bottom: 8px;
+	transform: translateY(calc(100% + 8px));
+	transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.basi-cam-bar {
+	position: relative;
+	z-index: 1;
 	display: flex;
 	flex-wrap: wrap;
 	gap: 4px 6px;
@@ -1426,6 +1457,104 @@ body.basi-no-selection .basi-float-left::after {
 	-webkit-backdrop-filter: blur(10px);
 	box-shadow: 0 4px 20px #0006;
 	pointer-events: auto;
+}
+
+body.basi-app:has(.basi-footer:hover) .basi-cam-dock,
+.basi-cam-dock:hover,
+.basi-cam-dock:focus-within,
+.basi-cam-dock.basi-cam-open {
+	z-index: 46;
+}
+
+body.basi-app:has(.basi-footer:hover) .basi-cam-slide,
+.basi-cam-dock:hover .basi-cam-slide,
+.basi-cam-dock:focus-within .basi-cam-slide,
+.basi-cam-dock.basi-cam-open .basi-cam-slide {
+	transform: translateY(0);
+}
+
+.basi-compass {
+	position: absolute;
+	left: 14px;
+	bottom: 18px;
+	z-index: 37;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 4px;
+	pointer-events: none;
+	user-select: none;
+}
+
+.basi-compass-dial {
+	position: relative;
+	width: 68px;
+	height: 68px;
+	border-radius: 50%;
+	border: 1px solid #ffffff28;
+	background: color-mix(in srgb, #1a151c 78%, transparent);
+	box-shadow: 0 4px 16px #0007;
+	backdrop-filter: blur(10px);
+	-webkit-backdrop-filter: blur(10px);
+}
+
+.basi-compass-mark {
+	position: absolute;
+	font-size: 0.62rem;
+	font-weight: 800;
+	letter-spacing: 0.04em;
+	color: #c8bcc8;
+	line-height: 1;
+}
+
+.basi-compass-mark.n {
+	top: 5px;
+	left: 50%;
+	transform: translateX(-50%);
+	color: #e24436;
+}
+
+.basi-compass-mark.s {
+	bottom: 5px;
+	left: 50%;
+	transform: translateX(-50%);
+}
+
+.basi-compass-mark.e {
+	right: 6px;
+	top: 50%;
+	transform: translateY(-50%);
+}
+
+.basi-compass-mark.w {
+	left: 6px;
+	top: 50%;
+	transform: translateY(-50%);
+}
+
+.basi-compass-needle {
+	position: absolute;
+	left: 50%;
+	top: 50%;
+	width: 10px;
+	height: 36px;
+	margin: -18px 0 0 -5px;
+	transform-origin: 50% 50%;
+	background: linear-gradient(#e24436 0 50%, #f0e8f0 50% 100%);
+	clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+	filter: drop-shadow(0 1px 1px #0008);
+}
+
+.basi-compass.is-top .basi-compass-needle {
+	opacity: 0.28;
+}
+
+.basi-compass-label {
+	font-size: 0.68rem;
+	font-weight: 800;
+	letter-spacing: 0.06em;
+	color: #f0e8f0;
+	text-shadow: 0 1px 2px #000a;
 }
 
 .basi-cam-bar .basi-cam-btn,
@@ -1492,7 +1621,7 @@ body.basi-no-selection .basi-float-left::after {
 	left: 50%;
 	bottom: 12px;
 	transform: translateX(-50%);
-	z-index: 45;
+	z-index: 48;
 	margin: 0;
 	padding: 0;
 	display: flex;

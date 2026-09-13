@@ -415,8 +415,39 @@ body.basi-app .basi-preview-host {
 	border-radius: 0;
 }
 
+body.basi-app:has(.basi-footer:hover) .basi-cam-slide,
+body.basi-app .basi-cam-dock:hover .basi-cam-slide,
+body.basi-app .basi-cam-dock:focus-within .basi-cam-slide,
+body.basi-app .basi-cam-dock.basi-cam-open .basi-cam-slide {
+	transform: translateY(0);
+}
+
+body.basi-view-editor .basi-cam-dock,
+body.basi-view-editor .basi-compass {
+	visibility: hidden;
+	pointer-events: none;
+}
+
+body.basi-app .basi-compass-dial {
+	border-color: var(--basi-border);
+	background: color-mix(in srgb, var(--basi-panel) 82%, transparent);
+	box-shadow: var(--basi-shadow);
+}
+
+body.basi-app .basi-compass-mark {
+	color: var(--basi-muted);
+}
+
+body.basi-app .basi-compass-mark.n {
+	color: var(--error-red, #e24436);
+}
+
+body.basi-app .basi-compass-label {
+	color: var(--text-col);
+	text-shadow: none;
+}
+
 body.basi-app .basi-cam-bar {
-	top: calc(var(--basi-chrome-top) + 8px);
 	background: color-mix(in srgb, var(--basi-panel) 82%, transparent);
 	border: 1px solid var(--basi-border);
 	box-shadow: var(--basi-shadow);

@@ -2220,6 +2220,32 @@ describe("paper theme", async () => {
 		assert.doesNotMatch(html, /Hover left edge/);
 	});
 
+	it("compass yaw maps look direction to Minecraft north=-Z", async () => {
+		const { facingFromLookDir } = await import("../../src/ui/cameraCompass.js");
+		assert.equal(facingFromLookDir(0, 0, -1).cardinal, "N");
+		assert.equal(facingFromLookDir(1, 0, 0).cardinal, "E");
+		assert.equal(facingFromLookDir(0, 0, 1).cardinal, "S");
+		assert.equal(facingFromLookDir(-1, 0, 0).cardinal, "W");
+		assert.equal(facingFromLookDir(0, -1, 0).cardinal, "Top");
+		assert.ok(Math.abs(facingFromLookDir(0, 0, -1).yaw) < 1);
+		assert.ok(Math.abs(facingFromLookDir(1, 0, 0).yaw - 90) < 1);
+	});
+
+	it("camera bar pops up from the bottom on hover or C", () => {
+		const html = readFileSync(join(root, "src/index.html"), "utf8");
+		assert.match(html, /id="camDock"/);
+		assert.match(html, /id="camCompass"/);
+		assert.match(html, /basi-cam-hit/);
+		assert.match(html, /basi-cam-slide/);
+		const css = readFileSync(join(root, "src/viewer/viewer.css"), "utf8");
+		assert.match(css, /\.basi-cam-slide/);
+		assert.match(css, /translateY\(calc\(100% \+ 8px\)\)/);
+		assert.match(css, /\.basi-cam-dock:hover \.basi-cam-slide/);
+		const chrome = readFileSync(join(root, "src/ui/previewChrome.js"), "utf8");
+		assert.match(chrome, /toggleCamDock/);
+		assert.match(chrome, /e\.key === "c"/);
+	});
+
 	it("details dock scrolls as one column instead of clipping", () => {
 		const html = readFileSync(join(root, "src/index.html"), "utf8");
 		assert.match(html, /id="detailScroll"/);

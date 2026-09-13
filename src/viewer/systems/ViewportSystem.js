@@ -154,6 +154,7 @@ export default class ViewportSystem {
 		if (renderer && scene && camera) {
 			renderer.render(scene, camera);
 		}
+		this.ctx.cameraCtrl?.emitFacing?.();
 		stats?.end?.();
 	}
 

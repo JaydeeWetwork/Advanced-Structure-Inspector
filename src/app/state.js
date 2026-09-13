@@ -114,6 +114,8 @@ export function createEls() {
 		detailsCollapseBtn: $("detailsCollapseBtn"),
 		detailsCollapseBody: $("detailsCollapseBody"),
 		camIsoBtn: $("camIsoBtn"),
+		camDock: $("camDock"),
+		camBar: $("camBar"),
 		previewHost: $("previewHost"),
 		previewBtn: /** @type {HTMLButtonElement|null} */ ($("previewBtn")),
 		downloadBtn: $("downloadBtn"),

@@ -322,6 +322,11 @@ export function onPreviewKeydown(e) {
 		deselectInspectAndRefresh();
 		return;
 	}
+	if ((e.key === "c" || e.key === "C") && !e.ctrlKey && !e.metaKey && !e.altKey) {
+		e.preventDefault();
+		toggleCamDock();
+		return;
+	}
 	// Number keys 1–7 for camera presets (same as UI buttons)
 	// While fly mode is active, leave WASD / Space / Shift to the renderer
 	if (p.isFlyMode || p.getCameraPreset?.() === "fly") {
@@ -347,7 +352,22 @@ export function onPreviewKeydown(e) {
 	}
 	if (e.key === "Escape") {
 		deselectInspectAndRefresh();
+		const dock = document.getElementById("camDock");
+		if (dock?.classList.contains("basi-cam-open")) toggleCamDock(false);
 	}
+}
+
+/**
+ * Raise the camera bar from the bottom edge. Omit `force` to toggle.
+ * @param {boolean} [force]
+ */
+export function toggleCamDock(force) {
+	const dock = document.getElementById("camDock");
+	if (!dock) return false;
+	const on = force == null ? !dock.classList.contains("basi-cam-open") : !!force;
+	dock.classList.toggle("basi-cam-open", on);
+	dock.setAttribute("aria-expanded", on ? "true" : "false");
+	return on;
 }
 
 /**
