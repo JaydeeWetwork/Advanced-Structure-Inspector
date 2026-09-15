@@ -137,6 +137,7 @@ export function fillHydratedMaps({ rows, cats, ents, feats, entries, categories,
 				? [...row.acquiredMaterials]
 				: [],
 			defaultCameraPreset: row.defaultCameraPreset || "iso-north",
+			defaultCameraZoom: Number.isFinite(row.defaultCameraZoom) ? row.defaultCameraZoom : 1,
 			userDetails: Array.isArray(row.userDetails)
 				? row.userDetails.map(d => ({ ...d }))
 				: [],

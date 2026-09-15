@@ -437,7 +437,7 @@ describe("StructureCatalog", () => {
 		assert.equal(tree.uncategorized.structures.some(x => x.id === s.id), true);
 	});
 
-	it("persists acquiredMaterials, defaultCameraPreset, userDetails, creator meta via patch", async () => {
+	it("persists acquiredMaterials, defaultCameraPreset, defaultCameraZoom, userDetails, creator meta via patch", async () => {
 		const cat = new StructureCatalog();
 		cat.setPersistEnabled(false);
 		const file = new File([new Uint8Array([0])], "x.mcstructure");
@@ -459,6 +459,7 @@ describe("StructureCatalog", () => {
 		});
 		assert.deepEqual(e.acquiredMaterials, []);
 		assert.equal(e.defaultCameraPreset, "iso-north");
+		assert.equal(e.defaultCameraZoom, 1);
 		assert.deepEqual(e.userDetails, []);
 		assert.equal(e.creator, "");
 		assert.equal(e.credits, "");
@@ -466,6 +467,7 @@ describe("StructureCatalog", () => {
 		await cat.patch(e.id, {
 			acquiredMaterials: ["stone"],
 			defaultCameraPreset: "iso-east",
+			defaultCameraZoom: 1.5,
 			userDetails: [{ id: "n1", text: "needs hopper" }],
 			creator: "Jay",
 			credits: "Team",
@@ -474,6 +476,11 @@ describe("StructureCatalog", () => {
 		const u = cat.get(e.id);
 		assert.deepEqual(u.acquiredMaterials, ["stone"]);
 		assert.equal(u.defaultCameraPreset, "iso-east");
+		assert.equal(u.defaultCameraZoom, 1.5);
+		await cat.patch(e.id, { defaultCameraZoom: 3 });
+		assert.equal(cat.get(e.id).defaultCameraZoom, 2);
+		await cat.patch(e.id, { defaultCameraZoom: 0 });
+		assert.equal(cat.get(e.id).defaultCameraZoom, 0.5);
 		assert.equal(u.userDetails.length, 1);
 		assert.equal(u.userDetails[0].text, "needs hopper");
 		assert.equal(u.creator, "Jay");
@@ -2228,6 +2235,72 @@ describe("item upgrade schemas", async () => {
 	});
 });
 
+describe("true isometric showcase", async () => {
+	const {
+		ISO_ELEVATION_DEG,
+		ISO_OFFSETS,
+		applyOrthoFrustum,
+		isoDirectionInfo,
+		isoOffset,
+		isIsoCameraPreset,
+		normalizeIsoPreset,
+		orthoHalfExtents
+	} = await import("../../src/viewer/systems/isoCamera.js");
+
+	it("uses cube-diagonal 45° / 35.264° offsets", () => {
+		assert.deepEqual(isoOffset("iso-north"), [1, 1, -1]);
+		assert.deepEqual(isoOffset("iso-south"), [-1, 1, 1]);
+		assert.deepEqual(isoOffset("iso-east"), [1, 1, 1]);
+		assert.deepEqual(isoOffset("iso-west"), [-1, 1, -1]);
+		assert.deepEqual(isoOffset("iso"), ISO_OFFSETS["iso-north"]);
+		assert.equal(normalizeIsoPreset("iso"), "iso-north");
+		assert.equal(isIsoCameraPreset("iso-east"), true);
+		assert.equal(isIsoCameraPreset("north"), false);
+		assert.ok(Math.abs(ISO_ELEVATION_DEG - 35.264) < 0.01);
+		for (const id of ["iso-north", "iso-south", "iso-east", "iso-west"]) {
+			const info = isoDirectionInfo(id);
+			assert.ok(Math.abs(info.elevationDeg - ISO_ELEVATION_DEG) < 0.05);
+			const az = ((info.azimuthDeg % 360) + 360) % 360;
+			const nearest45 = Math.round(az / 45) * 45;
+			assert.ok(Math.abs(az - nearest45) < 0.05 || Math.abs(az - nearest45 + 360) < 0.05);
+			assert.ok(nearest45 % 45 === 0);
+			assert.ok(az % 90 !== 0);
+		}
+		const n = isoDirectionInfo("iso-north");
+		assert.ok(Math.abs(n.azimuthDeg - 45) < 0.05);
+	});
+
+	it("ortho frustum grows with AABB and shrinks with user zoom", () => {
+		const a = orthoHalfExtents(20, 10, 2, 1, 1);
+		assert.equal(a.halfHeight, 10);
+		assert.equal(a.halfWidth, 20);
+		const close = orthoHalfExtents(20, 10, 2, 1, 2);
+		assert.equal(close.halfHeight, 5);
+		const bigger = orthoHalfExtents(40, 20, 1, 1, 1);
+		assert.ok(bigger.halfHeight > a.halfHeight);
+		const cam = { left: 0, right: 0, top: 0, bottom: 0 };
+		applyOrthoFrustum(cam, 10, 2);
+		assert.equal(cam.left, -20);
+		assert.equal(cam.right, 20);
+		assert.equal(cam.top, 10);
+		assert.equal(cam.bottom, -10);
+	});
+
+	it("iso path uses OrthographicCamera; other presets stay perspective", () => {
+		const ctrl = readFileSync(join(root, "src/viewer/systems/CameraController.js"), "utf8");
+		assert.match(ctrl, /OrthographicCamera/);
+		assert.match(ctrl, /#applyIso/);
+		assert.match(ctrl, /#ensurePerspective/);
+		assert.match(ctrl, /isIsoCameraPreset/);
+		assert.doesNotMatch(ctrl, /0\.5,\s*0\.72,\s*-1/);
+		const view = readFileSync(join(root, "src/viewer/systems/ViewportSystem.js"), "utf8");
+		assert.match(view, /isOrthographicCamera/);
+		assert.match(view, /orthoHalfHeight/);
+		const orbit = readFileSync(join(root, "src/viewer/systems/orbitBootstrap.js"), "utf8");
+		assert.match(orbit, /controls\.object/);
+	});
+});
+
 describe("paper theme", async () => {
 	const { getSavedTheme, resolvedTheme } = await import("../../src/app/theme.js");
 
@@ -2281,6 +2354,31 @@ describe("paper theme", async () => {
 		assert.match(css, /overscroll-behavior:\s*contain/);
 	});
 
+	it("details dock camera selector includes a default zoom slider", async () => {
+		const html = readFileSync(join(root, "src/index.html"), "utf8");
+		assert.match(html, /id="defaultCamSelect"/);
+		assert.match(html, /id="defaultZoom"/);
+		assert.match(html, /id="defaultZoomVal"/);
+		const css = readFileSync(join(root, "src/viewer/viewer.css"), "utf8");
+		assert.match(css, /\.basi-default-zoom/);
+		const {
+			normalizeCameraZoom,
+			stepSelectIndex,
+			stepRangeValue
+		} = await import("../../src/ui/previewChrome.js");
+		assert.equal(normalizeCameraZoom(undefined), 1);
+		assert.equal(normalizeCameraZoom(1.5), 1.5);
+		assert.equal(normalizeCameraZoom(3), 2);
+		assert.equal(normalizeCameraZoom(0), 0.5);
+		assert.equal(stepSelectIndex(0, 12, 100), 1);
+		assert.equal(stepSelectIndex(0, 12, -100), 0);
+		assert.equal(stepSelectIndex(11, 12, 100), 11);
+		assert.equal(stepRangeValue(100, 50, 200, 5, -80), 105);
+		assert.equal(stepRangeValue(100, 50, 200, 5, 80), 95);
+		assert.equal(stepRangeValue(50, 50, 200, 5, 80), 50);
+		assert.equal(stepRangeValue(200, 50, 200, 5, -80), 200);
+	});
+
 	it("details dock uses structure name, Information, Materials, and feature picker", () => {
 		const html = readFileSync(join(root, "src/index.html"), "utf8");
 		assert.match(html, /id="detailFloatTitle"/);
@@ -2297,6 +2395,20 @@ describe("paper theme", async () => {
 		const actionsAt = html.indexOf('class="basi-detail-actions"');
 		const materialsAt = html.indexOf('id="materialsSection"');
 		assert.ok(materialsAt > 0 && actionsAt > materialsAt, "Reload/Download/Remove should sit below Materials");
+		const statsAt = html.indexOf('id="detailStats"');
+		const hopperAt = html.indexOf('id="hopperStatsChip"');
+		const headerBarAt = html.indexOf('id="selectionBar"');
+		assert.ok(statsAt > 0 && hopperAt > statsAt, "Hopper lock chip should sit below entity stats");
+		assert.ok(headerBarAt > 0 && hopperAt > headerBarAt, "Hopper lock chip should not live in the title bar");
+		assert.doesNotMatch(html.slice(headerBarAt, headerBarAt + 500), /hopperStatsChip/);
+	});
+
+	it("editor feature cards do not shrink and wrap label text", () => {
+		const css = readFileSync(join(root, "src/styles/editor.css"), "utf8");
+		assert.match(css, /\.basi-ed-feat-card\s*\{[^}]*flex:\s*0 0 auto/s);
+		assert.match(css, /\.basi-ed-feat-card\s*\{[^}]*min-height:\s*min-content/s);
+		assert.match(css, /\.basi-ed-feat-main\s*\{[^}]*white-space:\s*normal/s);
+		assert.match(css, /\.basi-ed-feat-name\s*\{[^}]*overflow-wrap:\s*anywhere/s);
 	});
 
 	it("editor feature cards do not shrink and wrap label text", () => {

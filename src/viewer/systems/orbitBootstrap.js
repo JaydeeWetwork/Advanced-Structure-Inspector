@@ -74,8 +74,9 @@ export function bindOrbitInteraction({
 }) {
 	const { abs } = Math;
 	controls.addEventListener("start", () => {
+		const cam = controls.object || camera;
 		cameraCtrl.orbitSnapshot = {
-			pos: camera.position.clone(),
+			pos: cam.position.clone(),
 			target: controls.target.clone()
 		};
 	});
@@ -83,15 +84,16 @@ export function bindOrbitInteraction({
 		const snap = cameraCtrl.orbitSnapshot;
 		cameraCtrl.orbitSnapshot = null;
 		if (!snap) return;
+		const cam = controls.object || camera;
 		if (canvas?.dataset?.basiSuppressOrbit === "1") {
-			camera.position.copy(snap.pos);
+			cam.position.copy(snap.pos);
 			controls.target.copy(snap.target);
 			controls.update();
 			requestRender();
 			return;
 		}
 		const moved =
-			camera.position.distanceTo(snap.pos) > 0.35
+			cam.position.distanceTo(snap.pos) > 0.35
 			|| controls.target.distanceTo(snap.target) > 0.35;
 		if (moved) cameraCtrl.enterFreeCamera();
 	});

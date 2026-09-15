@@ -276,6 +276,15 @@ body.basi-app .basi-cat-assign-select {
 	border-radius: 6px;
 }
 
+body.basi-app .basi-default-zoom-text,
+body.basi-app .basi-default-zoom-val {
+	color: var(--text-col);
+}
+
+body.basi-app .basi-default-zoom input[type="range"] {
+	accent-color: var(--basi-accent);
+}
+
 body.basi-app .basi-meta-input:focus,
 body.basi-app .basi-default-cam-select:focus,
 body.basi-app .basi-cat-assign-select:focus,

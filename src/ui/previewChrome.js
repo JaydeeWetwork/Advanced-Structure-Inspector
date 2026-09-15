@@ -41,6 +41,63 @@ export function normalizeCameraPreset(preset) {
 	return "iso-north";
 }
 
+/** Default opening zoom: 1 = current fit, 2 = twice as close, 0.5 = twice as far. */
+export const CAMERA_ZOOM_MIN = 0.5;
+export const CAMERA_ZOOM_MAX = 2;
+export const CAMERA_ZOOM_DEFAULT = 1;
+
+/**
+ * @param {unknown} z
+ * @returns {number}
+ */
+export function normalizeCameraZoom(z) {
+	const n = Number(z);
+	if (!Number.isFinite(n)) return CAMERA_ZOOM_DEFAULT;
+	const clamped = Math.max(CAMERA_ZOOM_MIN, Math.min(CAMERA_ZOOM_MAX, n));
+	return Math.round(clamped * 20) / 20;
+}
+
+/**
+ * Wheel over a &lt;select&gt;: scroll down → next option.
+ * @param {number} index
+ * @param {number} count
+ * @param {number} deltaY
+ */
+export function stepSelectIndex(index, count, deltaY) {
+	const dir = deltaY > 0 ? 1 : deltaY < 0 ? -1 : 0;
+	if (!dir || count <= 0) return index;
+	return Math.max(0, Math.min(count - 1, index + dir));
+}
+
+/**
+ * Wheel over the zoom slider: scroll up → closer (higher %).
+ * @param {number} value
+ * @param {number} min
+ * @param {number} max
+ * @param {number} step
+ * @param {number} deltaY
+ */
+export function stepRangeValue(value, min, max, step, deltaY) {
+	const dir = deltaY < 0 ? 1 : deltaY > 0 ? -1 : 0;
+	if (!dir) return value;
+	const next = value + dir * step;
+	return Math.max(min, Math.min(max, next));
+}
+
+/**
+ * Sync the details-dock camera select + zoom slider from a catalog entry.
+ * @param {{ defaultCameraPreset?: string, defaultCameraZoom?: number }|null|undefined} entry
+ */
+export function syncDefaultCamUi(entry) {
+	if (els.defaultCamSelect) {
+		els.defaultCamSelect.value = normalizeCameraPreset(entry?.defaultCameraPreset);
+	}
+	const z = normalizeCameraZoom(entry?.defaultCameraZoom);
+	const pct = String(Math.round(z * 100));
+	if (els.defaultZoom) els.defaultZoom.value = pct;
+	if (els.defaultZoomVal) els.defaultZoomVal.textContent = `${pct}%`;
+}
+
 /**
  * @param {string} current
  * @returns {string}
@@ -207,8 +264,8 @@ export function syncCamBarActive(preset) {
 		const isoId = isIsoPreset(id) ? (id === "iso" ? "iso-north" : id) : null;
 		els.camIsoBtn.textContent = isoId ? (ISO_LABELS[isoId] || "Iso") : "Iso N";
 		els.camIsoBtn.title = isoId
-			? `Isometric ${isoId.replace("iso-", "").toUpperCase()} — click to cycle N→S→E→W`
-			: "Cycle isometric N → S → E → W";
+			? `Isometric 3/4 ${isoId.replace("iso-", "").toUpperCase()} (ortho) — click to cycle N→S→E→W`
+			: "Cycle isometric 3/4 N → S → E → W (orthographic)";
 	}
 	const inLayer = p?.getSelectedLayer?.() != null && Number.isFinite(p.getSelectedLayer());
 	const showTilt = inLayer && isNsewPreset(id);
@@ -269,6 +326,29 @@ export function applyCameraPreset(preset, opts = {}) {
 }
 
 /**
+ * Step Y slice from keyboard or 3-finger tap.
+ * @param {1|-1|"all"} delta
+ * @returns {boolean}
+ */
+export function applyLayerStep(delta) {
+	if (!session.hasActive) return false;
+	if (els.detailPanel?.classList.contains("hidden")) return false;
+	const p = primaryPreview();
+	if (!p) return false;
+	if (delta === "all") {
+		p.showAllLayers?.();
+		updateLayerBadge(null);
+	} else {
+		const layer = p.stepLayer?.(delta);
+		updateLayerBadge(layer, p.getMaxLayer?.());
+	}
+	syncCamBarActive(p.getCameraPreset?.());
+	p.requestRedraw?.();
+	deselectInspectAndRefresh();
+	return true;
+}
+
+/**
  * @param {KeyboardEvent} e
  */
 export function onPreviewKeydown(e) {
@@ -282,30 +362,17 @@ export function onPreviewKeydown(e) {
 
 	if (e.key === "ArrowUp") {
 		e.preventDefault();
-		const layer = p.stepLayer?.(1);
-		updateLayerBadge(layer, p.getMaxLayer?.());
-		// Entering layer mode sets N@67 inside renderer; refresh lit buttons + tilt visibility
-		syncCamBarActive(p.getCameraPreset?.());
-		p.requestRedraw?.();
-		deselectInspectAndRefresh();
+		applyLayerStep(1);
 		return;
 	}
 	if (e.key === "ArrowDown") {
 		e.preventDefault();
-		const layer = p.stepLayer?.(-1);
-		updateLayerBadge(layer, p.getMaxLayer?.());
-		syncCamBarActive(p.getCameraPreset?.());
-		p.requestRedraw?.();
-		deselectInspectAndRefresh();
+		applyLayerStep(-1);
 		return;
 	}
 	if (e.key === "ArrowLeft") {
 		e.preventDefault();
-		p.showAllLayers?.();
-		updateLayerBadge(null);
-		syncCamBarActive(p.getCameraPreset?.());
-		p.requestRedraw?.();
-		deselectInspectAndRefresh();
+		applyLayerStep("all");
 		return;
 	}
 	if (e.key === "ArrowRight") {

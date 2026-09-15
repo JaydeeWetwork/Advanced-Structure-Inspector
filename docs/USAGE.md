@@ -141,11 +141,9 @@ Hover the right edge when a structure is selected; **pin** to keep it open. Clic
 - **Category** — Uncategorized or a named category (uses that category’s default/first entry; empty categories get a General entry).
 - **Entry** — function group inside the category (disabled when Uncategorized).
 
-**Information:** default camera for this structure, creator / credits / source link, feature chips, size/block/entity stats, notes.
+**Information:** default camera for this structure, creator / credits / source link, feature chips, size/block/entity stats, hopper lock percent (Bedrock `toggle_bit` — locked when powered), notes.
 
 **Materials:** block counts, stacks/shulkers, acquired checkboxes.
-
-Header **hopper chip:** Bedrock hoppers with `toggle_bit` (locked when powered).
 
 **Reload** rebuilds the preview. **Download** saves the stored `.mcstructure`. **Remove** deletes this catalog entry.
 
@@ -161,14 +159,14 @@ While loading, a **centered card** shows status and a **progress bar**. It disap
 
 | Control | Meaning |
 |---------|---------|
-| Iso N | Cycle isometric north → south → east → west |
+| Iso N | Cycle isometric 3/4 (orthographic, 45° around, 35.264° down). Parallel lines, equal scale. |
 | N / S / E / W | Cardinal views (tilt slider in layer mode) |
 | Top | Top-down |
 | Layer | Frame the current Y slice |
 | Free | No auto reframe (orbit still works) |
 | Fly | WASD move, Space up, Shift down, drag to look |
 
-**Default camera** on the details dock is used the next time this structure opens.
+**Default camera** and **Zoom** on the details dock are used the next time this structure opens. 100% is the usual fit; higher is closer. Hover and scroll the mouse wheel to cycle the camera or nudge zoom.
 
 The app parks up to **two** previous WebGL previews so reselecting is faster. Browsers limit WebGL contexts — close extra 3D tabs if preview fails.
 
@@ -226,6 +224,9 @@ Designed for **iPad Safari** (tablets). The desktop layout stays: catalog on the
 | Tap the 3D view | Tuck unpinned panels and the camera bar |
 | One-finger drag (center of the view) | Orbit |
 | Two-finger pinch / pan | Zoom / pan |
+| Three-finger tap near the **top** of the view | Layer up (`↑`) |
+| Three-finger tap near the **bottom** | Layer down (`↓`) |
+| Three-finger tap in the **middle** | Show all layers (`←`) |
 | Long-press a block or entity | Inspect (same as double-click on desktop) |
 
 **Pin** still keeps a dock open. Fly is look-drag only without a keyboard (WASD / Space / Shift).

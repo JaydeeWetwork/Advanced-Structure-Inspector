@@ -564,6 +564,18 @@ export default class PreviewRenderer extends AsyncFactory {
 		this.#cameraCtrl.setPreset(preset);
 	}
 
+	getCameraZoom() {
+		return this.#cameraCtrl.userZoom ?? 1;
+	}
+
+	/**
+	 * @param {number} z
+	 * @param {{ reframe?: boolean }} [opts]
+	 */
+	setCameraZoom(z, opts = {}) {
+		return this.#cameraCtrl.setUserZoom(z, opts);
+	}
+
 	resetCamera() {
 		this.#cameraCtrl.resetCamera();
 	}

@@ -103,6 +103,8 @@ export function createEls() {
 		detailMaterialList: $("detailMaterialList"),
 		materialListHint: $("materialListHint"),
 		defaultCamSelect: /** @type {HTMLSelectElement|null} */ ($("defaultCamSelect")),
+		defaultZoom: /** @type {HTMLInputElement|null} */ ($("defaultZoom")),
+		defaultZoomVal: $("defaultZoomVal"),
 		metaCreator: /** @type {HTMLInputElement|null} */ ($("metaCreator")),
 		metaCredits: /** @type {HTMLInputElement|null} */ ($("metaCredits")),
 		metaSourceLink: /** @type {HTMLInputElement|null} */ ($("metaSourceLink")),

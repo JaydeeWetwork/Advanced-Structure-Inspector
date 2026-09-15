@@ -38,14 +38,19 @@ import {
 } from "./ui/detailPanel.js";
 import {
 	normalizeCameraPreset,
+	normalizeCameraZoom,
+	stepSelectIndex,
+	stepRangeValue,
 	applyCameraPreset,
 	syncCamBarActive,
 	onPreviewKeydown,
 	onPreviewDblClick,
 	bindPreviewInspectLongPress,
 	toggleCamDock,
+	applyLayerStep,
 	initInspectWindow
 } from "./ui/previewChrome.js";
+import { bindLayerTaps } from "./ui/layerTap.js";
 import { initCameraCompass } from "./ui/cameraCompass.js";
 import {
 	selectEntry,
@@ -134,6 +139,15 @@ function wireUi() {
 		}
 	});
 	bindPreviewInspectLongPress(els.previewHost);
+	bindLayerTaps(els.previewHost, {
+		onUp: () => applyLayerStep(1),
+		onDown: () => applyLayerStep(-1),
+		onAll: () => applyLayerStep("all"),
+		suppressOrbit: () => suppressPreviewOrbit(true),
+		releaseOrbit: () => {
+			requestAnimationFrame(() => suppressPreviewOrbit(false));
+		}
+	});
 	els.importInput?.addEventListener("change", () => {
 		handleFiles(els.importInput.files);
 	});
@@ -151,20 +165,79 @@ function wireUi() {
 	});
 	applyView();
 
-	els.defaultCamSelect?.addEventListener("change", () => {
+	const applyDefaultCamFromSelect = persist => {
 		if (!getSelectedId()) return;
 		const val = normalizeCameraPreset(els.defaultCamSelect?.value);
+		const p = primaryPreview();
+		if (p?.setCameraPreset && val !== "free") {
+			applyCameraPreset(val);
+		} else if (p && (val === "free" || val === "fly")) {
+			p.setCameraPreset?.(val);
+			syncCamBarActive(val);
+		}
+		if (!persist) return;
 		void catalog.patch(getSelectedId(), { defaultCameraPreset: val }).then(() => {
-			const p = primaryPreview();
-			if (p?.setCameraPreset && val !== "free") {
-				applyCameraPreset(val);
-			} else if (p && (val === "free" || val === "fly")) {
-				p.setCameraPreset?.(val);
-				syncCamBarActive(val);
-			}
 			setStatus(`Default camera: ${val}`, "ok");
 		});
-	});
+	};
+	els.defaultCamSelect?.addEventListener("change", () => applyDefaultCamFromSelect(true));
+
+	const applyDefaultZoomUi = persist => {
+		const z = normalizeCameraZoom(Number(els.defaultZoom?.value) / 100);
+		if (els.defaultZoomVal) els.defaultZoomVal.textContent = `${Math.round(z * 100)}%`;
+		const p = primaryPreview();
+		p?.setCameraZoom?.(z, { reframe: true });
+		if (!persist || !getSelectedId()) return;
+		void catalog.patch(getSelectedId(), { defaultCameraZoom: z }).then(() => {
+			setStatus(`Default zoom: ${Math.round(z * 100)}%`, "ok");
+		});
+	};
+	els.defaultZoom?.addEventListener("input", () => applyDefaultZoomUi(false));
+	els.defaultZoom?.addEventListener("change", () => applyDefaultZoomUi(true));
+
+	let zoomWheelPersistTimer = 0;
+	const scheduleZoomPersist = () => {
+		if (zoomWheelPersistTimer) clearTimeout(zoomWheelPersistTimer);
+		zoomWheelPersistTimer = window.setTimeout(() => {
+			zoomWheelPersistTimer = 0;
+			applyDefaultZoomUi(true);
+		}, 280);
+	};
+
+	const camWrap = els.defaultCamSelect?.closest(".basi-default-cam");
+	camWrap?.addEventListener(
+		"wheel",
+		e => {
+			if (!getSelectedId()) return;
+			e.preventDefault();
+			e.stopPropagation();
+			const overZoom =
+				e.target instanceof Element && !!e.target.closest(".basi-default-zoom");
+			if (overZoom) {
+				const input = els.defaultZoom;
+				if (!input) return;
+				const next = stepRangeValue(
+					Number(input.value),
+					Number(input.min),
+					Number(input.max),
+					Number(input.step) || 5,
+					e.deltaY
+				);
+				if (next === Number(input.value)) return;
+				input.value = String(next);
+				applyDefaultZoomUi(false);
+				scheduleZoomPersist();
+				return;
+			}
+			const sel = els.defaultCamSelect;
+			if (!sel) return;
+			const next = stepSelectIndex(sel.selectedIndex, sel.options.length, e.deltaY);
+			if (next === sel.selectedIndex) return;
+			sel.selectedIndex = next;
+			applyDefaultCamFromSelect(true);
+		},
+		{ passive: false }
+	);
 
 	const wireMetaInput = (input, field) => {
 		if (!input) return;

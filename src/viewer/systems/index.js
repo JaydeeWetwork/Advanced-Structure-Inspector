@@ -12,6 +12,17 @@ export {
 	entityStructureLayer
 } from "./EntityAttachSystem.js";
 export { default as CameraController } from "./CameraController.js";
+export {
+	ISO_ELEVATION_DEG,
+	ISO_ELEVATION_RAD,
+	ISO_OFFSETS,
+	applyOrthoFrustum,
+	isoDirectionInfo,
+	isoOffset,
+	isIsoCameraPreset,
+	normalizeIsoPreset,
+	orthoHalfExtents
+} from "./isoCamera.js";
 export { default as FlyController } from "./FlyController.js";
 export { default as InspectRaycaster } from "./InspectRaycaster.js";
 export {

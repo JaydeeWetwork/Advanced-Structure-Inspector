@@ -41,6 +41,13 @@ import {
 } from "./catalogSwitch.js";
 import { getActiveCatalog } from "./catalogRegistry.js";
 
+/** 1 = default fit; clamp to the details-dock zoom slider range. */
+function clampDefaultZoom(z) {
+	const n = Number(z);
+	if (!Number.isFinite(n)) return 1;
+	return Math.max(0.5, Math.min(2, Math.round(n * 20) / 20));
+}
+
 /**
  * @typedef {object} StructureCatalogEntry
  * @property {string} id
@@ -59,6 +66,7 @@ import { getActiveCatalog } from "./catalogRegistry.js";
  * @property {string[]} [featureIds]
  * @property {string[]} [acquiredMaterials]
  * @property {string} [defaultCameraPreset]
+ * @property {number} [defaultCameraZoom]
  * @property {{ id: string, text: string, addedAt?: number }[]} [userDetails]
  * @property {string} [creator]
  * @property {string} [credits]
@@ -218,6 +226,7 @@ export default class StructureCatalog {
 				? [...partial.acquiredMaterials]
 				: [],
 			defaultCameraPreset: partial.defaultCameraPreset || "iso-north",
+			defaultCameraZoom: clampDefaultZoom(partial.defaultCameraZoom),
 			userDetails: Array.isArray(partial.userDetails)
 				? partial.userDetails.map(d => ({ ...d }))
 				: [],
@@ -236,7 +245,7 @@ export default class StructureCatalog {
 
 	/**
 	 * @param {string} id
-	 * @param {Partial<Pick<StructureCatalogEntry, "materials"|"hopperStats"|"name"|"entityCount"|"blockCount"|"blockNames"|"parseError"|"entryId"|"featureIds"|"acquiredMaterials"|"defaultCameraPreset"|"userDetails"|"creator"|"credits"|"sourceLink">>} partial
+	 * @param {Partial<Pick<StructureCatalogEntry, "materials"|"hopperStats"|"name"|"entityCount"|"blockCount"|"blockNames"|"parseError"|"entryId"|"featureIds"|"acquiredMaterials"|"defaultCameraPreset"|"defaultCameraZoom"|"userDetails"|"creator"|"credits"|"sourceLink">>} partial
 	 * @returns {Promise<StructureCatalogEntry|null>}
 	 */
 	async patch(id, partial) {
@@ -251,6 +260,9 @@ export default class StructureCatalog {
 		}
 		if ("defaultCameraPreset" in partial) {
 			entry.defaultCameraPreset = partial.defaultCameraPreset || "iso-north";
+		}
+		if ("defaultCameraZoom" in partial) {
+			entry.defaultCameraZoom = clampDefaultZoom(partial.defaultCameraZoom);
 		}
 		if ("userDetails" in partial) {
 			entry.userDetails = Array.isArray(partial.userDetails)

@@ -17,7 +17,7 @@ function $(id) {
 }
 
 /**
- * Top header: name, source, hopper lock chip, action buttons.
+ * Top header: name and source. Hopper lock chip lives in the details dock.
  * @param {any|null} entry
  */
 export function updateSelectionHeader(entry) {

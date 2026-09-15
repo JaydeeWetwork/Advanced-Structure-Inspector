@@ -45,6 +45,7 @@ const META_STORE = "meta";
  * @property {string[]} [featureIds]
  * @property {string[]} [acquiredMaterials]
  * @property {string} [defaultCameraPreset]
+ * @property {number} [defaultCameraZoom]
  * @property {{ id: string, text: string, addedAt?: number }[]} [userDetails]
  * @property {string} [creator]
  * @property {string} [credits]
@@ -223,6 +224,7 @@ function serializeStructure(entry) {
 		featureIds: Array.isArray(entry.featureIds) ? entry.featureIds : [],
 		acquiredMaterials: Array.isArray(entry.acquiredMaterials) ? entry.acquiredMaterials : [],
 		defaultCameraPreset: entry.defaultCameraPreset || "iso-north",
+		defaultCameraZoom: Number.isFinite(entry.defaultCameraZoom) ? entry.defaultCameraZoom : 1,
 		userDetails: Array.isArray(entry.userDetails) ? entry.userDetails : [],
 		creator: typeof entry.creator === "string" ? entry.creator : "",
 		credits: typeof entry.credits === "string" ? entry.credits : "",
@@ -319,6 +321,7 @@ export async function dbLoadAll(dbName) {
 					? row.acquiredMaterials
 					: [],
 				defaultCameraPreset: row.defaultCameraPreset || "iso-north",
+				defaultCameraZoom: Number.isFinite(row.defaultCameraZoom) ? row.defaultCameraZoom : 1,
 				userDetails: Array.isArray(row.userDetails) ? row.userDetails : [],
 				creator: typeof row.creator === "string" ? row.creator : "",
 				credits: typeof row.credits === "string" ? row.credits : "",

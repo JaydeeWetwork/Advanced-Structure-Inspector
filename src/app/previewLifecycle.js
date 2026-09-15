@@ -19,7 +19,9 @@ import {
 	syncCamBarActive,
 	updateLayerBadge,
 	showPreviewPlaceholder,
-	normalizeCameraPreset
+	normalizeCameraPreset,
+	normalizeCameraZoom,
+	syncDefaultCamUi
 } from "../ui/previewChrome.js";
 import { updatePreviewLoading, removePreviewLoading } from "../ui/previewLoading.js";
 import {
@@ -97,9 +99,7 @@ export function selectEntry(id, opts = {}) {
 		});
 	}
 
-	if (els.defaultCamSelect) {
-		els.defaultCamSelect.value = normalizeCameraPreset(entry.defaultCameraPreset);
-	}
+	syncDefaultCamUi(entry);
 	syncMetaFields(entry);
 
 	if (els.detailStats) {
@@ -220,8 +220,10 @@ export async function loadPreview(opts = {}) {
 			const tilt = tiltEl ? +tiltEl.value : 28;
 			const entryNow = catalog.get(buildForId);
 			const defaultCam = normalizeCameraPreset(entryNow?.defaultCameraPreset);
+			const defaultZoom = normalizeCameraZoom(entryNow?.defaultCameraZoom);
 			for (const pr of session.activePreviews) {
 				pr.setCameraTilt?.(tilt, { reframe: false });
+				pr.setCameraZoom?.(defaultZoom, { reframe: false });
 				pr.setCameraPreset?.(defaultCam);
 				pr.requestRedraw?.();
 			}

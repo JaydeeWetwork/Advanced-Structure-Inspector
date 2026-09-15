@@ -66,6 +66,16 @@ export default class ViewportSystem {
 		can.style.display = "block";
 		can.style.aspectRatio = "auto";
 		camera.aspect = w / Math.max(h, 1);
+		if (camera.isOrthographicCamera) {
+			const hh = this.ctx.cameraCtrl?.orthoHalfHeight;
+			if (Number.isFinite(hh) && hh > 0) {
+				const a = camera.aspect;
+				camera.left = -hh * a;
+				camera.right = hh * a;
+				camera.top = hh;
+				camera.bottom = -hh;
+			}
+		}
 		camera.updateProjectionMatrix();
 	}
 

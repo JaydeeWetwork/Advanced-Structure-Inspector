@@ -145,12 +145,14 @@ body.basi-app {
 	display: flex;
 	flex-direction: column;
 	gap: 1px;
-	padding: 4px 10px;
+	padding: 7px 9px;
 	border-radius: 8px;
 	background: var(--input-bg);
 	border: 1px solid var(--basi-border);
 	flex-shrink: 0;
-	min-width: 8rem;
+	min-width: 0;
+	width: 100%;
+	box-sizing: border-box;
 	/* --hopper-lock-color set in JS from 0% green → 100% red */
 	border-left: 4px solid var(--hopper-lock-color, var(--basi-border));
 }
@@ -451,6 +453,39 @@ body.basi-has-selection .basi-float-right {
 .basi-default-cam-select:focus {
 	outline: 2px solid var(--dark-border);
 	outline-offset: -1px;
+}
+
+.basi-default-zoom {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin: 0;
+	padding: 6px 2px 2px;
+	user-select: none;
+}
+
+.basi-default-zoom-text {
+	font-size: 0.78rem;
+	font-weight: 650;
+	color: var(--basi-muted);
+	flex-shrink: 0;
+}
+
+.basi-default-zoom input[type="range"] {
+	flex: 1;
+	min-width: 0;
+	accent-color: var(--dark-bg);
+	cursor: pointer;
+}
+
+.basi-default-zoom-val {
+	font-size: 0.78rem;
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
+	min-width: 3.1rem;
+	text-align: right;
+	color: var(--text-col);
+	flex-shrink: 0;
 }
 
 .basi-cat-assign {
