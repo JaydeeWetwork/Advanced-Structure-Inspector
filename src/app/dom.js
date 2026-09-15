@@ -196,14 +196,31 @@ export function closeDetailFloatIfIdle(opts = {}) {
 }
 
 /**
+ * True when the dock is visually expanded (not tucked).
+ * @param {HTMLElement|null|undefined} el
+ */
+export function isFloatShowing(el) {
+	if (!el) return false;
+	if (el.classList.contains("basi-float-tucked")) return false;
+	if (el.classList.contains("basi-float-open") || el.classList.contains("basi-float-pinned")) {
+		return true;
+	}
+	return el.classList.contains("basi-float-left")
+		&& document.body.classList.contains("basi-no-selection");
+}
+
+/**
  * @param {string} floatId
  * @param {number} [ms]
  */
 export function flashFloatDock(floatId, ms = 1500) {
 	const el = document.getElementById(floatId);
 	if (!el) return;
-	if (el.classList.contains("basi-float-pinned")) return;
-	el.classList.add("basi-float-open");
+	if (el.classList.contains("basi-float-pinned")) {
+		el.classList.remove("basi-float-tucked");
+		return;
+	}
+	openFloatDock(el);
 	if (document.body.classList.contains("basi-touch")) {
 		// Stay open until swipe-away or canvas tap; hover cannot hold it.
 		return;

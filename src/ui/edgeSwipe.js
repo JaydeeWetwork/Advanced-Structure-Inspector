@@ -8,7 +8,7 @@
 
 export const EDGE_BAND = {
 	left: 64,
-	right: 64,
+	right: 88,
 	bottom: 72
 };
 
@@ -118,13 +118,21 @@ export function isSwipeIgnoreTarget(t) {
  * @param {boolean} camOpen
  * @returns {"catalog"|"detail"|"cam"|null}
  */
-export function closeSwipeTarget(t, camOpen) {
+export function closeSwipeTarget(t, camOpen, docks = {}) {
 	if (typeof Element === "undefined" || !(t instanceof Element)) return null;
 	if (t.closest(".basi-cam-bar") || (camOpen && t.closest(".basi-cam-dock"))) return "cam";
-	if (t.closest("#catalogFloat .basi-float-panel, .basi-float-left .basi-float-panel")) {
+	const catalogOpen = docks.catalogOpen === true;
+	const detailOpen = docks.detailOpen === true;
+	if (
+		catalogOpen
+		&& t.closest("#catalogFloat .basi-float-panel, .basi-float-left .basi-float-panel")
+	) {
 		return "catalog";
 	}
-	if (t.closest("#detailFloat .basi-float-panel, .basi-float-right .basi-float-panel")) {
+	if (
+		detailOpen
+		&& t.closest("#detailFloat .basi-float-panel, .basi-float-right .basi-float-panel")
+	) {
 		return "detail";
 	}
 	return null;
@@ -140,6 +148,8 @@ export function closeSwipeTarget(t, camOpen) {
  *   openCam: () => void,
  *   closeCam: () => void,
  *   isCamOpen: () => boolean,
+ *   isCatalogOpen?: () => boolean,
+ *   isDetailOpen?: () => boolean,
  *   closeUnpinned: () => void,
  *   suppressOrbit?: () => void,
  *   releaseOrbit?: () => void
@@ -200,7 +210,10 @@ export function bindEdgeSwipe(stage, api) {
 		startY = e.clientY;
 		pointerId = e.pointerId;
 
-		const closing = closeSwipeTarget(e.target, !!api.isCamOpen?.());
+		const closing = closeSwipeTarget(e.target, !!api.isCamOpen?.(), {
+			catalogOpen: !!api.isCatalogOpen?.(),
+			detailOpen: !!api.isDetailOpen?.()
+		});
 		if (closing) {
 			state = "maybe-close";
 			closeWhich = closing;
@@ -291,14 +304,14 @@ export function bindEdgeSwipe(stage, api) {
 		const target = e.target;
 
 		if (!consumed && !opened && dist < TAP_MAX_PX && target instanceof Element) {
-			if (state === "maybe-open") {
-				if (band === "left" && target.closest(".basi-float-left .basi-float-hit")) {
+			if (state === "maybe-open" && band) {
+				if (band === "left") {
 					api.openCatalog();
 					consumed = true;
-				} else if (band === "right" && target.closest(".basi-float-right .basi-float-hit")) {
+				} else if (band === "right") {
 					api.openDetail();
 					consumed = true;
-				} else if (band === "bottom" && target.closest(".basi-cam-hit")) {
+				} else if (band === "bottom") {
 					api.openCam();
 					consumed = true;
 				}
@@ -316,6 +329,13 @@ export function bindEdgeSwipe(stage, api) {
 
 	const onTouchMove = e => {
 		if (state === "swipe-open" || state === "swipe-close") {
+			e.preventDefault();
+			return;
+		}
+		if (state !== "maybe-open" || !band || (e.touches?.length ?? 0) !== 1) return;
+		const t = e.touches[0];
+		const result = classifyOpenSwipe(band, t.clientX - startX, t.clientY - startY);
+		if (result === "pending" || result === "catalog" || result === "detail" || result === "cam") {
 			e.preventDefault();
 		}
 	};

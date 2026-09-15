@@ -34,6 +34,7 @@ describe("edgeBandAt", () => {
 
 	it("returns right in the right band", () => {
 		assert.equal(edgeBandAt(1024 - 10, 400, stage), "right");
+		assert.equal(edgeBandAt(1024 - EDGE_BAND.right, 400, stage), "right");
 	});
 
 	it("returns bottom in the bottom band", () => {
@@ -111,5 +112,6 @@ describe("swipe DOM helpers", () => {
 
 	it("closeSwipeTarget is null without a DOM Element", () => {
 		assert.equal(closeSwipeTarget(null, false), null);
+		assert.equal(closeSwipeTarget(null, false, { detailOpen: true }), null);
 	});
 });

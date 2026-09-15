@@ -891,6 +891,10 @@ body.basi-touch {
 	--basi-float-hit: 64px;
 }
 
+body.basi-touch .basi-float-right {
+	--basi-float-hit: 88px;
+}
+
 body.basi-touch .basi-float-hit,
 body.basi-touch .basi-cam-hit {
 	touch-action: none;

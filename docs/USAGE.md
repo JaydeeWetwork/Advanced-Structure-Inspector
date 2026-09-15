@@ -220,7 +220,7 @@ Start swipes and pinches **on the 3D view**, not the iPad screen edge. Safari us
 | Gesture | Action |
 |---------|--------|
 | Swipe **right** from the left of the view | Open **Structures** |
-| Swipe **left** from the right of the view | Open **Details** (when a structure is selected) |
+| Swipe **left** from the right of the view (or tap that edge) | Open **Details** (when a structure is selected) |
 | Swipe **up** from the bottom of the view | Open the **camera bar** |
 | Swipe the open panel away (left / right / down) | Close that panel |
 | Tap the 3D view | Hide open panels (Structures, Details, camera bar, inspect) |
