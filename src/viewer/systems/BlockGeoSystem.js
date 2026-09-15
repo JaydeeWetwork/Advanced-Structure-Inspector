@@ -218,7 +218,7 @@ export default class BlockGeoSystem {
 	 * @param {import("three").BufferGeometry} bufferGeo
 	 * @param {[number,number,number][]} positions
 	 * @param {import("three").Material} material
-	 * @param {{ mirrorX?: boolean }} [opts]
+	 * @param {{ mirrorX?: boolean, mirrorZ?: boolean }} [opts]
 	 * @returns {import("three").InstancedMesh}
 	 */
 	instanceBufferGeoAtPositions(bufferGeo, positions, material, opts = {}) {
@@ -227,10 +227,15 @@ export default class BlockGeoSystem {
 		if (!this.#dummy) this.#dummy = new THREE.Object3D();
 		const dummy = this.#dummy;
 		const mirrorX = !!opts.mirrorX;
+		const mirrorZ = !!opts.mirrorZ;
 		for (let i = 0; i < positions.length; i++) {
 			const [px, py, pz] = positions[i];
-			dummy.position.set(mirrorX ? px + 16 : px, py, pz);
-			dummy.scale.set(mirrorX ? -1 : 1, 1, 1);
+			dummy.position.set(
+				mirrorX ? px + 16 : px,
+				py,
+				mirrorZ ? pz + 16 : pz
+			);
+			dummy.scale.set(mirrorX ? -1 : 1, 1, mirrorZ ? -1 : 1);
 			dummy.updateMatrix();
 			instancedMesh.setMatrixAt(i, dummy.matrix);
 		}

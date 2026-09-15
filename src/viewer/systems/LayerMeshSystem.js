@@ -4,7 +4,10 @@
 
 import { clearChildren } from "./disposeObject3D.js";
 import { allowedLayerYs } from "../layerVisibility.js";
-import { doubleChestNeedsPreviewXMirror } from "../doubleChest.js";
+import {
+	doubleChestNeedsPreviewXMirror,
+	doubleChestNeedsPreviewZMirror
+} from "../doubleChest.js";
 
 export default class LayerMeshSystem {
 	/** @type {import("three").Group|null} */
@@ -117,6 +120,7 @@ export default class LayerMeshSystem {
 				const palBlock = this.ctx.blockPalette?.[paletteI];
 				const largeChest = String(palBlock?.basi_block_shape ?? "").startsWith("chest_large");
 				const mirrorX = !isFloor && doubleChestNeedsPreviewXMirror(palBlock);
+				const mirrorZ = !isFloor && doubleChestNeedsPreviewZMirror(palBlock);
 				let volumeMat = isFloor
 					? (pool.solidFloorMat ?? pool.regularMat)
 					: (isTranslucent ? pool.transparentMat : pool.regularMat);
@@ -125,7 +129,8 @@ export default class LayerMeshSystem {
 				const addMesh = (geo, material) => {
 					if (!geo || !material) return;
 					const mesh = this.ctx.geo.instanceBufferGeoAtPositions(geo, threePositions, material, {
-						mirrorX
+						mirrorX,
+						mirrorZ
 					});
 					if (isTranslucent && !isFloor) mesh.renderOrder = threePositions.length;
 					if (isFloor) mesh.renderOrder = -1000;

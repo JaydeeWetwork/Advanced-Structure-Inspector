@@ -62,7 +62,8 @@ export function classifyChestPair(facing, dx, dz) {
 
 /**
  * Preview instances negate X (`-16*x`) but already flip Z in BufferGeometry.
- * North/south pairs sit on X, so those meshes need instance scale.x = -1.
+ * North/south pairs sit on X, so those meshes need instance scale.x = -1
+ * or the 30-wide geo grows the wrong way (into the neighbor, not the partner).
  *
  * @param {any} block palette entry
  */
@@ -70,6 +71,19 @@ export function doubleChestNeedsPreviewXMirror(block) {
 	if (!String(block?.basi_block_shape ?? "").startsWith("chest_large")) return false;
 	const s = String(chestFacing(block.states)).toLowerCase();
 	return s === "north" || s === "south";
+}
+
+/**
+ * East/west pairs sit on Z. The same 30-wide geo + yaw maps width onto Z,
+ * and without scale.z = -1 it grows north/south into non-chest blocks
+ * (e.g. JD-Semi-Universal-V4 east chests over hoppers).
+ *
+ * @param {any} block palette entry
+ */
+export function doubleChestNeedsPreviewZMirror(block) {
+	if (!String(block?.basi_block_shape ?? "").startsWith("chest_large")) return false;
+	const s = String(chestFacing(block.states)).toLowerCase();
+	return s === "east" || s === "west";
 }
 
 /** Coerce nbtify wrappers and primitives to a number. */

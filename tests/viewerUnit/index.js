@@ -1552,24 +1552,29 @@ describe("doubleChest", async () => {
 		assert.equal(chestFacing({ "minecraft:cardinal_direction": "west" }), "west");
 	});
 
-	it("N/S double chests need preview instance X-mirror; E/W do not", async () => {
-		const { doubleChestNeedsPreviewXMirror } = await import(
-			"../../src/viewer/doubleChest.js"
-		);
-		assert.equal(
-			doubleChestNeedsPreviewXMirror({
-				basi_block_shape: "chest_large<textures/entity/chest/double_normal>",
-				states: { "minecraft:cardinal_direction": "north" }
-			}),
-			true
-		);
-		assert.equal(
-			doubleChestNeedsPreviewXMirror({
-				basi_block_shape: "chest_large<textures/entity/chest/double_normal>",
-				states: { "minecraft:cardinal_direction": "east" }
-			}),
-			false
-		);
+	it("N/S double chests need preview instance X-mirror; E/W need Z-mirror", async () => {
+		const {
+			doubleChestNeedsPreviewXMirror,
+			doubleChestNeedsPreviewZMirror
+		} = await import("../../src/viewer/doubleChest.js");
+		const ns = {
+			basi_block_shape: "chest_large<textures/entity/chest/double_normal>",
+			states: { "minecraft:cardinal_direction": "north" }
+		};
+		const ew = {
+			basi_block_shape: "chest_large<textures/entity/chest/double_normal>",
+			states: { "minecraft:cardinal_direction": "east" }
+		};
+		const west = {
+			basi_block_shape: "chest_large<textures/entity/chest/double_normal>",
+			states: { "minecraft:cardinal_direction": "west" }
+		};
+		assert.equal(doubleChestNeedsPreviewXMirror(ns), true);
+		assert.equal(doubleChestNeedsPreviewZMirror(ns), false);
+		assert.equal(doubleChestNeedsPreviewXMirror(ew), false);
+		assert.equal(doubleChestNeedsPreviewZMirror(ew), true);
+		assert.equal(doubleChestNeedsPreviewZMirror(west), true);
+		assert.equal(doubleChestNeedsPreviewXMirror(west), false);
 	});
 
 	it("nbtNumber unwraps typed values", async () => {
@@ -1637,6 +1642,34 @@ describe("doubleChest", async () => {
 		assert.equal(r.palette[r.indices[0][0]].states.basi_chest_half, "left");
 		assert.equal(r.palette[r.indices[0][1]].states.basi_chest_half, "right");
 		assert.match(r.palette[r.indices[0][0]].basi_block_shape, /chest_large</);
+
+		// East-facing pair along Z: player-left is the northern cell; mesh Z-mirror
+		// (not swapping halves) is what covers the southern partner.
+		const eastNbt = {
+			size: [1, 1, 2],
+			structure_world_origin: [0, 0, 0],
+			structure: {
+				palette: {
+					default: {
+						block_position_data: {
+							0: { block_entity_data: { id: "Chest", x: 0, y: 0, z: 0, pairx: 0, pairz: 1 } },
+							1: { block_entity_data: { id: "Chest", x: 0, y: 0, z: 1, pairx: 0, pairz: 0 } }
+						}
+					}
+				}
+			}
+		};
+		const eastPal = [{ name: "minecraft:chest", states: { "minecraft:cardinal_direction": "east" } }];
+		const eastIdx = [new Int32Array([0, 0]), new Int32Array([-1, -1])];
+		const er = applyDoubleChestPalette(eastNbt, eastPal, eastIdx);
+		assert.equal(er.pairedCount, 2);
+		assert.equal(er.palette[er.indices[0][0]].states.basi_chest_half, "left");
+		assert.equal(er.palette[er.indices[0][1]].states.basi_chest_half, "right");
+		assert.match(er.palette[er.indices[0][0]].basi_block_shape, /chest_large</);
+		const mesh = readFileSync(join(root, "src/viewer/systems/BlockGeoSystem.js"), "utf8");
+		assert.match(mesh, /mirrorZ/);
+		const layers = readFileSync(join(root, "src/viewer/systems/LayerMeshSystem.js"), "utf8");
+		assert.match(layers, /doubleChestNeedsPreviewZMirror/);
 		assert.equal(r.palette[r.indices[0][1]].basi_block_shape, "chest_double_skip");
 	});
 });
