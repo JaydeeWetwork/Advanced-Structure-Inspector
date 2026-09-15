@@ -29,7 +29,8 @@ import {
 	saveMetaField,
 	openFeatureDialog,
 	closeFeatureDialog,
-	createFeatureFromDialog
+	createFeatureFromDialog,
+	renderCategoryAssign
 } from "./ui/detailPanel.js";
 import {
 	normalizeCameraPreset,
@@ -105,6 +106,8 @@ function wireUi() {
 	window.addEventListener("hashchange", applyView);
 	catalog.subscribe(() => {
 		renderList();
+		const id = getSelectedId();
+		renderCategoryAssign(id ? catalog.get(id) : null);
 		if (isEditorView()) renderEditor();
 	});
 	applyView();

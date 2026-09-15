@@ -1,8 +1,6 @@
 // Allows us to stack multiple resource packs on top of each other and get a singular resource, much like Minecraft would do.
 // Currently this just grabs the vanilla resources.
 
-import { all as mergeObjects } from "deepmerge";
-
 import LocalResourcePack from "./LocalResourcePack.js";
 import { jsonc, removeFalsies } from "./utils.js";
 import { packAssetStore } from "./viewer/appearance/PackAssetStore.js";
@@ -58,6 +56,7 @@ export default class ResourcePackStack {
 			let resourcePackFiles = this.localResourcePacks.map(resourcePack => resourcePack.getFile(resourcePath));
 			let resourcePackJsons = await Promise.all(removeFalsies(resourcePackFiles).map(file => jsonc(file)));
 			resourcePackJsons.reverse(); // start with the lowest priority pack, so that they get overwritten by higher priority packs
+			const { all: mergeObjects } = await import("deepmerge");
 			let mergedJson = mergeObjects([vanillaJson, ...resourcePackJsons]);
 			console.debug(`Merged JSON file ${resourcePath}:`, mergedJson, "From:", [vanillaJson, ...resourcePackJsons]);
 			return new Response(JSON.stringify(mergedJson));

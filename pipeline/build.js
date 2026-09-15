@@ -15,6 +15,7 @@ const exportHoloPrintLibFlagName = "--export-holoprint-lib";
 
 const buildVersion = process.argv.find(arg => arg.startsWith(versionParamName))?.slice(versionParamName.length) ?? "testing";
 const exportHoloPrintLib = process.argv.includes(exportHoloPrintLibFlagName);
+const includePack = process.argv.includes("--pack") || exportHoloPrintLib;
 
 const cssTargets = browserslistToTargets(browserslist(">= 0.1%"));
 const importMapPattern = /<script type="importmap">([^]+?)<\/script>/;
@@ -34,21 +35,33 @@ try {
 
 	let importMapJSON = fs.readFileSync(`${distDir}/index.html`, "utf-8").match(importMapPattern)[1];
 	let externalModules = Object.keys(JSON.parse(importMapJSON)["imports"]);
+	const inspectorEntries = [
+		"temp/index.js",
+		"temp/styles/base.css",
+		"temp/styles/preview.css",
+		"temp/styles/theme.css",
+		"temp/viewer/viewer.css",
+		"temp/styles/paper.css",
+		"temp/styles/editor.css"
+	];
 	let { metafile } = esbuild.buildSync({
 		absWorkingDir: process.cwd(),
-		entryPoints: [
-			"temp/index.js",
-			"temp/holoprint/holoprintPack.js",
-			"temp/styles/index.css",
-			"temp/viewer/viewer.css"
-		],
+		entryPoints: includePack
+			? [
+				...inspectorEntries,
+				"temp/holoprint/holoprintPack.js",
+				"temp/styles/index.css"
+			]
+			: inspectorEntries,
 		bundle: true,
-		external: externalModules,
+		splitting: true,
+		external: [...externalModules, "lil-gui", "stats.js"],
 		dropLabels: ["TS"],
 		minify: true,
 		format: "esm",
 		outdir: distDir,
 		entryNames: "[dir]/[name]-[hash]",
+		chunkNames: "chunks/[name]-[hash]",
 		assetNames: "[dir]/[name]-[hash]",
 		loader: {
 			".molang.js": "copy", // don't process these files at all, treat them as assets
@@ -226,6 +239,7 @@ function rmDir(dir) {
  * @returns {boolean}
  */
 function shouldBeCopiedFromTempToDist(filename) {
+	if (!includePack && path.basename(filename) === "holoprintPack.html") return false;
 	const filesProcessedByEsbuild = [".js", ".css", ".css.map", ".glsl"];
 	return !filesProcessedByEsbuild.some(ext => filename.endsWith(ext)) || path.basename(filename) == "index.css.map"
 }

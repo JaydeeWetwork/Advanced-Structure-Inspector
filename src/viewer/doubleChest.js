@@ -282,20 +282,19 @@ export function linkInspectDoubleChests(blocks, ox, oz) {
 	let n = 0;
 	for (const block of blocks.values()) {
 		if (block.doubleChest) continue;
-		const be = block.blockEntity;
-		if (!be || be.pairx == null || be.pairz == null) continue;
-		if (be.forceunpair === 1 || be.forceunpair === true) continue;
+		if (block.pairx == null || block.pairz == null) continue;
+		if (block.forceunpair === true) continue;
 		if (!isChestBlockName(block.name)) continue;
 
-		const pairx = nbtNumber(be.pairx);
-		const pairz = nbtNumber(be.pairz);
+		const pairx = nbtNumber(block.pairx);
+		const pairz = nbtNumber(block.pairz);
 		if (!Number.isFinite(pairx) || !Number.isFinite(pairz)) continue;
 		const px = Math.floor(pairx - Number(ox || 0));
 		const pz = Math.floor(pairz - Number(oz || 0));
 		const partner = blocks.get(`${px},${block.y},${pz}`);
-		if (!partner?.blockEntity || partner.doubleChest) continue;
-		const backX = Math.floor(nbtNumber(partner.blockEntity.pairx) - Number(ox || 0));
-		const backZ = Math.floor(nbtNumber(partner.blockEntity.pairz) - Number(oz || 0));
+		if (!partner || partner.pairx == null || partner.pairz == null || partner.doubleChest) continue;
+		const backX = Math.floor(nbtNumber(partner.pairx) - Number(ox || 0));
+		const backZ = Math.floor(nbtNumber(partner.pairz) - Number(oz || 0));
 		if (backX !== block.x || backZ !== block.z) continue;
 
 		const dx = px - block.x;

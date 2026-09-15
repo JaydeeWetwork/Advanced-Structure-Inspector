@@ -21,37 +21,35 @@
 				} catch (e) {}
 			})();
 		</script>
-		<link rel="stylesheet" href="styles/base.css?v=build80"/>
-		<link rel="stylesheet" href="styles/preview.css?v=build80"/>
-		<link rel="stylesheet" href="styles/theme.css?v=build80"/>
-		<link rel="stylesheet" href="viewer/viewer.css?v=build80"/>
-		<link rel="stylesheet" href="styles/paper.css?v=build80"/>
-		<link rel="stylesheet" href="styles/editor.css?v=build80"/>
+		<link rel="stylesheet" href="styles/base.css?v=build86"/>
+		<link rel="stylesheet" href="styles/preview.css?v=build86"/>
+		<link rel="stylesheet" href="styles/theme.css?v=build86"/>
+		<link rel="stylesheet" href="viewer/viewer.css?v=build86"/>
+		<link rel="stylesheet" href="styles/paper.css?v=build86"/>
+		<link rel="stylesheet" href="styles/editor.css?v=build86"/>
 		<script type="importmap">
 			{
 				"imports": {
 					"nbtify-readonly-typeless": "https://esm.sh/nbtify-readonly-typeless@1.1.2?keep-names",
+					"nbtify": "https://esm.sh/nbtify@2.2.0?keep-names",
 					"mcbe-leveldb-reader": "https://esm.sh/mcbe-leveldb-reader@2.0.1?exports=extractStructureFilesFromMcworld",
 					"tga-js": "https://esm.sh/tga-js@1.1.1",
 					"potpack": "https://esm.sh/potpack@2.1.0",
 					"deepmerge": "https://esm.sh/deepmerge@4.3.1",
 					"three": "https://esm.sh/three@0.177.0",
 					"three/examples/jsm/": "https://esm.sh/three@0.177.0/examples/jsm/",
-					"stats.js": "https://esm.sh/stats.js@0.17.0",
-					"lil-gui": "https://esm.sh/lil-gui@0.20",
-					"@zip.js/zip.js": "https://esm.sh/@zip.js/zip.js@^2.7.57?exports=ZipWriter,TextReader,BlobWriter,BlobReader,ZipReader",
-					"strip-json-comments": "https://esm.sh/strip-json-comments@5.0.1"
+					"@zip.js/zip.js": "https://esm.sh/@zip.js/zip.js@^2.7.57?exports=BlobWriter,BlobReader,ZipReader"
 				}
 			}
 		</script>
-		<script src="index.js?v=build80" type="module"></script>
+		<script src="index.js?v=build86" type="module"></script>
 		<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
 		<meta http-equiv="Pragma" content="no-cache"/>
 	</head>
 	<body class="basi-app basi-no-selection basi-view-viewer">
 		<header class="basi-header">
 			<div class="basi-header-brand">
-				<h1>Bedrock ASI <span class="basi-build" id="buildLabel" title="Build / cache token">build80</span></h1>
+				<h1>Bedrock ASI <span class="basi-build" id="buildLabel" title="Build / cache token">build86</span></h1>
 				<nav class="basi-view-switch" aria-label="App view">
 					<button type="button" class="basi-view-link is-active" id="viewViewerBtn" data-view="viewer">Viewer</button>
 					<button type="button" class="basi-view-link" id="viewEditorBtn" data-view="editor">Editor</button>
@@ -169,6 +167,20 @@
 					</div>
 
 					<div class="basi-detail-scroll" id="detailScroll">
+					<section class="basi-cat-assign" id="detailCategorySection" aria-label="Category">
+						<label class="basi-cat-assign-field">
+							<span class="basi-cat-assign-label">Category</span>
+							<select id="detailCategorySelect" class="basi-cat-assign-select" aria-label="Structure category">
+								<option value="">Uncategorized</option>
+							</select>
+						</label>
+						<label class="basi-cat-assign-field" id="detailEntryField">
+							<span class="basi-cat-assign-label">Entry</span>
+							<select id="detailEntrySelect" class="basi-cat-assign-select" aria-label="Structure entry">
+								<option value="">—</option>
+							</select>
+						</label>
+					</section>
 					<section class="basi-collapsible" id="detailsInfoSection" data-section="details">
 						<button type="button" class="basi-collapse-header" id="detailsCollapseBtn" aria-expanded="true">
 							<span class="basi-collapse-toggle" aria-hidden="true">▾</span>
@@ -328,17 +340,14 @@
 						<h3>Libraries &amp; runtimes</h3>
 						<ul>
 							<li><a href="https://threejs.org/" rel="noopener" target="_blank">three.js</a> — 3D preview</li>
-							<li><a href="https://github.com/mrdoob/stats.js" rel="noopener" target="_blank">stats.js</a> — FPS panel</li>
-							<li><a href="https://github.com/georgealways/lil-gui" rel="noopener" target="_blank">lil-gui</a> — preview options UI</li>
-							<li><a href="https://github.com/Offroaders123/NBTify" rel="noopener" target="_blank">nbtify-readonly-typeless</a> — NBT parse for structures</li>
-							<li><a href="https://github.com/Offroaders123/mcbe-leveldb-reader" rel="noopener" target="_blank">mcbe-leveldb-reader</a> — extract structures from worlds</li>
-							<li><a href="https://gildas-lormeau.github.io/zip.js/" rel="noopener" target="_blank">@zip.js/zip.js</a> — zip / pack I/O</li>
+							<li><a href="https://github.com/Offroaders123/NBTify" rel="noopener" target="_blank">nbtify-readonly-typeless</a> — read <code>.mcstructure</code> NBT</li>
+							<li><a href="https://github.com/Offroaders123/NBTify" rel="noopener" target="_blank">nbtify</a> — write <code>.mcstructure</code> NBT</li>
+							<li><a href="https://gildas-lormeau.github.io/zip.js/" rel="noopener" target="_blank">@zip.js/zip.js</a> — zip / <code>.mcpack</code> / <code>.mcaddon</code> ingest (on demand)</li>
+							<li><a href="https://github.com/Offroaders123/mcbe-leveldb-reader" rel="noopener" target="_blank">mcbe-leveldb-reader</a> — <code>.mcworld</code> / <code>.mctemplate</code> import (on demand)</li>
 							<li><a href="https://github.com/mapbox/potpack" rel="noopener" target="_blank">potpack</a> — texture atlas packing</li>
-							<li><a href="https://github.com/TehShrike/deepmerge" rel="noopener" target="_blank">deepmerge</a> — JSON resource merge</li>
-							<li><a href="https://github.com/vthibault/tga.js" rel="noopener" target="_blank">tga-js</a> — TGA texture decode</li>
-							<li><a href="https://github.com/sindresorhus/strip-json-comments" rel="noopener" target="_blank">strip-json-comments</a> — JSONC parse</li>
-							<li>HoloPrint pack UI (separate page) may load <a href="https://supabase.com/" rel="noopener" target="_blank">@supabase/supabase-js</a></li>
-							<li>Loaded via <a href="https://esm.sh/" rel="noopener" target="_blank">esm.sh</a></li>
+							<li><a href="https://github.com/vthibault/tga.js" rel="noopener" target="_blank">tga-js</a> — TGA texture decode (on demand)</li>
+							<li><a href="https://github.com/TehShrike/deepmerge" rel="noopener" target="_blank">deepmerge</a> — overlay resource-pack JSON merge (on demand)</li>
+							<li>CDN via <a href="https://esm.sh/" rel="noopener" target="_blank">esm.sh</a> for the libraries above (except local JSONC comment stripping)</li>
 						</ul>
 					</section>
 					<section>
@@ -349,7 +358,6 @@
 								<a href="https://github.com/Mojang/bedrock-samples" rel="noopener" target="_blank">Mojang/bedrock-samples</a>
 								(block/item textures via jsDelivr CDN)
 							</li>
-							<li>Preview skybox / branding assets from the HoloPrint project tree</li>
 							<li>Minecraft is a trademark of Mojang Studios / Microsoft — not affiliated</li>
 						</ul>
 					</section>

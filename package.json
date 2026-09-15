@@ -6,9 +6,12 @@
 	"type": "module",
 	"scripts": {
 		"lint": "tsc 2>&1 | grep -Ev 'TS2307|TS2694'",
-		"test": "npm run test --workspaces --if-present",
+		"test": "npm run test:viewer",
 		"test:viewer": "npm run test -w viewer_unit",
+		"test:pack": "npm run test -w test_sample_structures",
+		"test:all": "npm run test --workspaces --if-present",
 		"build": "npm run build -w pipeline",
+		"build:pack": "npm run build -w pipeline -- -- --pack",
 		"serve": "npx --yes serve src -p 5173",
 		"serve:dist": "npx --yes serve dist -p 5173",
 		"fill:sign-text": "node scripts/fill-sign-test-text.mjs",
@@ -26,5 +29,9 @@
 	"devDependencies": {
 		"nbtify": "^2.2.0",
 		"nbtify-readonly-typeless": "^1.1.2"
+	},
+	"allowScripts": {
+		"esbuild@0.28.1": true,
+		"puppeteer@25.10.0": true
 	}
 }

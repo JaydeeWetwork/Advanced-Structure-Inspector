@@ -3,41 +3,83 @@ on:
   push:
     branches: [main]
     tags:
-      - 'v[0-9]+.[0-9]+.[0-9]+'
+      - "v[0-9]+.[0-9]+.[0-9]+"
   workflow_dispatch:
-permissions: read-all
+
+# Pages: Settings → Pages → Source → GitHub Actions (required once).
+# GITHUB_TOKEN cannot create a Pages site.
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
 jobs:
-  build:
-    name: Build
+  build-and-deploy:
+    name: Build and Deploy GitHub Pages
     runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4.1.1
-      - name: Setup Node
-        uses: actions/setup-node@v5
-        with:
-          node-version: "22"
-      - name: Build
-        run: |
-          npm ci -w pipeline
-          npm run build -- -- --version=${{ github.ref_name }}
-      - name: Upload files as artifact
-        uses: actions/upload-pages-artifact@v3.0.1
-        with:
-          path: dist/
-  deploy:
-    name: Deploy GitHub Pages
-    needs: build
-    runs-on: ubuntu-latest
-    # Enable when this repo has Pages configured for GitHub Actions
-    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main'
-    permissions:
-      pages: write
-      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Job context
+        run: |
+          echo "event=${{ github.event_name }}"
+          echo "ref=${{ github.ref }}"
+          echo "ref_name=${{ github.ref_name }}"
+          echo "sha=${{ github.sha }}"
+          echo "actor=${{ github.actor }}"
+          echo "run=${{ github.run_id }} attempt=${{ github.run_attempt }}"
+          echo "workspace=$GITHUB_WORKSPACE"
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Show toolchain
+        run: |
+          echo "node $(node -v)"
+          echo "npm $(npm -v)"
+          node -p "process.platform + ' ' + process.arch"
+
+      - name: Install (pipeline workspace)
+        run: |
+          npm ci -w pipeline
+          echo "--- pipeline deps ---"
+          npm ls --prefix pipeline --depth=0 || true
+
+      - name: Build inspector dist
+        run: |
+          echo "Passing --version=${{ github.ref_name }} to pipeline/build.js"
+          npm run build -- -- --version=${{ github.ref_name }}
+
+      - name: Inspect dist
+        run: |
+          echo "=== dist tree ==="
+          find dist -type f | sort
+          echo "=== dist/index.html (href/src) ==="
+          grep -E 'href=|src=' dist/index.html || true
+          echo "=== dist size ==="
+          du -sh dist
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: dist/
+
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4.0.5
+        uses: actions/deploy-pages@v4
+
+      - name: Deployment URL
+        if: success()
+        run: echo "Published ${{ steps.deployment.outputs.page_url }}"

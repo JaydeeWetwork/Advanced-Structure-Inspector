@@ -29,4 +29,4 @@ When you share this project (modified or not):
 
 Full legal text: see `LICENSE`.
 
-Upstream pack terms (HoloPrint `TERMS_OF_USE.md`) apply to packs generated with the pack-generation path; they are not additional mandates for viewer-only features, but still apply if you produce HoloPrint-style packs.
+Upstream pack terms (`src/holoprint/TERMS_OF_USE.md`) apply to packs generated with the pack-generation path; they are not additional mandates for viewer-only features, but still apply if you produce HoloPrint-style packs.

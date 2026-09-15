@@ -3,7 +3,7 @@
  * Positions are converted to structure-local space (world Pos − structure_world_origin).
  */
 
-import { extractInventoryItems } from "./inspectStructure.js";
+import { extractInventoryItems, nbtBool } from "./inspectStructure.js";
 
 /**
  * @typedef {object} PreviewEntity
@@ -14,7 +14,7 @@ import { extractInventoryItems } from "./inspectStructure.js";
  * @property {number} pitchDeg // Bedrock Rotation[1]
  * @property {{ name: string, count: number, slot: number|null, damage: number|null }[]} [items]
  * @property {string|null} [customName]
- * @property {any} [raw]
+ * @property {boolean|null} [enabled]
  */
 
 /**
@@ -137,12 +137,7 @@ export function extractPreviewEntities(data) {
 		// Inventory for hopper/chest minecarts — same robust path as block containers
 		let items = [];
 		try {
-			items = extractInventoryItems(ent).map(it => ({
-				name: it.name,
-				count: it.count,
-				slot: it.slot,
-				damage: it.damage
-			}));
+			items = extractInventoryItems(ent);
 		} catch {
 			items = [];
 		}
@@ -155,7 +150,7 @@ export function extractPreviewEntities(data) {
 			pitchDeg: Number.isFinite(rotArr[1]) ? rotArr[1] : 0,
 			items,
 			customName: customName != null ? String(customName) : null,
-			raw: ent
+			enabled: nbtBool(ent.Enabled ?? ent.enabled)
 		});
 	}
 	return out;

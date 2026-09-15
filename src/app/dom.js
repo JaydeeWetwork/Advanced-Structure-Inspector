@@ -144,6 +144,18 @@ export function initFloatPins() {
 }
 
 /**
+ * Tuck the right details dock unless pinned or the pointer is still over it.
+ * @param {{ force?: boolean }} [opts]
+ */
+export function closeDetailFloatIfIdle(opts = {}) {
+	const el = els?.detailFloat;
+	if (!el) return;
+	if (el.classList.contains("basi-float-pinned")) return;
+	if (!opts.force && el.matches(":hover")) return;
+	el.classList.remove("basi-float-open");
+}
+
+/**
  * @param {string} floatId
  * @param {number} [ms]
  */
@@ -162,16 +174,10 @@ export function flashFloatDock(floatId, ms = 1500) {
 				_floatFlashTimers.delete(floatId);
 				return;
 			}
-			if (!el.matches(":hover") && !el.contains(document.activeElement)) {
-				el.classList.remove("basi-float-open");
+			if (el.matches(":hover")) {
+				el.addEventListener("pointerleave", () => closeDetailFloatIfIdle(), { once: true });
 			} else {
-				const onLeave = () => {
-					if (!el.classList.contains("basi-float-pinned")) {
-						el.classList.remove("basi-float-open");
-					}
-					el.removeEventListener("pointerleave", onLeave);
-				};
-				el.addEventListener("pointerleave", onLeave, { once: true });
+				closeDetailFloatIfIdle();
 			}
 			_floatFlashTimers.delete(floatId);
 		}, ms)

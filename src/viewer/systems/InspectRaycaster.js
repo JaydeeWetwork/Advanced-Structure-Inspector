@@ -97,9 +97,8 @@ export default class InspectRaycaster {
 							pos: ent.pos,
 							items: ent.items ?? [],
 							customName: ent.customName ?? null,
-							raw: ent.raw ?? ent
+							enabled: ent.enabled ?? null
 						};
-					if (!base.raw) base.raw = ent.raw ?? ent;
 					if ((!base.items || !base.items.length) && ent.items?.length) {
 						base.items = ent.items;
 					}
@@ -185,16 +184,19 @@ export default class InspectRaycaster {
 
 	#fallbackBlockInfo(x, y, z, paletteI) {
 		const b = this.ctx.blockPalette?.[paletteI];
+		const be = b?.block_entity_data ?? null;
 		return {
 			x,
 			y,
 			z,
 			name: String(b?.name ?? "unknown").replace(/^minecraft:/, ""),
 			states: b?.states,
-			blockEntityId: b?.block_entity_data?.id ?? null,
-			blockEntity: b?.block_entity_data ?? null,
+			blockEntityId: be?.id != null ? String(be.id) : null,
 			items: [],
-			waterlogName: null
+			waterlogName: null,
+			sign: null,
+			lectern: null,
+			disabledSlots: []
 		};
 	}
 

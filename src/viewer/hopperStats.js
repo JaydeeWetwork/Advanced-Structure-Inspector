@@ -11,6 +11,7 @@
  */
 
 import { readMcstructure } from "./api/structure.js";
+import { nbtBool } from "./inspectStructure.js";
 
 /**
  * @param {string|undefined|null} id
@@ -18,16 +19,6 @@ import { readMcstructure } from "./api/structure.js";
 function stripNs(id) {
 	if (!id || typeof id !== "string") return "";
 	return id.replace(/^minecraft:/, "").toLowerCase();
-}
-
-/**
- * @param {unknown} v
- * @returns {boolean|null} null if unknown
- */
-function asBool(v) {
-	if (v === true || v === 1 || v === "1" || v === "true") return true;
-	if (v === false || v === 0 || v === "0" || v === "false") return false;
-	return null;
 }
 
 /**
@@ -64,9 +55,8 @@ export function computeHopperStats(inspectIndex, rawNbt) {
 			const name = stripNs(b.name);
 			if (name !== "hopper") continue;
 			stats.hoppers++;
-			const tb = asBool(b.states?.toggle_bit);
-			// Also accept powered_bit aliases if ever present
-			const powered = tb ?? asBool(b.states?.powered_bit);
+			const tb = nbtBool(b.states?.toggle_bit);
+			const powered = tb ?? nbtBool(b.states?.powered_bit);
 			if (powered === true) stats.locked++;
 			else stats.unlocked++;
 		}
@@ -85,7 +75,7 @@ export function computeHopperStats(inspectIndex, rawNbt) {
 				const name = stripNs(palette[p]?.name);
 				if (name !== "hopper") continue;
 				stats.hoppers++;
-				const tb = asBool(palette[p]?.states?.toggle_bit);
+				const tb = nbtBool(palette[p]?.states?.toggle_bit);
 				if (tb === true) stats.locked++;
 				else stats.unlocked++;
 			}
@@ -97,8 +87,7 @@ export function computeHopperStats(inspectIndex, rawNbt) {
 		const id = stripNs(e.identifier);
 		if (id !== "hopper_minecart" && id !== "minecart_hopper") continue;
 		stats.hopperMinecarts++;
-		const raw = e.raw || {};
-		const en = asBool(raw.Enabled ?? raw.enabled);
+		const en = e.enabled;
 		if (en === false) stats.hopperMinecartsDisabled++;
 		else if (en === true) stats.hopperMinecartsEnabled++;
 		else stats.hopperMinecartsUnknown++;

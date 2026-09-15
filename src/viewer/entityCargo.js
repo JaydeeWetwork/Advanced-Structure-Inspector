@@ -55,7 +55,7 @@ export function cargoPaletteEntries(entities) {
 
 /**
  * Poly-mesh template (resolved UVs) → BufferGeometry.
- * Same Z-flip + winding as BlockGeoSystem.polyMeshTemplateToBufferGeo.
+ * Same Z-flip + winding as BlockGeoSystem card/volume buffer geos.
  *
  * @param {typeof import("three")} THREE
  * @param {any[]} faces

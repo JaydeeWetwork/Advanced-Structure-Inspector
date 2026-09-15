@@ -9,7 +9,6 @@ import { BUILD_ID } from "../buildId.js";
 import PreviewRenderer from "../PreviewRenderer.js";
 import ResourcePackStack from "../ResourcePackStack.js";
 import EntityGeoMaker from "../EntityGeoMaker.js";
-import LilGui from "../components/LilGui.js";
 import { awaitAllEntries, desparseArray, jsonc, UserError } from "../utils.js";
 import { throwIfAborted, isAbortError } from "./abortUtil.js";
 import {
@@ -27,10 +26,10 @@ import { McstructureCodecError, readMcstructure } from "./api/structure.js";
 import { loadItemUpgradeSchemas } from "./itemUpgrade.js";
 import fetchers from "../fetchers.js";
 
-function ensureLilGuiDefined() {
-	if (!customElements.get("lil-gui")) {
-		customElements.define("lil-gui", LilGui);
-	}
+async function ensureLilGuiDefined() {
+	if (customElements.get("lil-gui")) return;
+	const { default: LilGui } = await import("../components/LilGui.js");
+	customElements.define("lil-gui", LilGui);
 }
 
 function defaultPreviewConfig(partial = {}) {
@@ -45,7 +44,7 @@ function defaultPreviewConfig(partial = {}) {
 		TEXTURE_OUTLINE_COLOR: partial.TEXTURE_OUTLINE_COLOR ?? "#00F",
 		TEXTURE_OUTLINE_OPACITY: partial.TEXTURE_OUTLINE_OPACITY ?? 0.65,
 		SHOW_PREVIEW_SKYBOX: partial.SHOW_PREVIEW_SKYBOX ?? false,
-		SHOW_PREVIEW_WIDGETS: partial.SHOW_PREVIEW_WIDGETS ?? true,
+		SHOW_PREVIEW_WIDGETS: partial.SHOW_PREVIEW_WIDGETS ?? false,
 		SHOW_ENTITIES: partial.SHOW_ENTITIES ?? true,
 		PACK_NAME: partial.PACK_NAME
 	};
@@ -99,12 +98,12 @@ function loadDataFiles(fileNames, signal) {
  * @param {Record<string, any>} config
  * @param {ResourcePackStack} resourcePackStack
  * @param {AbortSignal|null|undefined} signal
- * @param {(msg: string) => void} [onProgress]
+ * @param {(msg: string, fraction?: number) => void} [onProgress]
  */
 async function buildPreviewAssets(structureFile, config, resourcePackStack, signal, onProgress) {
-	const progress = msg => {
+	const progress = (msg, fraction) => {
 		try {
-			onProgress?.(msg);
+			onProgress?.(msg, fraction);
 		} catch {
 			/* ignore */
 		}
@@ -132,13 +131,14 @@ async function buildPreviewAssets(structureFile, config, resourcePackStack, sign
 		resourcePackStack.fetchResource("textures/terrain_texture.json").then(r => jsonc(r)),
 		resourcePackStack.fetchResource("textures/flipbook_textures.json").then(r => jsonc(r))
 	]);
-	progress("Parsing NBT…");
+	progress("Parsing NBT…", 0.08);
 	const nbt = await readStructureNBT(structureFile, signal);
 	const structureSize = normalizeVec3(nbt["size"]);
 	const structure = nbt["structure"];
 	const volume = structureSize[0] * structureSize[1] * structureSize[2];
 	progress(
-		`Size ${structureSize.join("×")} (${volume.toLocaleString()} cells) — loading pack data…`
+		`Size ${structureSize.join("×")} (${volume.toLocaleString()} cells) — loading pack data…`,
+		0.22
 	);
 
 	const { palette: blockPalette, indices: structureIndices } = await tweakBlockPalette(
@@ -172,7 +172,7 @@ async function buildPreviewAssets(structureFile, config, resourcePackStack, sign
 		: extractRenderableEntities(nbt);
 	const cargoEntries = config.SHOW_ENTITIES === false ? [] : cargoPaletteEntries(entities);
 
-	progress(`Building geometry for ${mergedPalette.length} palette entries…`);
+	progress(`Building geometry for ${mergedPalette.length} palette entries…`, 0.42);
 	const entityGeoMaker = new EntityGeoMaker(resourcePackStack);
 	const blockGeoMaker = new BlockGeoMaker(
 		config,
@@ -197,7 +197,7 @@ async function buildPreviewAssets(structureFile, config, resourcePackStack, sign
 
 	const texRefs = blockGeoMaker.textureRefs;
 	const texCount = texRefs?.size ?? texRefs?.length ?? 0;
-	progress(`Packing texture atlas (${texCount} texture refs)…`);
+	progress(`Packing texture atlas (${texCount} texture refs)…`, 0.68);
 	const textureAtlas = new TextureAtlas(
 		config,
 		resourcePackStack,
@@ -244,7 +244,7 @@ async function buildPreviewAssets(structureFile, config, resourcePackStack, sign
 		entities.map(e => e.identifier));
 
 	// Sparse inspect index (block entities only — huge win on large volumes)
-	progress("Indexing containers & entities…");
+	progress("Indexing containers & entities…", 0.82);
 	const itemSchemas = await itemSchemasPromise;
 	const inspectIndex = buildInspectIndex(nbt, { itemSchemas });
 	console.info(
@@ -252,7 +252,7 @@ async function buildPreviewAssets(structureFile, config, resourcePackStack, sign
 		+ (inspectIndex.sparse ? " (sparse)" : "")
 	);
 
-	progress("Assets ready — creating WebGL preview…");
+	progress("Assets ready — creating WebGL preview…", 0.92);
 	return {
 		structureSize,
 		blockPalette: mergedPalette,
@@ -282,10 +282,10 @@ export async function renderStructurePreview(
 	opts = {}
 ) {
 	const signal = opts.signal ?? null;
-	/** @type {(msg: string) => void} */
+	/** @type {(msg: string, fraction?: number) => void} */
 	const onProgress = typeof opts.onProgress === "function" ? opts.onProgress : () => {};
-	ensureLilGuiDefined();
 	const config = defaultPreviewConfig(partialConfig);
+	if (config.SHOW_PREVIEW_WIDGETS) await ensureLilGuiDefined();
 	const files = Array.isArray(structureFiles) ? structureFiles : [structureFiles];
 	const name =
 		config.PACK_NAME
@@ -347,8 +347,8 @@ export async function renderStructurePreview(
 				{
 					...PreviewRenderer.PERFORMANCE_OPTIONS,
 					showSkybox: config.SHOW_PREVIEW_SKYBOX ?? PreviewRenderer.PERFORMANCE_OPTIONS.showSkybox,
-					showFps: config.SHOW_PREVIEW_WIDGETS ?? true,
-					showOptions: config.SHOW_PREVIEW_WIDGETS ?? true,
+					showFps: !!config.SHOW_PREVIEW_WIDGETS,
+					showOptions: !!config.SHOW_PREVIEW_WIDGETS,
 					showEntities: config.SHOW_ENTITIES !== false,
 					entityResourcePackStack: assets.resourcePackStack,
 					// init() meshes these — do not call attachEntities from outside

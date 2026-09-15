@@ -3,9 +3,6 @@
  */
 
 import {
-	extractInventoryItems,
-	extractSignText,
-	extractLecternBook,
 	readRedstoneSignal
 } from "./inspectStructure.js";
 import { largeChestTitle } from "./doubleChest.js";
@@ -13,8 +10,11 @@ import { describeSignPlacement } from "./signPlacement.js";
 import {
 	formatSignInspectDump,
 	renderSignTweakControls,
-	setSignDebugFocus
+	setSignDebugFocus,
+	signDebugEnabled
 } from "./signDebug.js";
+
+export { parseDisabledSlots } from "./inspectStructure.js";
 
 /**
  * @typedef {{ name: string, count: number, slot: number|null, damage: number|null }} ItemStack
@@ -177,50 +177,6 @@ export function readComposterFillLevel(states) {
 }
 
 /**
- * Parse crafter disabled slots from block entity.
- * Bedrock/Java may store as int array of slot indexes or a bitmask.
- * @param {any} blockEntity
- * @returns {Set<number>}
- */
-export function parseDisabledSlots(blockEntity) {
-	/** @type {Set<number>} */
-	const disabled = new Set();
-	if (!blockEntity || typeof blockEntity !== "object") return disabled;
-
-	const raw =
-		blockEntity.disabled_slots
-		?? blockEntity.disabledSlots
-		?? blockEntity.DisabledSlots
-		?? null;
-
-	if (raw == null) return disabled;
-
-	// Int array of slot indexes
-	if (Array.isArray(raw) || ArrayBuffer.isView(raw)) {
-		for (const v of raw) {
-			const n = Number(v);
-			if (Number.isFinite(n) && n >= 0 && n < 9) disabled.add(n);
-		}
-		return disabled;
-	}
-	if (typeof raw === "object" && Array.isArray(raw.value)) {
-		for (const v of raw.value) {
-			const n = Number(v);
-			if (Number.isFinite(n) && n >= 0 && n < 9) disabled.add(n);
-		}
-		return disabled;
-	}
-	// Bitmask integer (bit i = slot i disabled)
-	const mask = Number(raw);
-	if (Number.isFinite(mask) && mask > 0) {
-		for (let i = 0; i < 9; i++) {
-			if (mask & (1 << i)) disabled.add(i);
-		}
-	}
-	return disabled;
-}
-
-/**
  * Map items into fixed slots.
  * @param {ItemStack[]} items
  * @param {number} slotCount
@@ -267,8 +223,6 @@ export function renderContainerUi(hit) {
 	let titleSource = {};
 	/** @type {ItemStack[]} */
 	let items = [];
-	/** @type {any} */
-	let blockEntity = null;
 	let lockedHint = "";
 
 	/** @type {Record<string, unknown>|null} */
@@ -281,16 +235,8 @@ export function renderContainerUi(hit) {
 			blockEntityId: b.blockEntityId,
 			doubleChest: b.doubleChest || null
 		};
-		blockEntity = b.blockEntity;
 		blockStates = b.states && typeof b.states === "object" ? b.states : null;
-		if (b.doubleChest && Array.isArray(b.doubleItems)) {
-			items = b.doubleItems;
-		} else {
-			// Prefer live re-parse from block entity NBT so we pick up nested shapes
-			const fromBe = b.blockEntity ? extractInventoryItems(b.blockEntity) : [];
-			items = fromBe.length ? fromBe : (b.items || []);
-		}
-		// Hopper lock from block states (Bedrock: toggle_bit)
+		items = b.doubleChest && Array.isArray(b.doubleItems) ? b.doubleItems : (b.items || []);
 		if (String(b.name || "").replace(/^minecraft:/, "") === "hopper") {
 			const tb = b.states?.toggle_bit;
 			const locked = tb === true || tb === 1 || tb === "1" || tb === "true";
@@ -299,15 +245,9 @@ export function renderContainerUi(hit) {
 	} else if (hit.kind === "entity" && hit.entity) {
 		const e = hit.entity;
 		titleSource = { name: e.identifier, identifier: e.identifier };
-		// Always re-parse from raw entity NBT (hopper/chest minecart Items, nested forms)
-		const raw = e.raw || e;
-		const fromRaw = extractInventoryItems(raw);
-		items = fromRaw.length ? fromRaw : (e.items || []);
-		// Hopper minecart enable flag if present
-		const en = raw.Enabled ?? raw.enabled;
-		if (String(e.identifier || "").includes("hopper") && en != null) {
-			const on = en === true || en === 1 || en === "1";
-			lockedHint = on ? "Enabled" : "Disabled (locked)";
+		items = e.items || [];
+		if (String(e.identifier || "").includes("hopper") && e.enabled != null) {
+			lockedHint = e.enabled ? "Enabled" : "Disabled (locked)";
 		}
 	} else {
 		root.classList.add("mc-inv-empty");
@@ -320,7 +260,9 @@ export function renderContainerUi(hit) {
 	if (kind === "double_chest") {
 		layout.title = largeChestTitle(titleSource.name);
 	}
-	const disabled = kind === "crafter" ? parseDisabledSlots(blockEntity) : new Set();
+	const disabled = kind === "crafter"
+		? new Set(hit.kind === "block" ? (hit.block?.disabledSlots ?? []) : [])
+		: new Set();
 	const slots = fillSlots(items, layout.slotCount);
 
 	// Composter fill badge (Bedrock: composter_fill_level 0–8)
@@ -393,9 +335,9 @@ export function renderContainerUi(hit) {
 	} else if (layout.layout === "composter") {
 		body.appendChild(renderComposterLayout(blockStates));
 	} else if (layout.layout === "sign") {
-		body.appendChild(renderSignLayout(blockEntity, hit.kind === "block" ? hit.block : null));
+		body.appendChild(renderSignLayout(hit.kind === "block" ? hit.block : null));
 	} else if (layout.layout === "lectern") {
-		body.appendChild(renderLecternLayout(blockEntity));
+		body.appendChild(renderLecternLayout(hit.kind === "block" ? hit.block : null));
 	} else if (layout.layout === "redstone") {
 		body.appendChild(renderRedstoneLayout(blockStates));
 	} else if (layout.layout === "double_chest") {
@@ -715,13 +657,12 @@ function renderComposterLayout(states) {
 
 /**
  * Sign face text panel + placement dump for overlay QA.
- * @param {any} blockEntity
  * @param {import("./inspectStructure.js").InspectBlock|null} [block]
  */
-function renderSignLayout(blockEntity, block = null) {
+function renderSignLayout(block = null) {
 	const wrap = document.createElement("div");
 	wrap.className = "mc-inv-text-panel mc-inv-sign";
-	const data = extractSignText(blockEntity);
+	const data = block?.sign;
 	if (!data) {
 		wrap.textContent = "No sign text in block entity.";
 		return wrap;
@@ -729,7 +670,8 @@ function renderSignLayout(blockEntity, block = null) {
 
 	if (block) {
 		const dump = renderSignPlacementDump(block);
-		wrap.appendChild(renderSignTweakControls(block, { dumpEl: dump }));
+		const hud = renderSignTweakControls(block, { dumpEl: dump });
+		if (hud) wrap.appendChild(hud);
 		wrap.appendChild(dump);
 	}
 
@@ -774,7 +716,7 @@ function renderSignLayout(blockEntity, block = null) {
  * @param {import("./inspectStructure.js").InspectBlock} block
  */
 function renderSignPlacementDump(block) {
-	setSignDebugFocus(block, block.name);
+	if (signDebugEnabled()) setSignDebugFocus(block, block.name);
 	const box = document.createElement("pre");
 	box.className = "mc-sign-debug";
 	box.textContent = formatSignInspectDump(block);
@@ -783,12 +725,12 @@ function renderSignPlacementDump(block) {
 
 /**
  * Lectern book reader panel.
- * @param {any} blockEntity
+ * @param {import("./inspectStructure.js").InspectBlock|null} [block]
  */
-function renderLecternLayout(blockEntity) {
+function renderLecternLayout(block = null) {
 	const wrap = document.createElement("div");
 	wrap.className = "mc-inv-text-panel mc-inv-lectern";
-	const data = extractLecternBook(blockEntity);
+	const data = block?.lectern;
 	if (!data) {
 		wrap.textContent = "No lectern data.";
 		return wrap;

@@ -100,6 +100,22 @@ export function defaultMatchBlock(stringifiedBlock, block) {
 	return true;
 }
 
+/**
+ * Split 0-thickness card faces from volumetric faces. Preview instances each
+ * group with its own material (FrontSide volume, DoubleSide cards).
+ * @param {any[]|null|undefined} faces
+ * @returns {{ volume: any[], cards: any[] }}
+ */
+export function partitionTemplateFaces(faces) {
+	const volume = [];
+	const cards = [];
+	for (const face of faces || []) {
+		if (face?.doubleSide) cards.push(face);
+		else volume.push(face);
+	}
+	return { volume, cards };
+}
+
 export default class BlockGeoSystem {
 	/**
 	 * @param {import("./PreviewContext.js").default} ctx
@@ -114,27 +130,48 @@ export default class BlockGeoSystem {
 	#dummy;
 
 	/**
+	 * Volume geo (FrontSide) and card geo (0-thickness, DoubleSide) for one palette entry.
 	 * @param {number} polyMeshTemplatePaletteI
-	 * @returns {import("three").BufferGeometry}
+	 * @returns {{ volume: import("three").BufferGeometry|null, cards: import("three").BufferGeometry|null }}
 	 */
-	polyMeshTemplateToBufferGeo(polyMeshTemplatePaletteI) {
+	polyMeshTemplateToBufferGeos(polyMeshTemplatePaletteI) {
+		const { volume, cards } = partitionTemplateFaces(
+			this.ctx.polyMeshTemplatePalette?.[polyMeshTemplatePaletteI]
+		);
+		return {
+			volume: this.#facesToBufferGeo(volume),
+			cards: this.#facesToBufferGeo(cards)
+		};
+	}
+
+	/**
+	 * Z-flip + reversed winding, same as the previous PolyMeshMaker preview path.
+	 * @param {any[]|null|undefined} faces
+	 * @returns {import("three").BufferGeometry|null}
+	 */
+	#facesToBufferGeo(faces) {
 		const THREE = this.ctx.THREE;
-		const maker = this.ctx.polyMeshMaker;
-		maker.add(polyMeshTemplatePaletteI);
-		const polyMesh = maker.export();
-		maker.clear();
+		if (!THREE || !faces?.length) return null;
+		const ordered = faces.length > 1
+			? [...faces].sort((a, b) => (a.transparency ?? 0) - (b.transparency ?? 0))
+			: faces;
 		let i = 0;
 		const positions = [], normals = [], uvs = [], indices = [];
-		polyMesh["polys"].forEach(face => {
-			face.forEach(([posIndex, normalIndex, uvIndex]) => {
-				const pos = polyMesh.positions[posIndex];
+		for (const face of ordered) {
+			const verts = face.vertices;
+			if (!Array.isArray(verts) || verts.length < 4) continue;
+			const n = face.normal ?? [0, 1, 0];
+			for (const v of verts) {
+				const pos = v.pos ?? [0, 0, 0];
+				const uv = v.uv ?? [0, 0];
 				positions.push(pos[0], pos[1], 16 - pos[2]);
-				normals.push(...polyMesh.normals[normalIndex]);
-				uvs.push(polyMesh.uvs[uvIndex][0], 1 - polyMesh.uvs[uvIndex][1]);
-			});
+				normals.push(n[0], n[1], n[2]);
+				uvs.push(uv[0], 1 - uv[1]);
+			}
 			indices.push(i + 2, i + 1, i, i + 2, i, i + 3);
-			i += face.length;
-		});
+			i += verts.length;
+		}
+		if (!positions.length) return null;
 		const geo = new THREE.BufferGeometry();
 		geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(positions), 3));
 		geo.setAttribute("normal", new THREE.BufferAttribute(new Float32Array(normals), 3));

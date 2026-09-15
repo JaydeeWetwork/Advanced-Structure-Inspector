@@ -97,8 +97,8 @@ export default class LayerMeshSystem {
 			}
 			if (!structPositions.length) continue;
 
-			const geo = pool.getOrCreateGeo(paletteI, () =>
-				this.ctx.geo.polyMeshTemplateToBufferGeo(paletteI)
+			const geos = pool.getOrCreateGeos(paletteI, () =>
+				this.ctx.geo.polyMeshTemplateToBufferGeos(paletteI)
 			);
 
 			const isTranslucent = this.#translucentByPalette[paletteI]
@@ -117,27 +117,37 @@ export default class LayerMeshSystem {
 				const palBlock = this.ctx.blockPalette?.[paletteI];
 				const largeChest = String(palBlock?.basi_block_shape ?? "").startsWith("chest_large");
 				const mirrorX = !isFloor && doubleChestNeedsPreviewXMirror(palBlock);
-				let material = isFloor
+				let volumeMat = isFloor
 					? (pool.solidFloorMat ?? pool.regularMat)
 					: (isTranslucent ? pool.transparentMat : pool.regularMat);
-				if (largeChest) material = pool.ensureChestMirrorMat(this.ctx.THREE) ?? material;
+				if (largeChest) volumeMat = pool.ensureChestMirrorMat(THREE) ?? volumeMat;
 				const threePositions = list.map(([x, yy, z]) => [-16 * x - 16, 16 * yy, -16 * z - 16]);
-				const mesh = this.ctx.geo.instanceBufferGeoAtPositions(geo, threePositions, material, {
-					mirrorX
-				});
-				if (isTranslucent && !isFloor) mesh.renderOrder = threePositions.length;
-				if (isFloor) mesh.renderOrder = -1000;
-				mesh.castShadow = useShadows;
-				mesh.receiveShadow = useShadows;
-				mesh.frustumCulled = selected == null;
-				mesh.userData.includeInGlbExport = true;
-				mesh.userData.basiBlock = true;
-				mesh.userData.basiPaletteI = paletteI;
-				mesh.userData.basiBlockPositions = list;
-				mesh.userData.layerY = y;
-				mesh.userData.basiFloorLayer = isFloor;
-				mesh.userData.basiPickable = !isFloor;
-				this.getLayerGroup(y).add(mesh);
+				const addMesh = (geo, material) => {
+					if (!geo || !material) return;
+					const mesh = this.ctx.geo.instanceBufferGeoAtPositions(geo, threePositions, material, {
+						mirrorX
+					});
+					if (isTranslucent && !isFloor) mesh.renderOrder = threePositions.length;
+					if (isFloor) mesh.renderOrder = -1000;
+					mesh.castShadow = useShadows;
+					mesh.receiveShadow = useShadows;
+					mesh.frustumCulled = selected == null;
+					mesh.userData.includeInGlbExport = true;
+					mesh.userData.basiBlock = true;
+					mesh.userData.basiPaletteI = paletteI;
+					mesh.userData.basiBlockPositions = list;
+					mesh.userData.layerY = y;
+					mesh.userData.basiFloorLayer = isFloor;
+					mesh.userData.basiPickable = !isFloor;
+					this.getLayerGroup(y).add(mesh);
+				};
+				addMesh(geos.volume, volumeMat);
+				if (geos.cards) {
+					const cardMat = isTranslucent && !isFloor
+						? pool.transparentMat
+						: (pool.ensureCardDoubleMat(THREE) ?? volumeMat);
+					addMesh(geos.cards, cardMat);
+				}
 			}
 		}
 

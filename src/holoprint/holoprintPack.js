@@ -1,7 +1,6 @@
 import { extractStructureFilesFromMcworld } from "mcbe-leveldb-reader";
 import { selectEl, downloadFile, sleep, selectEls, loadTranslationLanguage, translate, getStackTrace, random, UserError, joinOr, conditionallyGroup, groupByFileExtension, addFilesToFileInput, setFileInputFiles, dispatchInputEvents, getAllChildren, jsonc, toImage, removeFalsies, clearCacheStorage, onEvent, onEventAndNow, cast, clearFileInput, html, removeFileExtension, tuple, assertAs } from "../utils.js";
 import * as HoloPrint from "./HoloPrint.js";
-import SupabaseLogger from "./SupabaseLogger.js";
 
 import ResourcePackStack from "../ResourcePackStack.js";
 import LocalResourcePack from "../LocalResourcePack.js";
@@ -15,9 +14,6 @@ import ResizingInput from "./components/ResizingInput.js";
 
 const IN_PRODUCTION = false;
 const ACTUAL_CONSOLE_LOG = false;
-
-const supabaseProjectUrl = "https://gnzyfffwvulwxbczqpgl.supabase.co";
-const supabaseApiKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImduenlmZmZ3dnVsd3hiY3pxcGdsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MjMwMjE3NzgsImV4cCI6MjAzODU5Nzc3OH0.AWMhFcP3PiMD3dMC_SeIVuPx128KVpgfkZ5qBStDuVw";
 
 let dropFileNotice;
 
@@ -43,8 +39,6 @@ let completedPacksCont;
 let logger;
 let languageSelector;
 let defaultResourcePackStack = new ResourcePackStack();
-
-let supabaseLogger;
 
 let texturePreviewImageCont;
 let texturePreviewImage;
@@ -689,19 +683,7 @@ async function makePack(structureFiles, localResourcePacks) {
 		let { pack } = res;
 		infoButton.dataset.translate = "download";
 		infoButton.classList.add("completed");
-		let hasLoggedPackCreation = false;
 		infoButton.onclick = () => {
-			if(!hasLoggedPackCreation && IN_PRODUCTION) {
-				hasLoggedPackCreation = true;
-				void async function() {
-					supabaseLogger ??= await SupabaseLogger.new(supabaseProjectUrl, supabaseApiKey);
-					try {
-						await supabaseLogger.recordPackCreation(structureFiles);
-					} catch(e) {
-						console.error(e);
-					}
-				}();
-			}
 			downloadFile(pack);
 		};
 	} else {

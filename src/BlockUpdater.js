@@ -7,9 +7,7 @@ import {
 	schemaFilenamesToApply
 } from "./viewer/blockUpgradeApply.js";
 
-const SCHEMA_LIST_URL = new URL("./data/blockUpgradeSchemaList.json", import.meta.url);
-
-/** Shared across every BlockUpdater instance (ASI preview + HoloPrint). */
+/** Shared across every BlockUpdater instance. */
 /** @type {Record<string, BlockUpdateSchemaSkeleton[]>} */
 const schemaIndex = {};
 /** @type {Map<string, Promise<BlockUpdateSchema>>} */
@@ -26,8 +24,12 @@ async function ensureSchemaIndex() {
 		return;
 	}
 	indexPromise ??= (async () => {
+		const url = new URL("data/blockUpgradeSchemaList.json", location.href).href;
+		const res = await fetch(url);
+		if (!res.ok) throw new Error(`${url} → HTTP ${res.status}`);
 		/** @type {BlockUpdateSchemaSkeleton[]} */
-		let schemaList = await fetch(SCHEMA_LIST_URL).then(res => res.json());
+		let schemaList = await res.json();
+		if (!Array.isArray(schemaList)) schemaList = [];
 		schemaList.forEach(schemaSkeleton => {
 			let schemaVersion = packedSchemaVersion(schemaSkeleton);
 			schemaIndex[schemaVersion] ??= [];

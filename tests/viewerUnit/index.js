@@ -616,6 +616,27 @@ describe("inspect pick (first classified hit)", async () => {
 	});
 });
 
+describe("partitionTemplateFaces", async () => {
+	const { partitionTemplateFaces } = await import("../../src/viewer/systems/BlockGeoSystem.js");
+
+	it("splits doubleSide cards from volumetric faces", () => {
+		const faces = [
+			{ normal: [0, 1, 0] },
+			{ normal: [1, 0, 0], doubleSide: true },
+			{ normal: [0, 0, 1], doubleSide: false }
+		];
+		const { volume, cards } = partitionTemplateFaces(faces);
+		assert.equal(volume.length, 2);
+		assert.equal(cards.length, 1);
+		assert.equal(cards[0].normal[0], 1);
+	});
+
+	it("treats empty/missing templates as no geos", () => {
+		assert.deepEqual(partitionTemplateFaces(null), { volume: [], cards: [] });
+		assert.deepEqual(partitionTemplateFaces([]), { volume: [], cards: [] });
+	});
+});
+
 describe("scanStructureBlocks", async () => {
 	const { scanStructureBlocks } = await import("../../src/viewer/systems/BlockGeoSystem.js");
 
@@ -714,6 +735,18 @@ describe("preview systems", async () => {
 		assert.equal(pool.isSharedMaterial({}), false);
 		const policy = pool.disposePolicy();
 		assert.equal(policy.isSharedMaterial(fakeMat), true);
+	});
+
+	it("PreviewResourcePool caches volume and card geos separately", () => {
+		const pool = new PreviewResourcePool();
+		const volume = { id: "vol" };
+		const cards = { id: "cards" };
+		const other = { id: "other" };
+		const geos = pool.getOrCreateGeos(3, () => ({ volume, cards }));
+		assert.equal(pool.getOrCreateGeos(3, () => ({ volume: other, cards: other })), geos);
+		assert.equal(pool.isSharedGeometry(volume), true);
+		assert.equal(pool.isSharedGeometry(cards), true);
+		assert.equal(pool.isSharedGeometry(other), false);
 	});
 
 	it("PreviewSessionManager parks and restores order", () => {
@@ -1294,11 +1327,7 @@ describe("itemFrameItems", async () => {
 			name: "frame",
 			states: { facing_direction: 3 },
 			blockEntityId: "ItemFrame",
-			blockEntity: {
-				id: "ItemFrame",
-				Item: { Name: "minecraft:diamond", Count: 1 },
-				ItemRotation: 90
-			},
+			itemRotation: 90,
 			items: [{ name: "diamond", count: 1, slot: null, damage: 0 }]
 		});
 		blocks.set("0,1,0", {
@@ -1306,19 +1335,15 @@ describe("itemFrameItems", async () => {
 			name: "glow_frame",
 			states: { facing_direction: 2 },
 			blockEntityId: "GlowItemFrame",
-			blockEntity: {
-				id: "GlowItemFrame",
-				Item: { Name: "minecraft:apple", Count: 1 },
-				ItemRotation: 0
-			},
-			items: []
+			itemRotation: 0,
+			items: [{ name: "apple", count: 1, slot: null, damage: 0 }]
 		});
 		blocks.set("2,0,0", {
 			x: 2, y: 0, z: 0,
 			name: "frame",
 			states: { facing_direction: 2 },
 			blockEntityId: "ItemFrame",
-			blockEntity: { id: "ItemFrame" },
+			itemRotation: 0,
 			items: []
 		});
 		const pl = extractItemFramePlacements({ blocks, entities: [] });
@@ -1682,6 +1707,8 @@ describe("inventory extract (minecarts / nbtify shapes)", async () => {
 		assert.equal(left.doubleItems.find(i => i.name === "dirt")?.slot, 0);
 		assert.equal(left.doubleItems.find(i => i.name === "diamond")?.slot, 27);
 		assert.equal(right.doubleItems.find(i => i.name === "diamond")?.slot, 27);
+		assert.equal(left.blockEntity, undefined);
+		assert.equal("raw" in left, false);
 	});
 
 	it("asList handles arrays, value wrappers, and numeric-key maps", () => {
@@ -2292,6 +2319,8 @@ describe("preview load cache / preload", () => {
 		assert.match(atlas, /mapPool/);
 		const pool = readFileSync(join(root, "src/viewer/systems/PreviewResourcePool.js"), "utf8");
 		assert.match(pool, /materialSide === "front"/);
+		assert.match(pool, /getOrCreateGeos/);
+		assert.doesNotMatch(pool, /getOrCreateGeo\(/);
 		const renderer = readFileSync(join(root, "src/PreviewRenderer.js"), "utf8");
 		assert.match(renderer, /materialSide: "front"/);
 		assert.match(renderer, /logarithmicDepthBuffer: true/);
@@ -2299,8 +2328,13 @@ describe("preview load cache / preload", () => {
 		assert.match(geoMaker, /#templateMemo/);
 		const layer = readFileSync(join(root, "src/viewer/systems/LayerMeshSystem.js"), "utf8");
 		assert.match(layer, /doubleChestNeedsPreviewXMirror/);
+		assert.match(layer, /polyMeshTemplateToBufferGeos/);
+		assert.match(layer, /getOrCreateGeos/);
+		assert.doesNotMatch(layer, /paperThin/);
+		assert.doesNotMatch(layer, /some\(f => f\.doubleSide\)/);
 		const geoSys = readFileSync(join(root, "src/viewer/systems/BlockGeoSystem.js"), "utf8");
 		assert.match(geoSys, /mirrorX/);
+		assert.match(geoSys, /partitionTemplateFaces/);
 	});
 
 	it("TextureAtlas caches decoded ImageData; ResourcePackStack caches vanilla pack JSON", () => {
@@ -2336,6 +2370,11 @@ describe("preview load cache / preload", () => {
 		assert.match(codec, /compression:\s*null/);
 		assert.match(codec, /endian:\s*"little"/);
 		assert.match(codec, /NBT\.read\(buffer,\s*MCSTRUCTURE_READ_OPTIONS\)/);
+		assert.match(codec, /writeMcstructure/);
+		assert.doesNotMatch(codec, /ZIP_TOO_MANY_ENTRIES/);
+		const fill = readFileSync(join(root, "scripts/fill-sign-test-text.mjs"), "utf8");
+		assert.match(fill, /writeMcstructure/);
+		assert.doesNotMatch(fill, /NBT\.write\(root\)/);
 		for (const rel of [
 			"src/viewer/parseStructure.js",
 			"src/viewer/structurePreview.js",
@@ -2345,6 +2384,10 @@ describe("preview load cache / preload", () => {
 		]) {
 			const src = readFileSync(join(root, rel), "utf8");
 			assert.match(src, /readMcstructure/);
+			if (rel.endsWith("HoloPrint.js")) {
+				assert.match(src, /from \"..\/viewer\/palette.js\"/);
+				assert.doesNotMatch(src, /async function tweakBlockPalette/);
+			}
 			assert.doesNotMatch(src, /NBT\.read\(arrayBuffer\)/);
 			assert.doesNotMatch(src, /NBT\.read\(ab\)/);
 			assert.doesNotMatch(src, /NBT\.read\(arrayBuffer,\s*options\)/);
@@ -2443,6 +2486,20 @@ describe("mcstructureCodec", async () => {
 		buf[8] = 0x0a;
 		assert.throws(() => gateMcstructureBytes(buf), e => e.code === "STRUCTURE_LEVEL_DAT");
 	});
+
+	it("round-trips hoppers.mcstructure through writeMcstructure", async () => {
+		const p = join(root, "tests/sampleStructures/hoppers.mcstructure");
+		if (!existsSync(p)) return;
+		const { writeMcstructure } = await import("../../src/viewer/core/nbt/mcstructureCodec.js");
+		const buf = readFileSync(p);
+		const { nbt } = await readMcstructure(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength));
+		const out = await writeMcstructure(nbt);
+		const { nbt: again } = await readMcstructure(out);
+		assert.equal(isNBTValidMcstructure(again), true);
+		assert.ok(again.size instanceof Int32Array);
+		assert.ok(again.structure_world_origin instanceof Int32Array);
+		assert.equal(again.size.length, 3);
+	});
 });
 
 describe("preview face winding (FrontSide)", () => {
@@ -2519,6 +2576,38 @@ describe("preview face winding (FrontSide)", () => {
 			);
 		}
 	});
+
+	it("tags only 0-thickness cubes as doubleSide", async () => {
+		const BlockGeoMaker = (await import("../../src/BlockGeoMaker.js")).default;
+		const { partitionTemplateFaces } = await import("../../src/viewer/systems/BlockGeoSystem.js");
+		const maker = new BlockGeoMaker(
+			{ SCALE: 1, IGNORED_BLOCKS: [] },
+			{ entityModelToCubes: async () => [] },
+			await loadJsonc("src/data/blockShapes.json"),
+			await loadJsonc("src/data/blockShapeGeos.json"),
+			await loadJsonc("src/data/blockStateDefinitions.json"),
+			await loadJsonc("src/data/blockEigenvariants.json")
+		);
+		const palette = [
+			{ name: "stone", states: {} },
+			{ name: "deadbush", states: {} },
+			{ name: "unpowered_repeater", states: { repeater_delay: 0, direction: 0 } },
+			{ name: "redstone_torch", states: { torch_facing_direction: "top" } }
+		];
+		const { templates } = await maker.makePolyMeshTemplates(palette);
+		const atlas = stubAtlas(maker.textureRefs.size);
+		const split = templates.map((t, i) => {
+			const resolved = BlockGeoMaker.resolveTemplateFaceUvs(structuredClone(t), atlas);
+			const { volume, cards } = partitionTemplateFaces(resolved);
+			return { name: palette[i].name, volume: volume.length, cards: cards.length };
+		});
+		assert.equal(split[0].cards, 0, "stone is volumetric");
+		assert.ok(split[0].volume > 0, "stone has volume faces");
+		assert.equal(split[1].volume, 0, "deadbush is all cards");
+		assert.ok(split[1].cards > 0, "deadbush has card faces");
+		assert.ok(split[2].volume > 0 && split[2].cards > 0, "repeater is mixed");
+		assert.ok(split[3].volume > 0 && split[3].cards > 0, "redstone torch is mixed");
+	});
 });
 
 describe("boot leftover", () => {
@@ -2533,6 +2622,10 @@ describe("boot leftover", () => {
 		assert.match(boot, /preloadVanillaAssets/);
 		const updater = readFileSync(join(root, "src/BlockUpdater.js"), "utf8");
 		assert.match(updater, /const schemaLoads = new Map/);
+		assert.match(updater, /data\/blockUpgradeSchemaList\.json/);
+		assert.match(updater, /location\.href/);
+		assert.doesNotMatch(updater, /import\.meta\.url/);
+		assert.doesNotMatch(updater, /schemaListHref/);
 		assert.doesNotMatch(updater, /getSharedBlockUpdater/);
 		const palette = readFileSync(join(root, "src/viewer/palette.js"), "utf8");
 		assert.match(palette, /new BlockUpdater\s*\(/);

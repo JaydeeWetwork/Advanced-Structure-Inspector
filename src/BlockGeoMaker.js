@@ -273,7 +273,6 @@ export default class BlockGeoMaker {
 					if("rot" in cube) {
 						if("rot" in copiedCube) {
 							// maths for combining both rotations is hard so we handle it differently and create a list of extra rotations.
-							// HoloPrint.js will create a wrapper bone for each rotation
 							copiedCube["extra_rots"] ??= [];
 							copiedCube["extra_rots"].unshift({
 								"rot": cube["rot"],
@@ -334,8 +333,9 @@ export default class BlockGeoMaker {
 		cubes.forEach(cube => {
 			let uv = this.#calculateUv(cube);
 			
-			// 0-size in an axis: keep one face. Preview materials are FrontSide, so
-			// that face must wind toward the usual view (up for floors, not down).
+			// 0-size in an axis: keep one face and tag it doubleSide. HoloPrint
+			// stays single-faced (DoubleSide materials). Preview compiles those
+			// faces into a separate card geo so volumetric faces stay FrontSide.
 			if(cube.w == 0) {
 				["east", "down", "up", "north", "south"].forEach(faceName => delete uv[faceName]);
 			}
@@ -367,6 +367,7 @@ export default class BlockGeoMaker {
 			/** @type {(PolyMeshTemplateFace & { fullbright: boolean })[]} */
 			let faces = [];
 			let textureSize = cube["texture_size"] ?? [16, 16];
+			const paperThin = cube.w == 0 || cube.h == 0 || cube.d == 0;
 			// add generic keys to all faces, and convert texture references into indices
 			Object.entries(uv).forEach(([faceName, face]) => {
 				let isSideFace = ["west", "east", "north", "south"].includes(faceName);
@@ -463,7 +464,8 @@ export default class BlockGeoMaker {
 					"normal": this.#getSurfaceNormal(vertices),
 					"textureRefI": this.textureRefs.indexOf(textureRef),
 					"vertices": vertices,
-					"fullbright": Boolean(cube["fullbright"])
+					"fullbright": Boolean(cube["fullbright"]),
+					"doubleSide": paperThin
 				});
 			});
 			if(faces.length == 1 && !("culled_faces" in cube)) {
@@ -1147,6 +1149,7 @@ export default class BlockGeoMaker {
 			return {
 				"normal": face["normal"],
 				"transparency": imageUv["transparency"],
+				"doubleSide": !!face["doubleSide"],
 				"vertices": vertices.map(vertex => ({
 					"pos": vertex["pos"],
 					"uv": tuple([

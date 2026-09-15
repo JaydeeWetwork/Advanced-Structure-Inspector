@@ -1,5 +1,5 @@
 /**
- * Structure codec API (P0/P1 nbtify gate).
+ * Structure codec API (nbtify gate).
  */
 
 export {
@@ -11,5 +11,6 @@ export {
 	isNBTValidMcstructure,
 	assertMcstructureLayers,
 	assertNbtQuotas,
-	readMcstructure
+	readMcstructure,
+	writeMcstructure
 } from "../core/nbt/mcstructureCodec.js";

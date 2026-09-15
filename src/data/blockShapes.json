@@ -85,8 +85,10 @@
 		"redstone_wire": "redstone_dust",
 		"powered_repeater": "repeater",
 		"unpowered_repeater": "repeater",
+		"repeater": "repeater",
 		"powered_comparator": "comparator",
 		"unpowered_comparator": "comparator",
+		"comparator": "comparator",
 		"observer": "observer", // top face is rotated
 		"piston": "piston<textures/entity/pistonarm/pistonArm>",
 		"sticky_piston": "piston<textures/entity/pistonarm/pistonArmSticky>",
@@ -133,8 +135,9 @@
 		"torch": "torch",
 		"soul_torch": "torch",
 		"copper_torch": "torch",
-		"unlit_redstone_torch": "torch",
-		"redstone_torch": "redstone_torch", // a different block shape is needed for the "glow" outline.
+		"unlit_redstone_torch": "redstone_torch",
+		"lit_redstone_torch": "redstone_torch",
+		"redstone_torch": "redstone_torch",
 		
 		// flowers
 		"fern": "cross_texture",

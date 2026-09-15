@@ -5,6 +5,7 @@
 import { els, primaryPreview, session } from "../app/state.js";
 import { escapeHtml } from "../app/dom.js";
 import { bindFloatingWindow } from "./floatingWindow.js";
+import { updatePreviewLoading, removePreviewLoading } from "./previewLoading.js";
 
 /** @type {ReturnType<typeof bindFloatingWindow>|null} */
 let inspectWin = null;
@@ -75,19 +76,16 @@ export function showPreviewPlaceholder(msg, opts = {}) {
 			+ "Use force:true only when intentionally replacing a preview."
 		);
 		// Still surface the message without destroying the view
-		const existing = host.querySelector(".basi-preview-loading-msg, .meta");
-		if (existing && !host.querySelector("canvas")) {
-			existing.textContent = msg;
-		}
+		updatePreviewLoading(host, { msg });
 		return;
 	}
 
 	host.replaceChildren();
-	const p = document.createElement("p");
-	p.className = "meta";
-	p.style.cssText = "padding:12px;color:#ccc;margin:0";
-	p.textContent = msg;
-	host.appendChild(p);
+	updatePreviewLoading(host, {
+		msg,
+		fraction: opts.error ? 0 : 0.04,
+		error: !!opts.error
+	});
 	clearInspectPanel();
 	updateLayerBadge(null);
 }

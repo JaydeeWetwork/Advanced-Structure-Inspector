@@ -1,4 +1,7 @@
-![HoloPrint](images/banner.png)
+# HoloPrint（上游说明，非 ASI）
+
+截图目录已从本仓库根目录移除。原图见 [HoloPrint](https://github.com/SuperLlama88888/holoprint)。
+
 
 [![English](https://img.shields.io/badge/Language-English-blue)](README.md)
 ### 关于

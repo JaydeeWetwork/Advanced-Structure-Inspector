@@ -215,6 +215,7 @@ body.basi-app .basi-float .basi-list-header,
 body.basi-app .basi-float .basi-material-header,
 body.basi-app .basi-float .basi-layer-toolbar,
 body.basi-app .basi-default-cam-label,
+body.basi-app .basi-cat-assign-label,
 body.basi-app .basi-meta-field-label,
 body.basi-app .basi-collapse-header {
 	background: transparent;
@@ -262,19 +263,22 @@ body.basi-app .basi-float-pinned .basi-float-pin {
 
 body.basi-app .basi-search,
 body.basi-app .basi-meta-input,
-body.basi-app .basi-default-cam-select {
+body.basi-app .basi-default-cam-select,
+body.basi-app .basi-cat-assign-select {
 	background: var(--basi-input);
 	border: 1px solid var(--basi-border);
 	color: var(--text-col);
 	border-radius: 6px;
 }
 
-body.basi-app .basi-default-cam-select {
+body.basi-app .basi-default-cam-select,
+body.basi-app .basi-cat-assign-select {
 	border-radius: 6px;
 }
 
 body.basi-app .basi-meta-input:focus,
 body.basi-app .basi-default-cam-select:focus,
+body.basi-app .basi-cat-assign-select:focus,
 body.basi-app .basi-search:focus {
 	outline: 2px solid color-mix(in srgb, var(--basi-accent) 45%, transparent);
 	outline-offset: 0;
@@ -389,6 +393,24 @@ body.basi-app .basi-layer-badge {
 	background: var(--basi-accent);
 	border-color: transparent;
 	color: var(--basi-accent-text);
+}
+
+body.basi-app .basi-preview-loading-card {
+	background: color-mix(in srgb, var(--basi-panel, #1a151a) 90%, transparent);
+	border-color: var(--basi-border);
+}
+
+body.basi-app .basi-preview-loading-msg {
+	color: var(--text-col);
+}
+
+body.basi-app .basi-preview-progress {
+	background: var(--basi-input, #2a222c);
+	border-color: var(--basi-border);
+}
+
+body.basi-app .basi-preview-progress-fill {
+	background: var(--basi-accent);
 }
 
 body.basi-app .basi-empty {

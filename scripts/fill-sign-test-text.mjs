@@ -1,7 +1,7 @@
 /**
  * Fill FrontText + BackText on every sign in sample structure files.
  *
- * Uses nbtify (writable) + little-endian Bedrock .mcstructure format.
+ * Uses product readMcstructure / writeMcstructure (little-endian, no gzip).
  * Labels encode face / wood / facing so orientation bugs are obvious in the viewer.
  *
  * Usage (from repo root):
@@ -12,7 +12,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import * as NBT from "nbtify";
+import { readMcstructure, writeMcstructure } from "../src/viewer/core/nbt/mcstructureCodec.js";
 import { facingLabel, kindOfSign, woodKind } from "../src/viewer/signPlacement.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -113,8 +113,7 @@ async function fillFile(filePath) {
 	}
 	const raw = fs.readFileSync(abs);
 	const ab = raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength);
-	const root = await NBT.read(ab, { endian: "little", strict: false });
-	const data = root.data;
+	const { nbt: data } = await readMcstructure(ab);
 	const palette = data?.structure?.palette?.default?.block_palette ?? [];
 	const indices = data?.structure?.block_indices?.[0] ?? [];
 	const beMap = data?.structure?.palette?.default?.block_position_data;
@@ -247,12 +246,11 @@ async function fillFile(filePath) {
 		});
 	}
 
-	const outBuf = await NBT.write(root);
+	const outBuf = await writeMcstructure(data);
 	fs.writeFileSync(abs, Buffer.from(outBuf));
 
-	// Verify round-trip
-	const verify = await NBT.read(outBuf, { endian: "little", strict: false });
-	const vBe = verify.data?.structure?.palette?.default?.block_position_data;
+	const { nbt: verify } = await readMcstructure(outBuf);
+	const vBe = verify?.structure?.palette?.default?.block_position_data;
 	let withText = 0;
 	for (const k of Object.keys(vBe || {})) {
 		const bed = vBe[k]?.block_entity_data ?? vBe[k];

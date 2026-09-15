@@ -2,7 +2,7 @@
 	"name": "viewer_unit",
 	"type": "module",
 	"scripts": {
-		"test": "node --test index.js"
+		"test": "node --test index.js nbtGates.test.js ingestGates.test.js inspectExtract.test.js"
 	},
 	"devDependencies": {
 		"nbtify-readonly-typeless": "1.1.2"

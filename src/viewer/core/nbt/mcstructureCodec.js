@@ -2,12 +2,12 @@
  * Single chokepoint for .mcstructure bytes → NBT.
  * Never call option-less NBT.read. Never decompress.
  *
- * Residual (P5): nbtify still does `new Int32Array(untrustedLength)` before a
- * remaining-bytes check. A tiny file with length 0x7FFFFFFF can OOM before
- * quotas run. Do not treat this module as a complete F2 fix.
+ * Array lengths are checked by nbtArrayLengthGate before nbtify. nbtify still
+ * allocates INT_ARRAY after that walk rejects huge lengths.
  */
 
 import * as NBT from "nbtify-readonly-typeless";
+import { assertNbtArrayLengths } from "./nbtArrayLengthGate.js";
 
 export const MCSTRUCTURE_MAX_BYTES = 64 * 1024 * 1024;
 export const MCSTRUCTURE_MAX_CELLS = 8_388_608;
@@ -290,6 +290,7 @@ export async function readMcstructure(input, opts = {}) {
  */
 async function readMcstructureFromBuffer(buffer) {
 	gateMcstructureBytes(buffer);
+	assertNbtArrayLengths(buffer, fail);
 	let parsed;
 	try {
 		parsed = await NBT.read(buffer, MCSTRUCTURE_READ_OPTIONS);
@@ -317,4 +318,25 @@ async function readMcstructureFromBuffer(buffer) {
 		}
 		throw e;
 	}
+}
+
+const WRITE_OPTIONS = {
+	endian: "little",
+	compression: null,
+	bedrockLevel: false
+};
+
+/**
+ * Product write: little-endian uncompressed .mcstructure. Re-reads with P1.
+ * @param {object} nbt
+ * @returns {Promise<Uint8Array>}
+ */
+export async function writeMcstructure(nbt) {
+	const layer = assertMcstructureLayers(nbt);
+	assertNbtQuotas(nbt, layer.volume);
+	const writable = await import("nbtify");
+	const bytes = await writable.write(nbt, WRITE_OPTIONS);
+	const u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+	await readMcstructureFromBuffer(u8);
+	return u8;
 }

@@ -13,6 +13,7 @@ export {
 	parseSignTextLines,
 	extractLecternBook,
 	extractBookPages,
+	parseDisabledSlots,
 	readRedstoneSignal,
 	formatInspectText
 } from "../inspectStructure.js";

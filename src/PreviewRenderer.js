@@ -29,9 +29,7 @@ import {
 	SpecialBlockOverlay
 } from "./viewer/systems/index.js";
 import { disposeObject3D } from "./viewer/systems/disposeObject3D.js";
-import { SIGN_TWEAK_EVENT } from "./viewer/signDebug.js";
-
-import Stats from "stats.js";
+import { SIGN_TWEAK_EVENT, signDebugEnabled } from "./viewer/signDebug.js";
 
 /** @type {typeof import("three")} */
 let THREE;
@@ -101,8 +99,8 @@ export default class PreviewRenderer extends AsyncFactory {
 		directionalLightShadowMapResolution: 2,
 		highResolution: false,
 		debugHelpersVisible: false,
-		showFps: true,
-		showOptions: true,
+		showFps: false,
+		showOptions: false,
 		shadowsEnabled: true,
 		antialias: true,
 		maxPixelRatio: 2,
@@ -218,21 +216,6 @@ export default class PreviewRenderer extends AsyncFactory {
 		this.#loadingMessage.appendChild(p);
 		this.cont.appendChild(this.#loadingMessage);
 
-		if (this.options.showFps) {
-			const stats = new Stats();
-			stats.showPanel(0);
-			stats.dom.classList.add("statsPanel");
-			stats.dom.childNodes.forEach(can => {
-				if (!(can instanceof HTMLCanvasElement)) return;
-				const c2d = can.getContext("2d");
-				const defaultFontFamilies = "Helvetica";
-				c2d.font = c2d.font.replace(
-					defaultFontFamilies,
-					`"Space Grotesk", ${defaultFontFamilies}`
-				);
-			});
-			this.#ctx.stats = stats;
-		}
 		if (this.options.showOptions) {
 			try {
 				const guiEl = document.createElement("lil-gui");
@@ -408,8 +391,17 @@ export default class PreviewRenderer extends AsyncFactory {
 		await this.#lighting.initBackground(this.#pool);
 		if (this.#initAborted()) return;
 
-		if (this.options.showFps && ctx.stats) {
-			this.cont.appendChild(ctx.stats.dom);
+		if (this.options.showFps) {
+			try {
+				const { default: Stats } = await import("stats.js");
+				const stats = new Stats();
+				stats.showPanel(0);
+				stats.dom.classList.add("statsPanel");
+				ctx.stats = stats;
+				this.cont.appendChild(stats.dom);
+			} catch (e) {
+				console.warn("[basi] stats.js skipped:", e);
+			}
 		}
 		if (this.options.showOptions && this.#optionsGui) {
 			wirePreviewOptionsGui({
@@ -445,7 +437,7 @@ export default class PreviewRenderer extends AsyncFactory {
 		this.#layers.rebuildBlockMeshes(null);
 		this.#rebuildOverlays();
 		try {
-			globalThis.addEventListener(SIGN_TWEAK_EVENT, this.#onSignTweaks);
+			if (signDebugEnabled()) globalThis.addEventListener(SIGN_TWEAK_EVENT, this.#onSignTweaks);
 		} catch {
 			/* ignore */
 		}

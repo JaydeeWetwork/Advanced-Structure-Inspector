@@ -17,6 +17,16 @@ const RECIPE_KEY = "basi.signTweakRecipe.last";
 
 export const SIGN_TWEAK_EVENT = "basi-sign-tweaks-changed";
 
+/** Live tweak HUD / overlay. Off unless `?signDebug=1` or localStorage `basi.signDebug=1`. */
+export function signDebugEnabled() {
+	try {
+		if (typeof location !== "undefined" && /[?&]signDebug=1/.test(location.search)) return true;
+		return typeof localStorage !== "undefined" && localStorage.getItem("basi.signDebug") === "1";
+	} catch {
+		return false;
+	}
+}
+
 /** Shared across duplicate ESM copies (?v= cache splits). */
 function signDebugStore() {
 	const g = globalThis;
@@ -467,8 +477,10 @@ const SLIDERS = [
  * Controls that live in the sign inspect panel (not lil-gui).
  * @param {object} [block]
  * @param {{ dumpEl?: HTMLElement|null }} [opts]
+ * @returns {HTMLElement|null}
  */
 export function renderSignTweakControls(block = null, opts = {}) {
+	if (!signDebugEnabled()) return null;
 	if (block) setSignDebugFocus(block, block.name);
 
 	const root = document.createElement("div");

@@ -11,7 +11,7 @@ import {
 	session,
 	primaryPreview
 } from "./state.js";
-import { setStatus, formatSize, flashFloatDock, stat } from "./dom.js";
+import { setStatus, formatSize, flashFloatDock, closeDetailFloatIfIdle, stat } from "./dom.js";
 import { renderList } from "../ui/catalogList.js";
 import {
 	clearInspectPanel,
@@ -21,6 +21,7 @@ import {
 	showPreviewPlaceholder,
 	normalizeCameraPreset
 } from "../ui/previewChrome.js";
+import { updatePreviewLoading, removePreviewLoading } from "../ui/previewLoading.js";
 import {
 	updateSelectionHeader,
 	syncMetaFields,
@@ -63,6 +64,7 @@ export function selectEntry(id, opts = {}) {
 	if (!entry) {
 		els.emptyState?.classList.remove("hidden");
 		els.detailPanel?.classList.add("hidden");
+		closeDetailFloatIfIdle({ force: true });
 		updateSelectionHeader(null);
 		syncMetaFields(null);
 		if (els.previewHost) {
@@ -156,21 +158,17 @@ export async function loadPreview(opts = {}) {
 	if (host) host.dataset.basiPreviewBuilding = "1";
 
 	try {
-		const { BUILD_ID } = await import("../buildId.js");
-		const { renderStructurePreview } = await import(`../viewer/structurePreview.js?v=${BUILD_ID}`);
-		const { default: ResourcePackStack } = await import(`../ResourcePackStack.js?v=${BUILD_ID}`);
+		const { renderStructurePreview } = await import("../viewer/structurePreview.js");
+		const { default: ResourcePackStack } = await import("../ResourcePackStack.js");
 		if (signal.aborted || getSelectedId() !== buildForId) return;
 
 		const previewCont = document.createElement("div");
 		previewCont.className = "previewCont";
-		// Exactly one root under the host — never clear host again until load finishes
 		host?.replaceChildren(previewCont);
-		// Loading label lives *inside* cont so progress updates cannot wipe the preview
-		const loadingLabel = document.createElement("p");
-		loadingLabel.className = "meta basi-preview-loading-msg";
-		loadingLabel.style.cssText = "padding:12px;color:#ccc;margin:0";
-		loadingLabel.textContent = "Building geometry & textures…";
-		previewCont.appendChild(loadingLabel);
+		updatePreviewLoading(host, {
+			msg: "Building geometry & textures…",
+			fraction: 0.05
+		});
 
 		clearInspectPanel();
 		updateLayerBadge(null);
@@ -181,16 +179,15 @@ export async function loadPreview(opts = {}) {
 			{
 				PACK_NAME: entry.name,
 				SHOW_PREVIEW_SKYBOX: false,
-				SHOW_PREVIEW_WIDGETS: true
+				SHOW_PREVIEW_WIDGETS: false
 			},
 			new ResourcePackStack(),
 			{
 				signal,
-				onProgress: msg => {
+				onProgress: (msg, fraction) => {
 					if (signal.aborted || getSelectedId() !== buildForId) return;
-					// Status bar + in-cont label only — never replaceChildren on host
 					setStatus(msg, "", { catalog: false });
-					if (loadingLabel.isConnected) loadingLabel.textContent = msg;
+					updatePreviewLoading(host, { msg, fraction });
 				}
 			}
 		);
@@ -201,12 +198,8 @@ export async function loadPreview(opts = {}) {
 		}
 		session.setActive(previews);
 		session.endPreviewJob();
-		// Drop outer progress label if still present (renderer has its own canvas now)
-		try {
-			loadingLabel.remove();
-		} catch {
-			/* ignore */
-		}
+		updatePreviewLoading(host, { msg: "Ready", fraction: 1 });
+		removePreviewLoading(host);
 		// Sanity: canvas must still be in the host (silent blank if something wiped it)
 		const canvasInHost = host?.querySelector("canvas");
 		if (!canvasInHost) {
@@ -243,7 +236,7 @@ export async function loadPreview(opts = {}) {
 			return;
 		}
 		console.error("[basi] preview failed", e);
-		showPreviewPlaceholder(`Preview failed: ${e?.message || e}`, { force: true });
+		showPreviewPlaceholder(`Preview failed: ${e?.message || e}`, { force: true, error: true });
 		setStatus(String(e?.message ?? e), "error");
 	} finally {
 		if (host) delete host.dataset.basiPreviewBuilding;

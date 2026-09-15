@@ -9,13 +9,13 @@ import { geoPointToThree } from "../previewSpace.js";
 import { signPlaneInstanceVerts } from "../signPlacement.js";
 import {
 	applySignTweaks,
+	signDebugEnabled,
 	signTweaks,
 	subscribeSignTweaks,
 	tweaksAffectSign,
 	tweaksAreIdentity
 } from "../signDebug.js";
 import { isOnActiveLayer } from "../layerVisibility.js";
-import { extractSignText, extractLecternBook } from "../inspectStructure.js";
 
 export default class SpecialBlockOverlay {
 	/** @type {import("three").Group|null} */
@@ -28,10 +28,12 @@ export default class SpecialBlockOverlay {
 	 */
 	constructor(ctx) {
 		this.ctx = ctx;
-		this.#unsubTweaks = subscribeSignTweaks(() => {
-			if (this.ctx.isDisposed()) return;
-			this.applyLiveTweaks();
-		});
+		if (signDebugEnabled()) {
+			this.#unsubTweaks = subscribeSignTweaks(() => {
+				if (this.ctx.isDisposed()) return;
+				this.applyLiveTweaks();
+			});
+		}
 	}
 
 	clear() {
@@ -76,6 +78,7 @@ export default class SpecialBlockOverlay {
 			this.#addSignFaces(THREE, root, inspectIndex, layerFilter);
 			this.#addLecternBooks(THREE, root, inspectIndex, layerFilter);
 		}
+		if (signDebugEnabled()) this.applyLiveTweaks();
 		this.ctx.requestRender();
 	}
 
@@ -84,6 +87,7 @@ export default class SpecialBlockOverlay {
 	 * @returns {boolean} true if live meshes were updated
 	 */
 	applyLiveTweaks() {
+		if (!signDebugEnabled()) return false;
 		const THREE = this.ctx.THREE;
 		if (!THREE || !this.#root) return false;
 		/** @type {import("three").Mesh[]} */
@@ -125,7 +129,7 @@ export default class SpecialBlockOverlay {
 			const name = String(b.name || "").replace(/^minecraft:/, "");
 			if (!name.includes("sign")) continue;
 			if (!isOnActiveLayer(b.y, layerFilter)) continue;
-			const sign = extractSignText(b.blockEntity);
+			const sign = b.sign;
 			if (!sign) continue;
 
 			for (const { face, isBack } of [
@@ -149,10 +153,6 @@ export default class SpecialBlockOverlay {
 	 */
 	#makeSignTextMesh(THREE, b, name, lines, face, isBack) {
 		const baseline = signPlaneInstanceVerts(b, name, isBack);
-		let baked = baseline;
-		if (tweaksAffectSign(b, name, signTweaks) && !tweaksAreIdentity(signTweaks)) {
-			baked = applySignTweaks(baseline, signTweaks);
-		}
 		const glowing = !!face.glowing;
 		const tex = this.#makeTextTexture(THREE, lines, face.color, {
 			glowing,
@@ -161,7 +161,7 @@ export default class SpecialBlockOverlay {
 		const mat = new THREE.MeshBasicMaterial({
 			map: tex,
 			transparent: true,
-			side: signTweaks.doubleSide ? THREE.DoubleSide : THREE.FrontSide,
+			side: THREE.FrontSide,
 			depthWrite: true,
 			alphaTest: 0.08,
 			polygonOffset: true,
@@ -172,7 +172,7 @@ export default class SpecialBlockOverlay {
 
 		const geo = new THREE.PlaneGeometry(1, 1);
 		const mesh = new THREE.Mesh(geo, mat);
-		writeSignPlaneVerts(mesh, baked);
+		writeSignPlaneVerts(mesh, baseline);
 		mesh.renderOrder = 8;
 		mesh.userData.basiSpecialOverlay = true;
 		mesh.userData.basiSignBaseline = baseline;
@@ -184,10 +184,12 @@ export default class SpecialBlockOverlay {
 		const g = new THREE.Group();
 		g.userData.basiSpecialOverlay = true;
 		g.add(mesh);
-		const markers = this.#makeSignMarkers(THREE, baked, isBack);
-		markers.visible = !!signTweaks.markers;
-		mesh.userData.basiSignMarkers = markers;
-		g.add(markers);
+		if (signDebugEnabled()) {
+			const markers = this.#makeSignMarkers(THREE, baseline, isBack);
+			markers.visible = false;
+			mesh.userData.basiSignMarkers = markers;
+			g.add(markers);
+		}
 		return g;
 	}
 
@@ -235,7 +237,7 @@ export default class SpecialBlockOverlay {
 			const name = String(b.name || "").replace(/^minecraft:/, "");
 			if (name !== "lectern") continue;
 			if (!isOnActiveLayer(b.y, layerFilter)) continue;
-			const lec = extractLecternBook(b.blockEntity);
+			const lec = b.lectern;
 			if (!lec?.hasBook) continue;
 
 			const g = new THREE.Group();

@@ -289,6 +289,33 @@ export default class StructureCatalog {
 	}
 
 	/**
+	 * Default (or first) function-entry in a category.
+	 * @param {string} categoryId
+	 * @returns {CatalogEntry|undefined}
+	 */
+	defaultEntryForCategory(categoryId) {
+		const entries = this.listCatalogEntries(categoryId);
+		return entries.find(e => e.isDefault) || entries[0];
+	}
+
+	/**
+	 * Assign a structure to a category (its default/first entry) or Uncategorized.
+	 * @param {string} structureId
+	 * @param {string|null} categoryId
+	 */
+	async assignStructureToCategory(structureId, categoryId) {
+		if (!categoryId || categoryId === "uncategorized") {
+			return this.setStructureEntry(structureId, null);
+		}
+		if (!this.#categories.has(categoryId)) return this.get(structureId) ?? null;
+		const pick = this.defaultEntryForCategory(categoryId);
+		if (!pick) {
+			throw new Error("Category has no entries");
+		}
+		return this.setStructureEntry(structureId, pick.id);
+	}
+
+	/**
 	 * @param {string} structureId
 	 * @param {string[]} featureIds
 	 */

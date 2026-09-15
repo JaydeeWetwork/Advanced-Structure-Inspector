@@ -1,2 +1,6 @@
 * text=auto
 **/package-lock.json binary
+
+# Private design/workflow docs: omit from git archive / release zips.
+# They must not be published on `main` (see scripts/promote-to-main.ps1).
+priv-docs/** export-ignore

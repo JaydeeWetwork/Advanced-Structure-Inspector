@@ -6,9 +6,8 @@ import MaterialList from "./MaterialList.js";
 import PreviewRenderer from "../PreviewRenderer.js";
 
 import entityScripts from "./entityScripts.molang.js";
-import { addPaddingToImage, array2DToMolang, arrayToMolang, awaitAllEntries, weaklyCacheUnaryFunc, concatenateFiles, createNumericEnum, desparseArray, functionToMolang, getFileExtension, hexColorToClampedTriplet, itemCriteriaToMolang, jsonc, JSONMap, JSONSet, lcm, loadTranslationLanguage, max, min, onEvent, overlaySquareImages, pi, removeFalsies, removeFileExtension, resizeImageToBlob, setImageOpacity, sha256, toBlob, toImage, translate, transposeMatrix, tuple, UserError, ReplacingPatternMap, conditionallyCacheUnaryFunc, clonePromise, getStructureIndexFromCoordinates, getGeoSpaceBlockPos } from "../utils.js";
+import { addPaddingToImage, array2DToMolang, arrayToMolang, awaitAllEntries, weaklyCacheUnaryFunc, concatenateFiles, createNumericEnum, desparseArray, functionToMolang, getFileExtension, hexColorToClampedTriplet, itemCriteriaToMolang, jsonc, lcm, loadTranslationLanguage, max, min, onEvent, overlaySquareImages, pi, removeFalsies, removeFileExtension, resizeImageToBlob, setImageOpacity, sha256, toBlob, toImage, translate, transposeMatrix, tuple, UserError, ReplacingPatternMap, conditionallyCacheUnaryFunc, clonePromise, getStructureIndexFromCoordinates, getGeoSpaceBlockPos } from "../utils.js";
 import ResourcePackStack from "../ResourcePackStack.js";
-import BlockUpdater from "../BlockUpdater.js";
 import SpawnAnimationMaker from "./SpawnAnimationMaker.js";
 import PolyMeshMaker from "../PolyMeshMaker.js";
 import fetchers from "../fetchers.js";
@@ -19,14 +18,17 @@ import {
 	McstructureCodecError,
 	readMcstructure
 } from "../viewer/api/structure.js";
+import {
+	IGNORED_BLOCKS,
+	mergeMultiplePalettesAndIndices,
+	tweakBlockPalette
+} from "../viewer/palette.js";
 
-export { createItemCriteria };
+export { createItemCriteria, IGNORED_BLOCKS };
 // StructureDiagramMaker is loaded lazily in makeStructureDiagrams() so preview-only
 // paths do not pull WebGL diagram shaders until pack generation needs them.
 
 export const VERSION = "dev";
-export const IGNORED_BLOCKS = ["air", "piston_arm_collision", "sticky_piston_arm_collision", "light_block", "light_block_0", "light_block_1", "light_block_2", "light_block_3", "light_block_4", "light_block_5", "light_block_6", "light_block_7", "light_block_8", "light_block_9", "light_block_10", "light_block_11", "light_block_12", "light_block_13", "light_block_14", "light_block_15"]; // blocks to be ignored when scanning the structure file
-const IGNORED_BLOCK_ENTITIES = new Set(["Beacon", "Beehive", "Bell", "BrewingStand", "ChiseledBookshelf", "CommandBlock", "Comparator", "Conduit", "CreakingHeart", "EnchantTable", "EndGateway", "JigsawBlock", "Lodestone", "SculkCatalyst", "SculkShrieker", "SculkSensor", "CalibratedSculkSensor", "StructureBlock", "BrushableBlock", "TrialSpawner", "Vault"]);
 export const PLAYER_CONTROL_NAMES = {
 	TOGGLE_RENDERING: "player_controls.toggle_rendering",
 	CHANGE_OPACITY: "player_controls.change_opacity",
@@ -946,108 +948,6 @@ async function getResponseContents(resPromise, filePath, rawBlob) {
 		// @ts-ignore
 		case "png": return await toImage(res);
 	}
-}
-/**
- * Removes ignored blocks from the block palette, updates old blocks, and adds block entities as separate entries.
- * @param {MCStructure["structure"]} structure The de-NBT-ed structure file
- * @param {string[]} ignoredBlocks
- * @returns {Promise<{ palette: Block[], indices: [Int32Array, Int32Array] }>}
- */
-async function tweakBlockPalette(structure, ignoredBlocks) {
-	let palette = structuredClone(structure["palette"]["default"]["block_palette"]);
-	
-	let blockVersions = new Set(); // version should be constant for all blocks. just wanted to test this
-	let blockUpdater = new BlockUpdater();
-	let updatedBlocks = 0;
-	for(let [i, block] of Object.entries(palette)) {
-		blockVersions.add(block["version"]);
-		if(blockUpdater.blockNeedsUpdating(block)) {
-			if(await blockUpdater.update(block)) {
-				updatedBlocks++;
-			}
-		}
-		block["name"] = block["name"].replace(/^minecraft:/, ""); // remove namespace here, right at the start
-		if(ignoredBlocks.includes(block["name"])) {
-			delete palette[i];
-			continue;
-		}
-		delete block["version"];
-		if(!Object.keys(block["states"]).length) {
-			delete block["states"]; // easier viewing
-		}
-	}
-	let blockVersionsStringified = Array.from(blockVersions).map(v => BlockUpdater.parseBlockVersion(v).join("."));
-	if(updatedBlocks > 0) {
-		console.info(`Updated ${updatedBlocks} block${updatedBlocks > 1? "s" : ""} from ${blockVersionsStringified.join(", ")} to ${BlockUpdater.parseBlockVersion(BlockUpdater.LATEST_VERSION).join(".")}!`);
-		console.info(`Note: Updated blocks may not be 100% accurate! If there are some errors, try loading the structure in the latest version of Minecraft then saving it again, so all blocks are up to date.`);
-	}
-	console.log("Block versions:", Array.from(blockVersions), blockVersionsStringified);
-	
-	// add block entities into the block palette (on layer 0)
-	let indices = structure["block_indices"];
-	/** @type {JSONMap<NBTBlock, number>} */
-	let newIndexCache = new JSONMap();
-	let entitylessBlockEntityIndices = new Set(); // contains all the block palette indices for blocks with block entities. since they don't have block entity data yet, and all block entities well be cloned and added to the end of the palette, we can remove all the entries in here from the palette.
-	let blockPositionData = structure["palette"]["default"]["block_position_data"];
-	for(let i in blockPositionData) {
-		let oldPaletteI = indices[0][i];
-		if(!(oldPaletteI in palette)) { // if the block is ignored, it will be deleted already, so there's no need to touch its block entities
-			continue;
-		}
-		if(!("block_entity_data" in blockPositionData[i])) { // observers have tick_queue_data
-			continue;
-		}
-		
-		let blockEntityData = structuredClone(blockPositionData[i]["block_entity_data"]);
-		if(IGNORED_BLOCK_ENTITIES.has(blockEntityData["id"])) {
-			continue;
-		}
-		delete blockEntityData["x"];
-		delete blockEntityData["y"];
-		delete blockEntityData["z"];
-		
-		// clone the old block and add the block entity data
-		let newBlock = structuredClone(palette[oldPaletteI]);
-		newBlock["block_entity_data"] = blockEntityData;
-		
-		// check that we haven't seen this block entity before. since in JS objects are compared by reference we have to stringify it first then check the cache.
-		if(newIndexCache.has(newBlock)) {
-			indices[0][i] = newIndexCache.get(newBlock);
-		} else {
-			let paletteI = palette.length;
-			palette[paletteI] = newBlock;
-			indices[0][i] = paletteI;
-			newIndexCache.set(newBlock, paletteI);
-			entitylessBlockEntityIndices.add(oldPaletteI); // we can schedule to delete the original block palette entry later, as it doesn't have any block entity data and all block entities clone it.
-		}
-	}
-	for(let paletteI of entitylessBlockEntityIndices) {
-		// console.log(`deleting entityless block entity ${paletteI} = ${JSON.stringify(blockPalette[paletteI])}`);
-		delete palette[paletteI]; // this makes the blockPalette array discontinuous; when using native array methods, they skip over the empty slots.
-	}
-	
-	return { palette, indices };
-}
-/**
- * Combines multiple block palettes into one, and updates indices for each.
- * @param {{palette: Block[], indices: [Int32Array, Int32Array]}[]} palettesAndIndices
- * @returns {{palette: Block[], indices: [Int32Array, Int32Array][]}}
- */
-function mergeMultiplePalettesAndIndices(palettesAndIndices) {
-	let mergedPaletteSet = new JSONSet();
-	let remappedIndices = [];
-	palettesAndIndices.forEach(({ palette, indices }) => {
-		let indexRemappings = [];
-		palette.forEach((block, i) => {
-			mergedPaletteSet.add(block);
-			indexRemappings[i] = mergedPaletteSet.indexOf(block);
-		});
-		remappedIndices.push(indices.map(layer => layer.map(i => indexRemappings[i] ?? -1)));
-	});
-	return {
-		palette: Array.from(mergedPaletteSet),
-		indices: remappedIndices
-	};
 }
 /**
  * @typedef {object} StructureDiagramsAndIndices

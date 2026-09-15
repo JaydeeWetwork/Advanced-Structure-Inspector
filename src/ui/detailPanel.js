@@ -27,6 +27,7 @@ export function updateSelectionHeader(entry) {
 			els.detailFloatTitle.textContent = "Details";
 			els.detailFloatTitle.title = "Details";
 		}
+		renderCategoryAssign(null);
 		return;
 	}
 	els.selectionBar?.classList.remove("hidden");
@@ -42,6 +43,100 @@ export function updateSelectionHeader(entry) {
 			: `${entry.sourceName} · ${entry.sourceKind}`;
 	}
 	renderHopperChip(entry.hopperStats);
+	renderCategoryAssign(entry);
+}
+
+/**
+ * Category / entry selects above Information.
+ * @param {any|null} entry
+ */
+export function renderCategoryAssign(entry) {
+	const catSel = els.detailCategorySelect;
+	const entSel = els.detailEntrySelect;
+	if (!catSel || !entSel) return;
+	bindCategoryAssignOnce();
+
+	const cats = catalog.listCategories();
+	catSel.replaceChildren();
+	const none = document.createElement("option");
+	none.value = "";
+	none.textContent = "Uncategorized";
+	catSel.appendChild(none);
+	for (const c of cats) {
+		const opt = document.createElement("option");
+		opt.value = c.id;
+		opt.textContent = c.name;
+		catSel.appendChild(opt);
+	}
+
+	if (!entry) {
+		catSel.value = "";
+		entSel.replaceChildren();
+		const empty = document.createElement("option");
+		empty.value = "";
+		empty.textContent = "—";
+		entSel.appendChild(empty);
+		entSel.disabled = true;
+		els.detailEntryField?.classList.add("is-disabled");
+		catSel.disabled = true;
+		return;
+	}
+
+	catSel.disabled = false;
+	const fn = entry.entryId ? catalog.getCatalogEntry(entry.entryId) : null;
+	const categoryId = fn?.categoryId || "";
+	catSel.value = categoryId;
+
+	entSel.replaceChildren();
+	if (!categoryId) {
+		const empty = document.createElement("option");
+		empty.value = "";
+		empty.textContent = "—";
+		entSel.appendChild(empty);
+		entSel.disabled = true;
+		els.detailEntryField?.classList.add("is-disabled");
+		return;
+	}
+
+	entSel.disabled = false;
+	els.detailEntryField?.classList.remove("is-disabled");
+	for (const e of catalog.listCatalogEntries(categoryId)) {
+		const opt = document.createElement("option");
+		opt.value = e.id;
+		opt.textContent = e.name;
+		entSel.appendChild(opt);
+	}
+	entSel.value = entry.entryId || "";
+}
+
+function bindCategoryAssignOnce() {
+	const catSel = els.detailCategorySelect;
+	const entSel = els.detailEntrySelect;
+	if (!catSel || catSel.dataset.bound) return;
+	catSel.dataset.bound = "1";
+	catSel.addEventListener("change", () => {
+		const id = getSelectedId();
+		if (!id) return;
+		const catId = catSel.value || null;
+		void catalog.assignStructureToCategory(id, catId).then(
+			() => {
+				setStatus("Category updated.", "ok");
+				catSel.blur();
+			},
+			() => {
+				setStatus("That category has no entry. Add one in Editor.", "warn");
+				renderCategoryAssign(catalog.get(id));
+			}
+		);
+	});
+	entSel?.addEventListener("change", () => {
+		const id = getSelectedId();
+		if (!id) return;
+		void catalog.setStructureEntry(id, entSel.value || null).then(() => {
+			setStatus("Entry updated.", "ok");
+			entSel.blur();
+		});
+	});
 }
 
 /**
