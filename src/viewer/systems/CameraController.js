@@ -82,9 +82,12 @@ export default class CameraController {
 
 	enterFreeCamera() {
 		if (this.#fly.enabled) return;
-		this.#ensurePerspective();
 		if (this.lastPreset === "free") return;
+		// Keep ortho after iso (and perspective after N/S/E/W). Switching
+		// projection here made iso look zoomed-out on pointer-up.
+		this.setFlyMode(false);
 		this.lastPreset = "free";
+		this.#syncControlsFromCamera();
 		this.emitPreset("free");
 		this.#paint();
 	}
@@ -252,7 +255,7 @@ export default class CameraController {
 		next.quaternion.copy(old.quaternion);
 		next.up.copy(old.up);
 		next.aspect = aspect;
-		next.zoom = 1;
+		next.zoom = Number.isFinite(old.zoom) && old.zoom > 0 ? old.zoom : 1;
 		if (controls) controls.object = next;
 		this.ctx.camera = next;
 		return next;
@@ -390,9 +393,9 @@ export default class CameraController {
 		}
 
 		if (preset === "free") {
-			this.#ensurePerspective();
 			this.setFlyMode(false);
 			this.lastPreset = "free";
+			this.#syncControlsFromCamera();
 			this.emitPreset("free");
 			this.#paint();
 			return true;

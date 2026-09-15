@@ -2299,6 +2299,16 @@ describe("true isometric showcase", async () => {
 		const orbit = readFileSync(join(root, "src/viewer/systems/orbitBootstrap.js"), "utf8");
 		assert.match(orbit, /controls\.object/);
 	});
+
+	it("free orbit does not switch iso ortho to perspective", () => {
+		const ctrl = readFileSync(join(root, "src/viewer/systems/CameraController.js"), "utf8");
+		const enter = ctrl.match(/enterFreeCamera\(\) \{[\s\S]*?\n\t\}/);
+		assert.ok(enter, "enterFreeCamera body");
+		assert.doesNotMatch(enter[0], /#ensurePerspective/);
+		const freePreset = ctrl.match(/if \(preset === "free"\) \{[\s\S]*?return true;\s*\}/);
+		assert.ok(freePreset, "setPreset free branch");
+		assert.doesNotMatch(freePreset[0], /#ensurePerspective/);
+	});
 });
 
 describe("paper theme", async () => {

@@ -163,7 +163,7 @@ While loading, a **centered card** shows status and a **progress bar**. It disap
 | N / S / E / W | Cardinal views (tilt slider in layer mode) |
 | Top | Top-down |
 | Layer | Frame the current Y slice |
-| Free | No auto reframe (orbit still works) |
+| Free | No auto reframe (orbit still works; keeps current zoom / projection) |
 | Fly | WASD move, Space up, Shift down, drag to look |
 
 **Default camera** and **Zoom** on the details dock are used the next time this structure opens. 100% is the usual fit; higher is closer. Hover and scroll the mouse wheel to cycle the camera or nudge zoom.
