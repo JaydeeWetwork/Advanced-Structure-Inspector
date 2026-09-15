@@ -15,7 +15,8 @@ This repository is a **fork / Adapted Material** of [HoloPrint](https://github.c
 - Import `.mcstructure`, and structures from `.mcworld` / `.mctemplate` / `.mcpack` / `.zip`
 - **Catalog** with categories, search, pins, creator/credits/source link
 - **3D preview** — orbit, iso N/S/E/W, fly cam (WASD + Space/Shift), layer slice
-- **Inspect** — double-click blocks/entities; chests, hoppers, shulkers, brewing, composters, minecarts
+- **iPad Safari** — edge swipes for catalog / details / camera, pinch-zoom, long-press inspect, three-finger layer taps
+- **Inspect** — double-click (or long-press on touch) blocks/entities; chests, hoppers, shulkers, brewing, composters, minecarts
 - **Item frames** — show filled item icons (including filled buckets)
 - **Materials list** — counts, stacks/shulkers, acquired checkboxes
 - **Notes** — per-structure details
@@ -24,9 +25,9 @@ This repository is a **fork / Adapted Material** of [HoloPrint](https://github.c
 
 ## Usage
 
-See **[docs/USAGE.md](./docs/USAGE.md)** for hotkeys, catalog, preview, inspect, and common issues.
+See **[docs/USAGE.md](./docs/USAGE.md)** for hotkeys, catalog, preview, inspect, **iPad Safari / touch**, and common issues.
 
-Short path: **Import…** → pick a structure in the left list → preview builds → double-click to inspect. Data stays in this browser. **Clear list** wipes the catalog and stored files for this site.
+Short path: **Import…** → pick a structure in the left list → preview builds → double-click (or long-press on iPad) to inspect. On iPad, swipe from the 3D view to open Structures, Details, and the camera bar — [touch gestures](./docs/USAGE.md#touch--ipad-safari). Data stays in this browser. **Clear list** wipes the catalog and stored files for this site.
 
 Java Edition NBT, gzip `.mcstructure`, litematic, and schematic files are rejected.
 
@@ -34,7 +35,7 @@ Java Edition NBT, gzip `.mcstructure`, litematic, and schematic files are reject
 
 ## How to run
 
-Requires **Node.js 18+** (20 LTS recommended) and a browser with **WebGL2**.
+Requires **Node.js 18+** (20 LTS recommended) and a browser with **WebGL2** (Chrome, Edge, Firefox, or **Safari** — including iPad).
 
 ```bash
 npm ci
@@ -62,7 +63,7 @@ Full install, tests, and troubleshooting: **[docs/SETUP.md](./docs/SETUP.md)**.
 
 | Doc | Contents |
 |-----|----------|
-| **[docs/USAGE.md](./docs/USAGE.md)** | Using the app: catalog, preview, hotkeys, inspect |
+| **[docs/USAGE.md](./docs/USAGE.md)** | Using the app: catalog, preview, hotkeys, inspect, iPad Safari / touch |
 | **[docs/SETUP.md](./docs/SETUP.md)** | Install, run, build, tests, common issues |
 | **[docs/RELEASE.md](./docs/RELEASE.md)** | 0.1.0 release notes |
 | **[NOTICE.md](./NOTICE.md)** | Attribution |

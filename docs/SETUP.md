@@ -2,7 +2,7 @@
 
 Step-by-step install, run, build, and troubleshoot.
 
-**Using the app** (hotkeys, catalog, preview, start/stop the server): [USAGE.md](./USAGE.md).
+**Using the app** (hotkeys, catalog, preview, iPad Safari / touch, start/stop the server): [USAGE.md](./USAGE.md).
 
 ## 1. Prerequisites
 
@@ -14,7 +14,7 @@ node -v   # v18.x or higher
 npm -v
 ```
 
-3. A modern browser with **WebGL2** (Chrome, Edge, Firefox, Safari).
+3. A modern browser with **WebGL2** (Chrome, Edge, Firefox, **Safari**). **iPad Safari** is supported for using the served app (same desktop layout; see [USAGE — Touch / iPad Safari](./USAGE.md#touch--ipad-safari)).
 
 ## 2. Get the code
 
@@ -135,6 +135,7 @@ npx --yes serve src -p 5180
 
 - Enable hardware acceleration
 - Close other heavy WebGL tabs (browsers limit contexts; app parks max 2 + 1 active)
+- **iPad Safari:** iPadOS 15+ (WebGL2). Open the app over **http(s)** from `npm run serve` or a static host — not `file://`. Touch gestures: [USAGE — Touch / iPad Safari](./USAGE.md#touch--ipad-safari).
 
 ### Icons missing (buckets, etc.)
 

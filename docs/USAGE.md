@@ -1,6 +1,6 @@
 # Bedrock ASI — usage guide
 
-How to run the app, use the catalog and 3D preview, and fix common problems.
+How to run the app, use the catalog and 3D preview, iPad Safari / touch controls, and fix common problems.
 
 For install, tests, and deploy details see [SETUP.md](./SETUP.md).
 
@@ -97,7 +97,7 @@ Do not use `cd /d` (that is cmd.exe).
 
 1. Start the server and open the URL above.
 2. Wait until the header badge shows **Ready** (not Loading…).
-3. Hover the **left** edge of the window for the **Structures** list (or pin it). On iPad, swipe **right** from the left of the 3D view.
+3. Hover the **left** edge of the window for the **Structures** list (or pin it). On iPad, swipe **right** from the left of the 3D view ([Touch / iPad Safari](#touch--ipad-safari)).
 4. **Import…** or drop files onto the page.
 5. Click a structure. A centered **progress** card appears while the preview builds, then the 3D view.
 
@@ -121,7 +121,7 @@ Imported files land in **Uncategorized** until you assign a category.
 
 ## Catalog (left dock)
 
-Hover the left edge to open; **pin** (« / ») to keep it open. On iPad, swipe right from the left of the 3D view (see [Touch / iPad](#touch--ipad)).
+Hover the left edge to open; **pin** (« / ») to keep it open. On iPad, swipe right from the left of the 3D view (see [Touch / iPad Safari](#touch--ipad-safari)).
 
 - **Search** filters names.
 - Tree: **Uncategorized** → **categories** → **entries** → structures.
@@ -134,7 +134,7 @@ Hover the left edge to open; **pin** (« / ») to keep it open. On iPad, swipe r
 
 ## Details (right dock)
 
-Hover the right edge when a structure is selected; **pin** to keep it open. Click the 3D view (or outside the dock) to tuck it unless pinned. On iPad, swipe left from the right of the 3D view.
+Hover the right edge when a structure is selected; **pin** to keep it open. Click the 3D view (or outside the dock) to tuck it unless pinned. On iPad, swipe left from the right of the 3D view (see [Touch / iPad Safari](#touch--ipad-safari)).
 
 **Above Information:**
 
@@ -155,7 +155,7 @@ While loading, a **centered card** shows status and a **progress bar**. It disap
 
 - **Drag** on the canvas to orbit (not in Fly).
 - **Compass** (bottom-left) shows facing.
-- **Camera bar** — hover the **bottom** edge or press **C**. On iPad / touch, swipe up from the bottom of the 3D view (see [Touch / iPad](#touch--ipad)).
+- **Camera bar** — hover the **bottom** edge or press **C**. On iPad / touch, swipe up from the bottom of the 3D view (see [Touch / iPad Safari](#touch--ipad-safari)).
 
 | Control | Meaning |
 |---------|---------|
@@ -203,7 +203,7 @@ Shortcuts apply when the preview is focused and you are **not** typing in a sear
 
 ## Inspect
 
-Double-click a block or entity on the canvas. A floating **Inspect** window opens (drag the title bar; double-click title to collapse).
+Double-click a block or entity on the canvas (on iPad Safari, **long-press**). A floating **Inspect** window opens (drag the title bar; double-click title to collapse).
 
 Opens inventories / mockups for chests (including double chests), hoppers, droppers, barrels, shulkers, brewing stands, composters, crafters, lecterns, signs, item frames, minecarts with cargo, and similar block entities. Other hits show a name chip.
 
@@ -211,9 +211,11 @@ Opens inventories / mockups for chests (including double chests), hoppers, dropp
 
 ---
 
-## Touch / iPad
+## Touch / iPad Safari
 
-Designed for **iPad Safari** (tablets). The desktop layout stays: catalog on the left, details on the right, camera bar on the bottom. Start the swipe **on the 3D view**, not the iPad screen edge (Safari uses the bezel for Back).
+**iPad Safari** is a supported client (tablets, WebGL2). Other WebGL2 browsers still work with a mouse and keyboard. There is no separate phone layout — the desktop chrome stays: **Structures** on the left, **Details** on the right, camera bar on the bottom.
+
+Start swipes and pinches **on the 3D view**, not the iPad screen edge. Safari uses the left bezel for **Back** and the bottom home indicator for the Dock.
 
 | Gesture | Action |
 |---------|--------|
@@ -229,9 +231,14 @@ Designed for **iPad Safari** (tablets). The desktop layout stays: catalog on the
 | Three-finger tap in the **middle** | Show all layers (`←`) |
 | Long-press a block or entity | Inspect (same as double-click on desktop) |
 
-**Pin** still keeps a dock open. Fly is look-drag only without a keyboard (WASD / Space / Shift).
+**Safari notes**
 
-Move a structure to a category with the Details **Category** / **Entry** menus; catalog drag-and-drop is a desktop mouse gesture.
+- **Pin** (« / ») still keeps a dock open when you tap the view.
+- **Import…** uses the iPad file picker. Drag-and-drop from Files is a desktop gesture.
+- Move a structure with the Details **Category** / **Entry** menus. Catalog drag-and-drop needs a mouse.
+- **Fly** is look-drag only without a keyboard (WASD / Space / Shift).
+- Open the app over **http(s)** (`npm run serve` or a static host). `file://` will not load modules.
+- First load still needs network (esm.sh libraries, jsDelivr vanilla textures).
 
 ---
 
@@ -271,7 +278,13 @@ This is per **origin** (scheme + host + port). `localhost:5173` and `localhost:5
 
 **Blank page / failed modules** — serve `src/` or `dist/`, not the repo root. Do not open `index.html` as `file://`. Hard-refresh after pulls (`Ctrl+Shift+R`).
 
-**Preview fails / WebGL** — enable hardware acceleration; close other WebGL tabs.
+**Preview fails / WebGL** — enable hardware acceleration; close other WebGL tabs. iPad Safari needs iPadOS 15+ and an **http(s)** URL.
+
+**iPad: swipe goes Back or shows the Dock** — start the swipe on the 3D canvas, not the screen edge or home indicator.
+
+**iPad: docks stay closed** — they do not open on hover. Swipe from the view (or pin them). See [Touch / iPad Safari](#touch--ipad-safari).
+
+**iPad: pinch zooms the page** — pinch on the 3D view, not the header or a dock.
 
 **Icons missing** — needs jsDelivr / bedrock-samples. Hard-refresh after updates.
 
