@@ -2298,6 +2298,14 @@ describe("paper theme", async () => {
 		const materialsAt = html.indexOf('id="materialsSection"');
 		assert.ok(materialsAt > 0 && actionsAt > materialsAt, "Reload/Download/Remove should sit below Materials");
 	});
+
+	it("editor feature cards do not shrink and wrap label text", () => {
+		const css = readFileSync(join(root, "src/styles/editor.css"), "utf8");
+		assert.match(css, /\.basi-ed-feat-card\s*\{[^}]*flex:\s*0 0 auto/s);
+		assert.match(css, /\.basi-ed-feat-card\s*\{[^}]*min-height:\s*min-content/s);
+		assert.match(css, /\.basi-ed-feat-main\s*\{[^}]*white-space:\s*normal/s);
+		assert.match(css, /\.basi-ed-feat-name\s*\{[^}]*overflow-wrap:\s*anywhere/s);
+	});
 });
 
 describe("preview load cache / preload", () => {
