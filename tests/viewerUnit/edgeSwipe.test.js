@@ -6,6 +6,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
 	EDGE_BAND,
+	TAP_MAX_PX,
 	edgeBandAt,
 	classifyOpenSwipe,
 	classifyCloseSwipe,
@@ -14,6 +15,12 @@ import {
 } from "../../src/ui/edgeSwipe.js";
 
 const stage = { left: 0, top: 80, right: 1024, bottom: 800 };
+
+describe("TAP_MAX_PX", () => {
+	it("allows more slop than axis lock so an iPad tap still hides chrome", () => {
+		assert.equal(TAP_MAX_PX >= 24, true);
+	});
+});
 
 describe("edgeBandAt", () => {
 	it("returns null in the canvas center", () => {

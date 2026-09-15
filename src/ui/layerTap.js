@@ -1,6 +1,6 @@
 /**
- * Three-finger taps on the preview to step Y layers (iPad).
- * Top → up, bottom → down, middle → show all.
+ * Three-finger taps on the preview (iPad).
+ * Top → layer up, bottom → layer down, middle → default camera.
  * One-finger orbit and two-finger pinch are left alone.
  */
 

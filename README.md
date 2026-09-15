@@ -15,7 +15,7 @@ This repository is a **fork / Adapted Material** of [HoloPrint](https://github.c
 - Import `.mcstructure`, and structures from `.mcworld` / `.mctemplate` / `.mcpack` / `.zip`
 - **Catalog** with categories, search, pins, creator/credits/source link
 - **3D preview** — orbit, iso N/S/E/W, fly cam (WASD + Space/Shift), layer slice
-- **iPad Safari** — edge swipes for catalog / details / camera, pinch-zoom, long-press inspect, three-finger layer taps
+- **iPad Safari** — edge swipes for catalog / details / camera, pinch-zoom, long-press inspect, three-finger layer taps (middle restores default camera)
 - **Inspect** — double-click (or long-press on touch) blocks/entities; chests, hoppers, shulkers, brewing, composters, minecarts
 - **Item frames** — show filled item icons (including filled buckets)
 - **Materials list** — counts, stacks/shulkers, acquired checkboxes

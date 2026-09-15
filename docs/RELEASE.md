@@ -19,7 +19,7 @@ This is the first tagged-style release of the inspector as a product separate fr
 - **Import** `.mcstructure`, zip archives, `.mcpack` / `.mcaddon`, and structure templates from `.mcworld` / `.mctemplate`
 - **Catalog** with categories and entries, search, drag-and-drop assignment, notes, and persistent storage
 - **3D preview**: orbit, isometric and cardinal cameras, top-down, fly, Y-layer slicing, compass HUD, centered load status and progress bar
-- **iPad Safari**: edge swipes open Structures / Details / the camera bar; two-finger pinch-zoom; long-press inspect; three-finger taps step Y layers
+- **iPad Safari**: edge swipes open Structures / Details / the camera bar; two-finger pinch-zoom; long-press inspect; three-finger taps step Y layers (middle restores that structure’s default camera)
 - **Inspect** (double-click, or long-press on touch): chests (including double chests), hoppers, droppers, minecart cargo, signs, lecterns, item frames, and similar block entities
 - **Details dock**: category/entry, default camera, materials list, hopper summary
 - **Editor**: taxonomy (categories, entries, features) and named catalog databases

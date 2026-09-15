@@ -14,6 +14,8 @@ export const EDGE_BAND = {
 
 export const AXIS_LOCK_PX = 12;
 export const SWIPE_MIN_PX = 40;
+/** Finger tap slop — iPad taps often exceed AXIS_LOCK_PX. */
+export const TAP_MAX_PX = 28;
 
 /**
  * @param {number} x
@@ -288,7 +290,7 @@ export function bindEdgeSwipe(stage, api) {
 		const dist = Math.hypot(dx, dy);
 		const target = e.target;
 
-		if (!consumed && !opened && dist < AXIS_LOCK_PX && target instanceof Element) {
+		if (!consumed && !opened && dist < TAP_MAX_PX && target instanceof Element) {
 			if (state === "maybe-open") {
 				if (band === "left" && target.closest(".basi-float-left .basi-float-hit")) {
 					api.openCatalog();
@@ -301,10 +303,9 @@ export function bindEdgeSwipe(stage, api) {
 					consumed = true;
 				}
 			}
-			if (
-				!consumed
-				&& (target.closest("#previewHost") || target.closest("canvas"))
-			) {
+			const host = target.closest("#previewHost");
+			const skipHide = host?.querySelector("canvas")?.dataset?.basiSuppressOrbit === "1";
+			if (!consumed && host && !skipHide) {
 				api.closeUnpinned?.();
 			}
 		}

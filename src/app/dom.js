@@ -156,7 +156,19 @@ export function isFloatPinned(el) {
  */
 export function openFloatDock(el) {
 	if (!el) return;
+	el.classList.remove("basi-float-tucked");
 	el.classList.add("basi-float-open");
+}
+
+/**
+ * Hide a dock even if it is pinned or held open by :hover / no-selection.
+ * Pin preference stays; the next swipe-open clears the tuck.
+ * @param {HTMLElement|null|undefined} el
+ */
+export function tuckFloatDock(el) {
+	if (!el) return;
+	el.classList.add("basi-float-tucked");
+	el.classList.remove("basi-float-open");
 }
 
 /**

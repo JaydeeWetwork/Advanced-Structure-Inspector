@@ -223,12 +223,12 @@ Start swipes and pinches **on the 3D view**, not the iPad screen edge. Safari us
 | Swipe **left** from the right of the view | Open **Details** (when a structure is selected) |
 | Swipe **up** from the bottom of the view | Open the **camera bar** |
 | Swipe the open panel away (left / right / down) | Close that panel |
-| Tap the 3D view | Tuck unpinned panels and the camera bar |
+| Tap the 3D view | Hide open panels (Structures, Details, camera bar, inspect) |
 | One-finger drag (center of the view) | Orbit |
 | Two-finger pinch / pan | Zoom / pan |
 | Three-finger tap near the **top** of the view | Layer up (`↑`) |
 | Three-finger tap near the **bottom** | Layer down (`↓`) |
-| Three-finger tap in the **middle** | Show all layers (`←`) |
+| Three-finger tap in the **middle** | Default camera for this structure (usually iso) |
 | Long-press a block or entity | Inspect (same as double-click on desktop) |
 
 **Safari notes**

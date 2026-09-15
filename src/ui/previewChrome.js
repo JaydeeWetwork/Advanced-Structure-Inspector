@@ -2,8 +2,8 @@
  * Preview chrome: layer badge, camera bar, inspect overlay, hotkeys.
  */
 
-import { els, primaryPreview, session } from "../app/state.js";
-import { escapeHtml } from "../app/dom.js";
+import { catalog, els, getSelectedId, primaryPreview, session } from "../app/state.js";
+import { escapeHtml, tuckFloatDock } from "../app/dom.js";
 import { bindFloatingWindow } from "./floatingWindow.js";
 import { updatePreviewLoading, removePreviewLoading } from "./previewLoading.js";
 
@@ -349,6 +349,27 @@ export function applyLayerStep(delta) {
 }
 
 /**
+ * Leave layer slice and restore this structure's default camera (usually iso).
+ * Used by the iPad three-finger tap in the middle of the preview.
+ * @returns {boolean}
+ */
+export function restoreDefaultCamera() {
+	if (!session.hasActive) return false;
+	if (els.detailPanel?.classList.contains("hidden")) return false;
+	const p = primaryPreview();
+	if (!p) return false;
+	p.showAllLayers?.();
+	updateLayerBadge(null);
+	const entry = getSelectedId() ? catalog.get(getSelectedId()) : null;
+	const preset = normalizeCameraPreset(entry?.defaultCameraPreset);
+	const zoom = normalizeCameraZoom(entry?.defaultCameraZoom);
+	p.setCameraZoom?.(zoom, { reframe: false });
+	applyCameraPreset(preset);
+	deselectInspectAndRefresh();
+	return true;
+}
+
+/**
  * @param {KeyboardEvent} e
  */
 export function onPreviewKeydown(e) {
@@ -432,7 +453,27 @@ export function toggleCamDock(force) {
 	const on = force == null ? !dock.classList.contains("basi-cam-open") : !!force;
 	dock.classList.toggle("basi-cam-open", on);
 	dock.setAttribute("aria-expanded", on ? "true" : "false");
+	if (on) dock.classList.remove("basi-cam-tucked");
 	return on;
+}
+
+/**
+ * Hide catalog, details, camera bar, and inspect (iPad tap on the 3D view).
+ */
+export function hidePreviewChrome() {
+	tuckFloatDock(els?.catalogFloat);
+	tuckFloatDock(els?.detailFloat);
+	const dock = document.getElementById("camDock");
+	if (dock) {
+		dock.classList.add("basi-cam-tucked");
+		dock.classList.remove("basi-cam-open");
+		dock.setAttribute("aria-expanded", "false");
+	}
+	const active = document.activeElement;
+	if (active instanceof HTMLElement && active.closest?.(".basi-float, .basi-cam-dock, .basi-inspect-panel")) {
+		active.blur();
+	}
+	clearInspectPanel();
 }
 
 /**

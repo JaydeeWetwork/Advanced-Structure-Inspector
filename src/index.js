@@ -48,6 +48,8 @@ import {
 	bindPreviewInspectLongPress,
 	toggleCamDock,
 	applyLayerStep,
+	restoreDefaultCamera,
+	hidePreviewChrome,
 	initInspectWindow
 } from "./ui/previewChrome.js";
 import { bindLayerTaps } from "./ui/layerTap.js";
@@ -128,11 +130,7 @@ function wireUi() {
 		openCam: () => toggleCamDock(true),
 		closeCam: () => toggleCamDock(false),
 		isCamOpen: () => !!els.camDock?.classList.contains("basi-cam-open"),
-		closeUnpinned: () => {
-			closeFloatDock(els.catalogFloat);
-			closeFloatDock(els.detailFloat);
-			toggleCamDock(false);
-		},
+		closeUnpinned: () => hidePreviewChrome(),
 		suppressOrbit: () => suppressPreviewOrbit(true),
 		releaseOrbit: () => {
 			requestAnimationFrame(() => suppressPreviewOrbit(false));
@@ -142,7 +140,7 @@ function wireUi() {
 	bindLayerTaps(els.previewHost, {
 		onUp: () => applyLayerStep(1),
 		onDown: () => applyLayerStep(-1),
-		onAll: () => applyLayerStep("all"),
+		onAll: () => restoreDefaultCamera(),
 		suppressOrbit: () => suppressPreviewOrbit(true),
 		releaseOrbit: () => {
 			requestAnimationFrame(() => suppressPreviewOrbit(false));

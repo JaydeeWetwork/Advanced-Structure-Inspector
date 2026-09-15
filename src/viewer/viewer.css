@@ -920,6 +920,36 @@ body.basi-touch.basi-app:has(.basi-footer:hover) .basi-cam-dock:not(.basi-cam-op
 	transform: translateY(calc(100% + 8px));
 }
 
+/* Tap the 3D view: hide docks even if pinned, hovered, or no-selection */
+body.basi-app .basi-float-left.basi-float-tucked,
+body.basi-app .basi-float-left.basi-float-tucked:hover,
+body.basi-app .basi-float-left.basi-float-tucked:focus-within,
+body.basi-app .basi-float-left.basi-float-tucked.basi-float-open,
+body.basi-app .basi-float-left.basi-float-tucked.basi-float-pinned,
+body.basi-app.basi-no-selection .basi-float-left.basi-float-tucked,
+body.basi-app.basi-no-selection .basi-float-left.basi-float-tucked:hover,
+body.basi-app.basi-no-selection .basi-float-left.basi-float-tucked:focus-within,
+body.basi-app.basi-no-selection .basi-float-left.basi-float-tucked.basi-float-open,
+body.basi-app.basi-no-selection .basi-float-left.basi-float-tucked.basi-float-pinned {
+	transform: translateX(calc(-100% + var(--basi-float-peek)));
+	opacity: 0.55;
+}
+
+body.basi-app .basi-float-right.basi-float-tucked,
+body.basi-app .basi-float-right.basi-float-tucked:hover,
+body.basi-app .basi-float-right.basi-float-tucked.basi-float-open,
+body.basi-app .basi-float-right.basi-float-tucked.basi-float-pinned {
+	transform: translateX(calc(100% - var(--basi-float-peek)));
+	opacity: 0.45;
+}
+
+body.basi-app .basi-cam-dock.basi-cam-tucked .basi-cam-slide,
+body.basi-app .basi-cam-dock.basi-cam-tucked:hover .basi-cam-slide,
+body.basi-app .basi-cam-dock.basi-cam-tucked:focus-within .basi-cam-slide,
+body.basi-app:has(.basi-footer:hover) .basi-cam-dock.basi-cam-tucked .basi-cam-slide {
+	transform: translateY(calc(100% + 8px));
+}
+
 /* Compact mobile: docks become bottom/top sheets peeks */
 @media (max-width: 720px) {
 	.basi-float {
@@ -966,6 +996,18 @@ body.basi-touch.basi-app:has(.basi-footer:hover) .basi-cam-dock:not(.basi-cam-op
 		right: 30%;
 		width: auto;
 		height: 3px;
+	}
+	body.basi-app .basi-float-left.basi-float-tucked,
+	body.basi-app .basi-float-left.basi-float-tucked:hover,
+	body.basi-app .basi-float-left.basi-float-tucked:focus-within,
+	body.basi-app .basi-float-left.basi-float-tucked.basi-float-open,
+	body.basi-app .basi-float-left.basi-float-tucked.basi-float-pinned,
+	body.basi-app.basi-no-selection .basi-float-left.basi-float-tucked,
+	body.basi-app .basi-float-right.basi-float-tucked,
+	body.basi-app .basi-float-right.basi-float-tucked:hover,
+	body.basi-app .basi-float-right.basi-float-tucked.basi-float-open,
+	body.basi-app .basi-float-right.basi-float-tucked.basi-float-pinned {
+		transform: translateY(calc(100% - var(--basi-float-peek)));
 	}
 }
 
