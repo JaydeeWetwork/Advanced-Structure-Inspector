@@ -427,16 +427,16 @@ body.basi-app .basi-preview-host {
 	border-radius: 0;
 }
 
-body.basi-app:has(.basi-footer:hover) .basi-cam-slide,
-body.basi-app .basi-cam-dock:hover .basi-cam-slide,
 body.basi-app .basi-cam-dock:focus-within .basi-cam-slide,
 body.basi-app .basi-cam-dock.basi-cam-open .basi-cam-slide {
 	transform: translateY(0);
 }
 
-body.basi-app.basi-touch .basi-cam-dock:hover:not(.basi-cam-open):not(:focus-within) .basi-cam-slide,
-body.basi-app.basi-touch:has(.basi-footer:hover) .basi-cam-dock:not(.basi-cam-open):not(:focus-within) .basi-cam-slide {
-	transform: translateY(calc(100% + 8px));
+@media (hover: hover) and (pointer: fine) {
+	body.basi-app:has(.basi-footer:hover) .basi-cam-slide,
+	body.basi-app .basi-cam-dock:hover .basi-cam-slide {
+		transform: translateY(0);
+	}
 }
 
 body.basi-view-editor .basi-cam-dock,
@@ -575,21 +575,4 @@ body.basi-app .basi-preview-host .previewCont lil-gui {
 	filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.25));
 }
 
-@media (max-width: 720px) {
-	body.basi-app {
-		--basi-chrome-top: 4.6rem;
-		--basi-chrome-bottom: 0px;
-	}
 
-	body.basi-app .basi-float {
-		top: auto;
-		bottom: 0;
-	}
-
-	body.basi-app .basi-float-left .basi-float-panel,
-	body.basi-app .basi-float-right .basi-float-panel {
-		border-radius: var(--basi-radius-lg) var(--basi-radius-lg) 0 0;
-		border: 1px solid var(--basi-border);
-		border-bottom: none;
-	}
-}

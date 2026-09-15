@@ -11,18 +11,18 @@ import {
 	session,
 	primaryPreview
 } from "./state.js";
-import { setStatus, formatSize, flashFloatDock, closeDetailFloatIfIdle, openFloatDock, stat } from "./dom.js";
+import { setStatus, formatSize, stat } from "./dom.js";
+import { flashFloatDock, closeDetailFloatIfIdle, openFloatDock } from "../ui/docks.js";
 import { renderList } from "../ui/catalogList.js";
+import { normalizeCameraPreset, normalizeCameraZoom } from "../viewer/systems/isoCamera.js";
+import { clearInspectPanel } from "../ui/inspectChrome.js";
 import {
-	clearInspectPanel,
 	syncLayerUiFromPreview,
 	syncCamBarActive,
 	updateLayerBadge,
-	showPreviewPlaceholder,
-	normalizeCameraPreset,
-	normalizeCameraZoom,
 	syncDefaultCamUi
-} from "../ui/previewChrome.js";
+} from "../ui/cameraBar.js";
+import { showPreviewPlaceholder } from "../ui/previewChrome.js";
 import { updatePreviewLoading, removePreviewLoading } from "../ui/previewLoading.js";
 import {
 	updateSelectionHeader,

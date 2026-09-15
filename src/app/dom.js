@@ -1,23 +1,8 @@
 /**
- * Status, formatting, float pins — shared DOM helpers.
+ * Status, formatting helpers. Dock APIs live in ui/docks.js.
  */
 
 import { els } from "./state.js";
-
-export {
-	applyFloatPin,
-	closeDetailFloatIfIdle,
-	closeFloatDock,
-	flashFloatDock,
-	initFloatPins,
-	isFloatPinned,
-	isFloatShowing,
-	loadFloatPins,
-	openFloatDock,
-	peekFloatDock,
-	saveFloatPins,
-	setDockVisibility
-} from "../ui/docks.js";
 
 /**
  * @param {string} message

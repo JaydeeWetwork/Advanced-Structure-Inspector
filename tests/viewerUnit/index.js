@@ -932,7 +932,7 @@ describe("signPlacement", async () => {
 	});
 
 	it("describeSignPlacement reports F/B and footer", async () => {
-		const { describeSignPlacement, signDebugFooter } = await import("../../src/viewer/signPlacement.js");
+		const { describeSignPlacement, signFaceTag } = await import("../../src/viewer/signPlacement.js");
 		const d = describeSignPlacement(
 			{ x: 2, y: 0, z: 0, states: { facing_direction: 4 } },
 			"oak_wall_sign"
@@ -941,7 +941,7 @@ describe("signPlacement", async () => {
 		assert.equal(d.facing.includes("fd=4"), true);
 		assert.equal(d.front.side, -1);
 		assert.equal(d.back.side, 1);
-		assert.match(signDebugFooter(d, false), /^F wall fd=4/);
+		assert.match(signFaceTag(d, false), /^F wall fd=4/);
 	});
 
 	it("standing gsd=15 board sits between F and B", async () => {
@@ -2344,9 +2344,10 @@ describe("paper theme", async () => {
 		assert.match(css, /\.basi-cam-slide/);
 		assert.match(css, /translateY\(calc\(100% \+ 8px\)\)/);
 		assert.match(css, /\.basi-cam-dock:hover \.basi-cam-slide/);
-		const chrome = readFileSync(join(root, "src/ui/previewChrome.js"), "utf8");
-		assert.match(chrome, /toggleCamDock/);
-		assert.match(chrome, /e\.key === "c"/);
+		const keys = readFileSync(join(root, "src/ui/previewChrome.js"), "utf8");
+		const cam = readFileSync(join(root, "src/ui/cameraBar.js"), "utf8");
+		assert.match(cam, /toggleCamDock/);
+		assert.match(keys, /e\.key === "c"/);
 	});
 
 	it("details dock scrolls as one column instead of clipping", () => {
@@ -2364,11 +2365,8 @@ describe("paper theme", async () => {
 		assert.match(html, /id="defaultZoomVal"/);
 		const css = readFileSync(join(root, "src/viewer/viewer.css"), "utf8");
 		assert.match(css, /\.basi-default-zoom/);
-		const {
-			normalizeCameraZoom,
-			stepSelectIndex,
-			stepRangeValue
-		} = await import("../../src/ui/previewChrome.js");
+		const { normalizeCameraZoom } = await import("../../src/viewer/systems/isoCamera.js");
+		const { stepSelectIndex, stepRangeValue } = await import("../../src/ui/cameraBar.js");
 		assert.equal(normalizeCameraZoom(undefined), 1);
 		assert.equal(normalizeCameraZoom(1.5), 1.5);
 		assert.equal(normalizeCameraZoom(3), 2);

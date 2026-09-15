@@ -28,6 +28,6 @@ export {
 export {
 	kindOfSign,
 	describeSignPlacement,
-	signDebugFooter,
+	signFaceTag,
 	placeSignFace
 } from "../signPlacement.js";

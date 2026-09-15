@@ -14,14 +14,13 @@ import {
 	primaryPreview,
 	importState
 } from "./app/state.js";
+import { setStatus } from "./app/dom.js";
 import {
-	setStatus,
 	initFloatPins,
 	openFloatDock,
 	peekFloatDock,
 	isFloatShowing
-} from "./app/dom.js";
-import { initPointerMode } from "./ui/pointerMode.js";
+} from "./ui/docks.js";
 import { bindEdgeSwipe } from "./ui/edgeSwipe.js";
 import { initTheme } from "./app/theme.js";
 import {
@@ -39,20 +38,24 @@ import {
 } from "./ui/detailPanel.js";
 import {
 	normalizeCameraPreset,
-	normalizeCameraZoom,
+	normalizeCameraZoom
+} from "./viewer/systems/isoCamera.js";
+import {
 	stepSelectIndex,
 	stepRangeValue,
 	applyCameraPreset,
 	syncCamBarActive,
-	onPreviewKeydown,
-	onPreviewDblClick,
-	bindPreviewInspectLongPress,
 	toggleCamDock,
 	applyLayerStep,
-	restoreDefaultCamera,
-	hidePreviewChrome,
+	restoreDefaultCamera
+} from "./ui/cameraBar.js";
+import {
+	onPreviewDblClick,
+	bindPreviewInspectLongPress,
 	initInspectWindow
-} from "./ui/previewChrome.js";
+} from "./ui/inspectChrome.js";
+import { onPreviewKeydown } from "./ui/previewChrome.js";
+import { hidePreviewChrome } from "./ui/chrome.js";
 import { bindLayerTaps } from "./ui/layerTap.js";
 import { initCameraCompass } from "./ui/cameraCompass.js";
 import {
@@ -115,7 +118,6 @@ function suppressPreviewOrbit(on) {
 }
 
 function wireUi() {
-	initPointerMode();
 	initTheme();
 	initFloatPins();
 	initInspectWindow();

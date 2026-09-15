@@ -3,6 +3,7 @@
  */
 
 import { els } from "../app/state.js";
+import { prefersFineHover } from "./pointerMode.js";
 
 const PIN_LS_KEY = "basi.floatPins.v3";
 const _floatFlashTimers = new Map();
@@ -55,16 +56,6 @@ export function isFloatPinned(el) {
 }
 
 /**
- * @param {HTMLElement|null|undefined} el
- * @param {{ force?: boolean }} [opts]
- */
-export function closeFloatDock(el, opts = {}) {
-	if (!el) return;
-	if (!opts.force && isFloatPinned(el)) return;
-	peekFloatDock(el);
-}
-
-/**
  * @returns {{ catalog: boolean, detail: boolean }}
  */
 export function loadFloatPins() {
@@ -102,7 +93,7 @@ export function applyFloatPin(floatEl, btn, pinned) {
 	if (btn) {
 		const isLeft = !!floatEl?.classList.contains("basi-float-left");
 		btn.setAttribute("aria-pressed", pinned ? "true" : "false");
-		btn.title = pinned ? "Unpin — hide until hover" : "Pin — keep open";
+		btn.title = pinned ? "Unpin this dock" : "Pin this dock";
 		btn.setAttribute("aria-label", btn.title);
 		btn.textContent = pinned ? (isLeft ? "«" : "»") : (isLeft ? "»" : "«");
 		btn.classList.toggle("is-pinned", pinned);
@@ -150,8 +141,7 @@ export function closeDetailFloatIfIdle(opts = {}) {
 	const el = els?.detailFloat;
 	if (!el) return;
 	if (isFloatPinned(el)) return;
-	const touch = document.body.classList.contains("basi-touch");
-	if (!opts.force && !touch && el.matches(":hover")) return;
+	if (!opts.force && prefersFineHover() && el.matches(":hover")) return;
 	peekFloatDock(el);
 }
 
@@ -163,7 +153,7 @@ export function flashFloatDock(floatId, ms = 1500) {
 	const el = document.getElementById(floatId);
 	if (!el) return;
 	openFloatDock(el);
-	if (isFloatPinned(el) || document.body.classList.contains("basi-touch")) return;
+	if (isFloatPinned(el) || !prefersFineHover()) return;
 	const prev = _floatFlashTimers.get(floatId);
 	if (prev) clearTimeout(prev);
 	_floatFlashTimers.set(

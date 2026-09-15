@@ -779,18 +779,27 @@ body.basi-has-selection .basi-float-right {
 	font-weight: 500;
 }
 
-/* Expand: data-visibility=open, or desktop hover. Pin never implies open. */
-.basi-float-left:hover,
-.basi-float-left:focus-within,
-.basi-float-left[data-visibility="open"] {
+/* Open is explicit. Hover-expand only on fine pointers (not iPad sticky hover). */
+.basi-float-left[data-visibility="open"],
+.basi-float-left:focus-within {
 	transform: translateX(0);
 	opacity: 1;
 }
 
-.basi-float-right:hover,
 .basi-float-right[data-visibility="open"] {
 	transform: translateX(0);
 	opacity: 1;
+}
+
+@media (hover: hover) and (pointer: fine) {
+	.basi-float-left:hover {
+		transform: translateX(0);
+		opacity: 1;
+	}
+	.basi-float-right:hover {
+		transform: translateX(0);
+		opacity: 1;
+	}
 }
 
 /* When no selection, keep list open for import/discovery */
@@ -873,95 +882,32 @@ body.basi-no-selection .basi-float-left {
 	left: 2px;
 }
 
-.basi-float-left:hover::after,
 .basi-float-left:focus-within::after,
 .basi-float-left[data-visibility="open"]::after,
-.basi-float-right:hover::after,
 .basi-float-right[data-visibility="open"]::after {
 	opacity: 0;
 }
 
-/* iPad / coarse pointer: swipe opens chrome; sticky :hover must not keep docks out */
-body.basi-touch {
-	--basi-float-hit: 64px;
-}
-
-body.basi-touch .basi-float-right {
-	--basi-float-hit: 88px;
-}
-
-body.basi-touch .basi-float-hit,
-body.basi-touch .basi-cam-hit {
-	touch-action: none;
-}
-
-body.basi-touch .basi-float-left:hover:not(:focus-within):not([data-visibility="open"]) {
-	transform: translateX(calc(-100% + var(--basi-float-peek)));
-	opacity: 0.55;
-}
-
-body.basi-touch .basi-float-right:hover:not([data-visibility="open"]) {
-	transform: translateX(calc(100% - var(--basi-float-peek)));
-	opacity: 0.45;
-}
-
-body.basi-touch .basi-cam-hit {
-	height: calc(72px + env(safe-area-inset-bottom, 0px));
-}
-
-body.basi-touch .basi-cam-dock:hover:not(.basi-cam-open):not(:focus-within),
-body.basi-touch.basi-app:has(.basi-footer:hover) .basi-cam-dock:not(.basi-cam-open):not(:focus-within) {
-	z-index: 36;
-}
-
-body.basi-touch .basi-cam-dock:hover:not(.basi-cam-open):not(:focus-within) .basi-cam-slide,
-body.basi-touch.basi-app:has(.basi-footer:hover) .basi-cam-dock:not(.basi-cam-open):not(:focus-within) .basi-cam-slide {
-	transform: translateY(calc(100% + 8px));
-}
-
-/* Compact mobile: docks become bottom/top sheets peeks */
-@media (max-width: 720px) {
-	.basi-float {
-		top: auto;
-		bottom: 0;
-		max-height: min(55vh, 420px);
-		width: min(100%, 360px);
+@media (hover: hover) and (pointer: fine) {
+	.basi-float-left:hover::after,
+	.basi-float-right:hover::after {
+		opacity: 0;
 	}
-	.basi-float-left {
-		left: 0;
-		right: auto;
-		transform: translateY(calc(100% - var(--basi-float-peek)));
+}
+
+@media (pointer: coarse) {
+	:root {
+		--basi-float-hit: 64px;
 	}
 	.basi-float-right {
-		right: 0;
-		left: auto;
-		transform: translateY(calc(100% - var(--basi-float-peek)));
-		flex-direction: column;
+		--basi-float-hit: 88px;
 	}
-	.basi-float-left:hover,
-	.basi-float-left:focus-within,
-	.basi-float-left[data-visibility="open"],
-	.basi-float-right:hover,
-	.basi-float-right[data-visibility="open"] {
-		transform: translateY(0);
+	.basi-float-hit,
+	.basi-cam-hit {
+		touch-action: none;
 	}
-	.basi-float-left .basi-float-panel,
-	.basi-float-right .basi-float-panel {
-		border-radius: var(--basi-radius) var(--basi-radius) 0 0;
-		border: 1px solid var(--basi-border);
-		border-bottom: none;
-	}
-	.basi-float-hit {
-		display: none;
-	}
-	.basi-float-left::after,
-	.basi-float-right::after {
-		top: 4px;
-		bottom: auto;
-		left: 30%;
-		right: 30%;
-		width: auto;
-		height: 3px;
+	.basi-cam-hit {
+		height: calc(72px + env(safe-area-inset-bottom, 0px));
 	}
 }
 
@@ -1593,18 +1539,25 @@ body.basi-touch.basi-app:has(.basi-footer:hover) .basi-cam-dock:not(.basi-cam-op
 	pointer-events: auto;
 }
 
-body.basi-app:has(.basi-footer:hover) .basi-cam-dock,
-.basi-cam-dock:hover,
 .basi-cam-dock:focus-within,
 .basi-cam-dock.basi-cam-open {
 	z-index: 46;
 }
 
-body.basi-app:has(.basi-footer:hover) .basi-cam-slide,
-.basi-cam-dock:hover .basi-cam-slide,
 .basi-cam-dock:focus-within .basi-cam-slide,
 .basi-cam-dock.basi-cam-open .basi-cam-slide {
 	transform: translateY(0);
+}
+
+@media (hover: hover) and (pointer: fine) {
+	body.basi-app:has(.basi-footer:hover) .basi-cam-dock,
+	.basi-cam-dock:hover {
+		z-index: 46;
+	}
+	body.basi-app:has(.basi-footer:hover) .basi-cam-slide,
+	.basi-cam-dock:hover .basi-cam-slide {
+		transform: translateY(0);
+	}
 }
 
 .basi-compass {
