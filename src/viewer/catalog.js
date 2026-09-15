@@ -4,32 +4,38 @@
  */
 
 import {
-	dbPutStructure,
 	dbDeleteStructure,
 	dbClearStructures,
-	dbLoadAll,
 	dbPutCategory,
 	dbPutCategories,
-	dbLoadCategories,
 	dbPutEntry,
 	dbPutEntries,
-	dbLoadEntries,
 	dbPutFeature,
 	dbPutFeatures,
-	dbLoadFeatures,
 	dbRemoveCategoryCascade,
 	dbRemoveEntryCascade,
 	dbRemoveFeatureCascade,
-	clearLegacyLocalStorageIndex,
-	dbGetMeta,
-	dbPutMeta,
 	DEFAULT_DB_NAME,
 	setActiveDbName
 } from "./db.js";
 import { ensureDefaultCatalogMigrated } from "./dbMigrate.js";
-import { TAXONOMY_SEED_STATE_KEY, TAXONOMY_SEED_VERSION } from "../data/taxonomy.js";
 import { applySeedTaxonomy, moveCategoryInList } from "./catalogSeed.js";
-import { buildCatalogTree, contrastText, fillHydratedMaps, filterFeatureIds } from "./catalogQuery.js";
+import {
+	buildCatalogTree,
+	contrastText,
+	filterFeatureIds,
+	newCatalogId,
+	slugFromName,
+	uniqueSlug
+} from "./catalogQuery.js";
+import {
+	hydrateCatalogStores,
+	loadAppliedSeedKeys,
+	persistStructureEntry,
+	saveAppliedSeedKeys,
+	tryPersist
+} from "./catalogPersist.js";
+import { normalizeCameraZoom } from "./systems/isoCamera.js";
 
 export { contrastText };
 import {
@@ -40,13 +46,6 @@ import {
 	saveCatalogAs
 } from "./catalogSwitch.js";
 import { getActiveCatalog } from "./catalogRegistry.js";
-
-/** 1 = default fit; clamp to the details-dock zoom slider range. */
-function clampDefaultZoom(z) {
-	const n = Number(z);
-	if (!Number.isFinite(n)) return 1;
-	return Math.max(0.5, Math.min(2, Math.round(n * 20) / 20));
-}
 
 /**
  * @typedef {object} StructureCatalogEntry
@@ -118,30 +117,6 @@ function clampDefaultZoom(z) {
 /** Sentinel for the virtual Uncategorized group (not stored in IDB). */
 export const UNCATEGORIZED_ID = null;
 
-function newId(prefix = "basi") {
-	if (typeof crypto !== "undefined" && crypto.randomUUID) {
-		return crypto.randomUUID();
-	}
-	return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-}
-
-function slugFromName(name) {
-	const slug = String(name || "")
-		.toLowerCase()
-		.replace(/[^a-z0-9]+/g, "-")
-		.replace(/^-+|-+$/g, "");
-	return slug || "item";
-}
-
-function uniqueSlug(base, taken) {
-	if (!taken.has(base)) return base;
-	for (let i = 2; i < 1000; i++) {
-		const next = `${base}-${i}`;
-		if (!taken.has(next)) return next;
-	}
-	return `${base}-${newId("s")}`;
-}
-
 export default class StructureCatalog {
 	/** @type {Map<string, StructureCatalogEntry>} */
 	#entries = new Map();
@@ -200,7 +175,7 @@ export default class StructureCatalog {
 	 * @returns {Promise<StructureCatalogEntry>}
 	 */
 	async add(partial) {
-		const id = partial.id ?? newId("basi");
+		const id = partial.id ?? newCatalogId("basi");
 		const entryId =
 			partial.entryId != null && this.#catalogEntries.has(partial.entryId)
 				? partial.entryId
@@ -226,7 +201,7 @@ export default class StructureCatalog {
 				? [...partial.acquiredMaterials]
 				: [],
 			defaultCameraPreset: partial.defaultCameraPreset || "iso-north",
-			defaultCameraZoom: clampDefaultZoom(partial.defaultCameraZoom),
+			defaultCameraZoom: normalizeCameraZoom(partial.defaultCameraZoom),
 			userDetails: Array.isArray(partial.userDetails)
 				? partial.userDetails.map(d => ({ ...d }))
 				: [],
@@ -262,7 +237,7 @@ export default class StructureCatalog {
 			entry.defaultCameraPreset = partial.defaultCameraPreset || "iso-north";
 		}
 		if ("defaultCameraZoom" in partial) {
-			entry.defaultCameraZoom = clampDefaultZoom(partial.defaultCameraZoom);
+			entry.defaultCameraZoom = normalizeCameraZoom(partial.defaultCameraZoom);
 		}
 		if ("userDetails" in partial) {
 			entry.userDetails = Array.isArray(partial.userDetails)
@@ -497,7 +472,7 @@ export default class StructureCatalog {
 		const maxOrder = this.listCategories().reduce((m, c) => Math.max(m, c.sortOrder), -1);
 		/** @type {StructureCategory} */
 		const cat = {
-			id: partial.id || newId("cat"),
+			id: partial.id || newCatalogId("cat"),
 			slug,
 			name,
 			description: typeof partial.description === "string" ? partial.description : "",
@@ -678,7 +653,7 @@ export default class StructureCatalog {
 		);
 		/** @type {CatalogEntry} */
 		const ent = {
-			id: partial.id || newId("ent"),
+			id: partial.id || newCatalogId("ent"),
 			slug,
 			categoryId,
 			name,
@@ -829,7 +804,7 @@ export default class StructureCatalog {
 			: [];
 		/** @type {CatalogFeature} */
 		const feat = {
-			id: partial.id || newId("feat"),
+			id: partial.id || newCatalogId("feat"),
 			slug,
 			name,
 			description: typeof partial.description === "string" ? partial.description : "",
@@ -951,7 +926,7 @@ export default class StructureCatalog {
 	 * @returns {Promise<{ categories: number, entries: number, features: number }>}
 	 */
 	async ensureSeedTaxonomy() {
-		const applied = await this.#loadAppliedSeedKeys();
+		const applied = await loadAppliedSeedKeys(this.#persistEnabled, this.#dbName);
 		const result = applySeedTaxonomy({
 			categories: this.#categories,
 			catalogEntries: this.#catalogEntries,
@@ -965,7 +940,7 @@ export default class StructureCatalog {
 				if (result.categories.length) await dbPutCategories(result.categories, dbName);
 				if (result.entries.length) await dbPutEntries(result.entries, dbName);
 				if (result.features.length) await dbPutFeatures(result.features, dbName);
-				await this.#saveAppliedSeedKeys(result.applied);
+				await saveAppliedSeedKeys(this.#persistEnabled, dbName, result.applied);
 				this.lastPersistError = null;
 			} catch (e) {
 				const msg = e?.message ?? String(e);
@@ -978,36 +953,6 @@ export default class StructureCatalog {
 		const nFeat = result.features.length;
 		if (nCat || nEnt || nFeat) this.#notify();
 		return { categories: nCat, entries: nEnt, features: nFeat };
-	}
-
-	async #loadAppliedSeedKeys() {
-		if (!this.#persistEnabled) return new Set();
-		try {
-			const meta = await dbGetMeta(this.#dbName);
-			if (Array.isArray(meta?.applied)) return new Set(meta.applied);
-			if (typeof localStorage === "undefined") return new Set();
-			let raw = localStorage.getItem(`${TAXONOMY_SEED_STATE_KEY}::${this.#dbName}`);
-			if (!raw && this.#dbName === DEFAULT_DB_NAME) {
-				raw = localStorage.getItem(TAXONOMY_SEED_STATE_KEY);
-			}
-			if (!raw) return new Set();
-			const o = JSON.parse(raw);
-			return new Set(Array.isArray(o?.applied) ? o.applied : []);
-		} catch {
-			return new Set();
-		}
-	}
-
-	async #saveAppliedSeedKeys(applied) {
-		if (!this.#persistEnabled) return;
-		try {
-			await dbPutMeta(
-				{ version: TAXONOMY_SEED_VERSION, applied: [...applied] },
-				this.#dbName
-			);
-		} catch {
-			/* ignore */
-		}
 	}
 
 	/**
@@ -1027,11 +972,11 @@ export default class StructureCatalog {
 
 	async #markSeedAppliedKeys(keys) {
 		if (!this.#persistEnabled) return;
-		const applied = await this.#loadAppliedSeedKeys();
+		const applied = await loadAppliedSeedKeys(true, this.#dbName);
 		for (const k of keys) {
 			if (k) applied.add(k);
 		}
-		await this.#saveAppliedSeedKeys(applied);
+		await saveAppliedSeedKeys(true, this.#dbName, applied);
 	}
 
 	/**
@@ -1048,30 +993,19 @@ export default class StructureCatalog {
 	 * @returns {Promise<number>} count of structures loaded
 	 */
 	async hydrateFromDb(gen = this.#hydrateGen) {
-		clearLegacyLocalStorageIndex();
-		const dbName = this.#dbName;
 		try {
-			const [rows, cats, ents, feats] = await Promise.all([
-				dbLoadAll(dbName),
-				dbLoadCategories(dbName),
-				dbLoadEntries(dbName),
-				dbLoadFeatures(dbName)
-			]);
-			if (gen !== this.#hydrateGen) return 0;
-			fillHydratedMaps({
-				rows,
-				cats,
-				ents,
-				feats,
+			const n = await hydrateCatalogStores({
+				dbName: this.#dbName,
 				entries: this.#entries,
 				categories: this.#categories,
 				catalogEntries: this.#catalogEntries,
 				features: this.#features
 			});
+			if (gen !== this.#hydrateGen) return 0;
 			await this.ensureSeedTaxonomy();
 			if (gen !== this.#hydrateGen) return 0;
 			this.#notify();
-			return rows.length;
+			return n;
 		} catch (e) {
 			console.warn("[basi] IndexedDB hydrate failed:", e);
 			if (gen !== this.#hydrateGen) return 0;
@@ -1090,17 +1024,16 @@ export default class StructureCatalog {
 	}
 
 	async #persistStructure(entry, dbName = this.#dbName) {
-		if (!this.#persistEnabled) return;
-		try {
-			await dbPutStructure(entry, dbName);
-			this.lastPersistError = null;
-			delete entry.persistError;
-		} catch (e) {
-			const msg = e?.message ?? String(e);
+		await persistStructureEntry(this.#persistEnabled, dbName, entry, err => {
+			if (!err) {
+				this.lastPersistError = null;
+				delete entry.persistError;
+				return;
+			}
+			const msg = err?.message ?? String(err);
 			this.lastPersistError = msg;
 			entry.persistError = msg;
-			console.warn("[basi] IndexedDB put failed:", e);
-		}
+		});
 	}
 
 	/**
@@ -1108,15 +1041,9 @@ export default class StructureCatalog {
 	 * @param {string} label
 	 */
 	async #tryPersist(fn, label) {
-		if (!this.#persistEnabled) return;
-		try {
-			await fn();
-			this.lastPersistError = null;
-		} catch (e) {
-			const msg = e?.message ?? String(e);
-			this.lastPersistError = msg;
-			console.warn(`[basi] ${label} failed:`, e);
-		}
+		await tryPersist(this.#persistEnabled, fn, label, err => {
+			this.lastPersistError = err ? err.message ?? String(err) : null;
+		});
 	}
 
 	#notify() {

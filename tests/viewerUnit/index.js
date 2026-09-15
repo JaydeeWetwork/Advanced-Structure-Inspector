@@ -1075,55 +1075,6 @@ describe("signPlacement", async () => {
 		assert.ok(Math.abs(baked.placed.tz - unflippedZ) > 8, "must not use unflipped instance Z");
 	});
 
-	it("sign tweaks lift along outward and yaw spins basis", async () => {
-		const { signPlaneInstanceVerts } = await import("../../src/viewer/signPlacement.js");
-		const {
-			applySignTweaks,
-			DEFAULT_SIGN_TWEAKS,
-			formatSignTweakRecipe,
-			tweaksAreIdentity
-		} = await import("../../src/viewer/signDebug.js");
-		const block = { x: 0, y: 0, z: 0, states: { ground_sign_direction: 0 } };
-		const base = signPlaneInstanceVerts(block, "standing_sign", false);
-		assert.equal(tweaksAreIdentity(DEFAULT_SIGN_TWEAKS), true);
-		const lifted = applySignTweaks(base, { ...DEFAULT_SIGN_TWEAKS, liftAdd: 2 });
-		const dx = lifted.placed.tx - base.placed.tx;
-		const dy = lifted.placed.ty - base.placed.ty;
-		const dz = lifted.placed.tz - base.placed.tz;
-		const dot = dx * base.basis.z[0] + dy * base.basis.z[1] + dz * base.basis.z[2];
-		assert.ok(Math.abs(dot - 2) < 1e-6, `lift should move along +Z, dot=${dot}`);
-		const yawed = applySignTweaks(base, { ...DEFAULT_SIGN_TWEAKS, yawDeg: 90 });
-		const z = yawed.basis.z;
-		assert.ok(Math.abs(z[1]) < 1e-6, "yaw keeps Z horizontal");
-		assert.ok(Math.abs(Math.hypot(z[0], z[2]) - 1) < 1e-6);
-		const recipe = formatSignTweakRecipe({
-			tweaks: { ...DEFAULT_SIGN_TWEAKS, yawDeg: -45, note: "test" }
-		});
-		assert.match(recipe, /---SIGN_TWEAK---/);
-		assert.match(recipe, /yawDeg: -45/);
-		assert.match(recipe, /note: test/);
-		const { tweaksAffectSign, setSignDebugFocus } = await import("../../src/viewer/signDebug.js");
-		const wall = { x: 1, y: 0, z: 2, states: { facing_direction: 2 } };
-		const oak = { x: 8, y: 0, z: 0, states: { ground_sign_direction: 2 } };
-		setSignDebugFocus(null);
-		assert.equal(tweaksAffectSign(oak, "oak_standing_sign", { ...DEFAULT_SIGN_TWEAKS, applyTo: "this" }), false);
-		setSignDebugFocus(oak, "oak_standing_sign");
-		assert.equal(tweaksAffectSign(oak, "oak_standing_sign", { ...DEFAULT_SIGN_TWEAKS, applyTo: "this" }), true);
-		assert.equal(tweaksAffectSign(wall, "warped_wall_sign", { ...DEFAULT_SIGN_TWEAKS, applyTo: "this" }), false);
-		assert.equal(tweaksAffectSign(wall, "warped_wall_sign", { ...DEFAULT_SIGN_TWEAKS, applyTo: "wall" }), true);
-		const { subscribeSignTweaks, notifySignTweaksChanged, signTweaks } =
-			await import("../../src/viewer/signDebug.js");
-		let hits = 0;
-		const off = subscribeSignTweaks(() => {
-			hits++;
-		});
-		signTweaks.liftAdd = 1.25;
-		notifySignTweaksChanged();
-		assert.equal(hits >= 1, true, "overlay must hear slider notify");
-		off();
-		signTweaks.liftAdd = 0;
-	});
-
 	it("F minus B is along baked board +Z for gsd=15", async () => {
 		const { placeSignFace, boardCenterThree, signBoardAxes, eulerOfSign } =
 			await import("../../src/viewer/signPlacement.js");
@@ -2276,6 +2227,8 @@ describe("true isometric showcase", async () => {
 		isoDirectionInfo,
 		isoOffset,
 		isIsoCameraPreset,
+		normalizeCameraPreset,
+		normalizeCameraZoom,
 		normalizeIsoPreset,
 		orthoHalfExtents
 	} = await import("../../src/viewer/systems/isoCamera.js");
@@ -2331,6 +2284,13 @@ describe("true isometric showcase", async () => {
 		assert.match(view, /orthoHalfHeight/);
 		const orbit = readFileSync(join(root, "src/viewer/systems/orbitBootstrap.js"), "utf8");
 		assert.match(orbit, /controls\.object/);
+	});
+
+	it("normalizes default camera zoom and iso aliases", () => {
+		assert.equal(normalizeCameraZoom(2.4), 2);
+		assert.equal(normalizeCameraZoom("nope"), 1);
+		assert.equal(normalizeCameraPreset("iso"), "iso-north");
+		assert.equal(normalizeCameraPreset("west"), "west");
 	});
 
 	it("free orbit does not switch iso ortho to perspective", () => {

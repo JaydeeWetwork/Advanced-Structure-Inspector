@@ -20,7 +20,14 @@ export {
 	isoDirectionInfo,
 	isoOffset,
 	isIsoCameraPreset,
+	isIsoPreset,
 	normalizeIsoPreset,
+	normalizeCameraPreset,
+	normalizeCameraZoom,
+	CAMERA_PRESET_OPTIONS,
+	CAMERA_ZOOM_MIN,
+	CAMERA_ZOOM_MAX,
+	CAMERA_ZOOM_DEFAULT,
 	orthoHalfExtents
 } from "./isoCamera.js";
 export { default as FlyController } from "./FlyController.js";

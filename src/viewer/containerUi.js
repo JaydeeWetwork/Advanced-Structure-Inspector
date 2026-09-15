@@ -7,12 +7,6 @@ import {
 } from "./inspectStructure.js";
 import { largeChestTitle } from "./doubleChest.js";
 import { describeSignPlacement } from "./signPlacement.js";
-import {
-	formatSignInspectDump,
-	renderSignTweakControls,
-	setSignDebugFocus,
-	signDebugEnabled
-} from "./signDebug.js";
 
 export { parseDisabledSlots } from "./inspectStructure.js";
 
@@ -668,13 +662,6 @@ function renderSignLayout(block = null) {
 		return wrap;
 	}
 
-	if (block) {
-		const dump = renderSignPlacementDump(block);
-		const hud = renderSignTweakControls(block, { dumpEl: dump });
-		if (hud) wrap.appendChild(hud);
-		wrap.appendChild(dump);
-	}
-
 	const addFace = (label, face) => {
 		const sec = document.createElement("div");
 		sec.className = "mc-text-face";
@@ -710,17 +697,6 @@ function renderSignLayout(block = null) {
 		wrap.appendChild(w);
 	}
 	return wrap;
-}
-
-/**
- * @param {import("./inspectStructure.js").InspectBlock} block
- */
-function renderSignPlacementDump(block) {
-	if (signDebugEnabled()) setSignDebugFocus(block, block.name);
-	const box = document.createElement("pre");
-	box.className = "mc-sign-debug";
-	box.textContent = formatSignInspectDump(block);
-	return box;
 }
 
 /**

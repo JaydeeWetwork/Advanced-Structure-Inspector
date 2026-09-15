@@ -1,0 +1,184 @@
+/**
+ * Dock visibility: peek | open. Pin is preference only (does not imply open).
+ */
+
+import { els } from "../app/state.js";
+
+const PIN_LS_KEY = "basi.floatPins.v3";
+const _floatFlashTimers = new Map();
+
+/**
+ * @param {HTMLElement|null|undefined} el
+ * @returns {"open"|"peek"}
+ */
+export function getDockVisibility(el) {
+	return el?.getAttribute("data-visibility") === "open" ? "open" : "peek";
+}
+
+/**
+ * @param {HTMLElement|null|undefined} el
+ * @param {"open"|"peek"} vis
+ */
+export function setDockVisibility(el, vis) {
+	if (!el) return;
+	el.setAttribute("data-visibility", vis === "open" ? "open" : "peek");
+}
+
+/**
+ * @param {HTMLElement|null|undefined} el
+ */
+export function openFloatDock(el) {
+	setDockVisibility(el, "open");
+}
+
+/**
+ * @param {HTMLElement|null|undefined} el
+ */
+export function peekFloatDock(el) {
+	setDockVisibility(el, "peek");
+}
+
+/**
+ * @param {HTMLElement|null|undefined} el
+ * @returns {boolean}
+ */
+export function isFloatShowing(el) {
+	return getDockVisibility(el) === "open";
+}
+
+/**
+ * @param {HTMLElement|null|undefined} el
+ * @returns {boolean}
+ */
+export function isFloatPinned(el) {
+	return !!el?.classList.contains("basi-float-pinned");
+}
+
+/**
+ * @param {HTMLElement|null|undefined} el
+ * @param {{ force?: boolean }} [opts]
+ */
+export function closeFloatDock(el, opts = {}) {
+	if (!el) return;
+	if (!opts.force && isFloatPinned(el)) return;
+	peekFloatDock(el);
+}
+
+/**
+ * @returns {{ catalog: boolean, detail: boolean }}
+ */
+export function loadFloatPins() {
+	try {
+		const raw = localStorage.getItem(PIN_LS_KEY);
+		if (!raw) return { catalog: false, detail: false };
+		const o = JSON.parse(raw);
+		return { catalog: !!o.catalog, detail: !!o.detail };
+	} catch {
+		return { catalog: false, detail: false };
+	}
+}
+
+/**
+ * @param {{ catalog: boolean, detail: boolean }} pins
+ */
+export function saveFloatPins(pins) {
+	try {
+		localStorage.setItem(PIN_LS_KEY, JSON.stringify(pins));
+	} catch {
+		/* ignore */
+	}
+}
+
+/**
+ * @param {HTMLElement|null} floatEl
+ * @param {HTMLButtonElement|null} btn
+ * @param {boolean} pinned
+ */
+export function applyFloatPin(floatEl, btn, pinned) {
+	if (floatEl) {
+		floatEl.classList.toggle("basi-float-pinned", pinned);
+		if (pinned) openFloatDock(floatEl);
+	}
+	if (btn) {
+		const isLeft = !!floatEl?.classList.contains("basi-float-left");
+		btn.setAttribute("aria-pressed", pinned ? "true" : "false");
+		btn.title = pinned ? "Unpin — hide until hover" : "Pin — keep open";
+		btn.setAttribute("aria-label", btn.title);
+		btn.textContent = pinned ? (isLeft ? "«" : "»") : (isLeft ? "»" : "«");
+		btn.classList.toggle("is-pinned", pinned);
+	}
+}
+
+export function initFloatPins() {
+	const pins = loadFloatPins();
+	applyFloatPin(els?.catalogFloat, els?.pinCatalogBtn, pins.catalog);
+	applyFloatPin(els?.detailFloat, els?.pinDetailBtn, pins.detail);
+
+	const toggle = which => {
+		const cur = loadFloatPins();
+		cur[which] = !cur[which];
+		saveFloatPins(cur);
+		if (which === "catalog") {
+			applyFloatPin(els?.catalogFloat, els?.pinCatalogBtn, cur.catalog);
+		} else {
+			applyFloatPin(els?.detailFloat, els?.pinDetailBtn, cur.detail);
+		}
+	};
+
+	els?.pinCatalogBtn?.addEventListener("click", e => {
+		e.preventDefault();
+		e.stopPropagation();
+		toggle("catalog");
+	});
+	els?.pinDetailBtn?.addEventListener("click", e => {
+		e.preventDefault();
+		e.stopPropagation();
+		toggle("detail");
+	});
+
+	const trapWheel = el => {
+		el?.addEventListener("wheel", e => e.stopPropagation(), { passive: true });
+	};
+	trapWheel(els?.detailFloat);
+	trapWheel(els?.catalogFloat);
+}
+
+/**
+ * @param {{ force?: boolean }} [opts]
+ */
+export function closeDetailFloatIfIdle(opts = {}) {
+	const el = els?.detailFloat;
+	if (!el) return;
+	if (isFloatPinned(el)) return;
+	const touch = document.body.classList.contains("basi-touch");
+	if (!opts.force && !touch && el.matches(":hover")) return;
+	peekFloatDock(el);
+}
+
+/**
+ * @param {string} floatId
+ * @param {number} [ms]
+ */
+export function flashFloatDock(floatId, ms = 1500) {
+	const el = document.getElementById(floatId);
+	if (!el) return;
+	openFloatDock(el);
+	if (isFloatPinned(el) || document.body.classList.contains("basi-touch")) return;
+	const prev = _floatFlashTimers.get(floatId);
+	if (prev) clearTimeout(prev);
+	_floatFlashTimers.set(
+		floatId,
+		setTimeout(() => {
+			if (isFloatPinned(el)) {
+				_floatFlashTimers.delete(floatId);
+				return;
+			}
+			if (el.matches(":hover")) {
+				el.addEventListener("pointerleave", () => closeDetailFloatIfIdle(), { once: true });
+			} else {
+				closeDetailFloatIfIdle();
+			}
+			_floatFlashTimers.delete(floatId);
+		}, ms)
+	);
+}

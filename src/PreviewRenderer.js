@@ -29,14 +29,18 @@ import {
 	SpecialBlockOverlay
 } from "./viewer/systems/index.js";
 import { disposeObject3D } from "./viewer/systems/disposeObject3D.js";
-import { SIGN_TWEAK_EVENT, signDebugEnabled } from "./viewer/signDebug.js";
+
 
 /** @type {typeof import("three")} */
 let THREE;
 /** @type {typeof import("three/examples/jsm/controls/OrbitControls.js").OrbitControls} */
 let OrbitControls;
 
-const IN_PRODUCTION = false;
+const IN_PRODUCTION =
+	typeof location !== "undefined"
+	&& location.hostname !== ""
+	&& location.hostname !== "localhost"
+	&& location.hostname !== "127.0.0.1";
 
 export default class PreviewRenderer extends AsyncFactory {
 	static #WEAK_DEVICE_OPTIONS = {
@@ -124,13 +128,6 @@ export default class PreviewRenderer extends AsyncFactory {
 	#optionsGui;
 	/** @type {import("three").Object3D[]} */
 	#debugHelpers = [];
-	/** @type {() => void} */
-	#onSignTweaks = () => {
-		if (this.#ctx?.isDisposed()) return;
-		if (this.#overlays?.applyLiveTweaks?.()) return;
-		this.#rebuildOverlays();
-	};
-
 	/**
 	 * Sole public list accessor — storage lives on EntityAttachSystem.
 	 * @returns {import("./viewer/entityExtract.js").PreviewEntity[]}
@@ -436,11 +433,6 @@ export default class PreviewRenderer extends AsyncFactory {
 		this.#inspect.init();
 		this.#layers.rebuildBlockMeshes(null);
 		this.#rebuildOverlays();
-		try {
-			if (signDebugEnabled()) globalThis.addEventListener(SIGN_TWEAK_EVENT, this.#onSignTweaks);
-		} catch {
-			/* ignore */
-		}
 		if (this.#initAborted()) return;
 
 		try {
@@ -660,11 +652,6 @@ export default class PreviewRenderer extends AsyncFactory {
 		}
 		try {
 			this.#lighting?.dispose?.();
-		} catch {
-			/* ignore */
-		}
-		try {
-			globalThis.removeEventListener(SIGN_TWEAK_EVENT, this.#onSignTweaks);
 		} catch {
 			/* ignore */
 		}

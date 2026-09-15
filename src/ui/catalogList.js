@@ -53,13 +53,13 @@ export function createStructureRow(entry, color = null) {
 	const err = entry.parseError;
 	const ent = entry.entityCount ? ` · ${entry.entityCount} ent` : "";
 	meta.textContent = err
-		? `Parse error · ${entry.sourceKind}`
+		? `Re-import · ${entry.sourceKind}`
 		: `${formatSize(entry.size)} · ${Number(entry.blockCount || 0).toLocaleString()} blocks${ent}`;
 
 	main.append(title, meta);
 	li.append(main);
 	li.draggable = true;
-	li.title = "Drag onto a category";
+	li.title = err || "Drag onto a category";
 	li.addEventListener("dragstart", e => {
 		e.stopPropagation();
 		e.dataTransfer.effectAllowed = "move";

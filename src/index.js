@@ -18,7 +18,7 @@ import {
 	setStatus,
 	initFloatPins,
 	openFloatDock,
-	tuckFloatDock,
+	peekFloatDock,
 	isFloatShowing
 } from "./app/dom.js";
 import { initPointerMode } from "./ui/pointerMode.js";
@@ -122,12 +122,12 @@ function wireUi() {
 	initCameraCompass();
 	bindEdgeSwipe(els.appStage, {
 		openCatalog: () => openFloatDock(els.catalogFloat),
-		closeCatalog: () => tuckFloatDock(els.catalogFloat),
+		closeCatalog: () => peekFloatDock(els.catalogFloat),
 		openDetail: () => {
 			if (!getSelectedId()) return;
 			openFloatDock(els.detailFloat);
 		},
-		closeDetail: () => tuckFloatDock(els.detailFloat),
+		closeDetail: () => peekFloatDock(els.detailFloat),
 		openCam: () => toggleCamDock(true),
 		closeCam: () => toggleCamDock(false),
 		isCamOpen: () => !!els.camDock?.classList.contains("basi-cam-open"),

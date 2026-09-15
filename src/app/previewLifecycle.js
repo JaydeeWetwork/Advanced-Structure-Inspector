@@ -11,7 +11,7 @@ import {
 	session,
 	primaryPreview
 } from "./state.js";
-import { setStatus, formatSize, flashFloatDock, closeDetailFloatIfIdle, stat } from "./dom.js";
+import { setStatus, formatSize, flashFloatDock, closeDetailFloatIfIdle, openFloatDock, stat } from "./dom.js";
 import { renderList } from "../ui/catalogList.js";
 import {
 	clearInspectPanel,
@@ -67,6 +67,7 @@ export function selectEntry(id, opts = {}) {
 		els.emptyState?.classList.remove("hidden");
 		els.detailPanel?.classList.add("hidden");
 		closeDetailFloatIfIdle({ force: true });
+		openFloatDock(els.catalogFloat);
 		updateSelectionHeader(null);
 		syncMetaFields(null);
 		if (els.previewHost) {

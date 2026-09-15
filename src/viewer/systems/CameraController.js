@@ -9,6 +9,7 @@ import {
 	applyOrthoFrustum,
 	isIsoCameraPreset,
 	isoOffset,
+	normalizeCameraZoom,
 	normalizeIsoPreset,
 	orthoHalfExtents
 } from "./isoCamera.js";
@@ -157,9 +158,7 @@ export default class CameraController {
 	}
 
 	#zoomFactor() {
-		const z = Number(this.userZoom);
-		if (!Number.isFinite(z) || z <= 0) return 1;
-		return Math.max(0.5, Math.min(2, z));
+		return normalizeCameraZoom(this.userZoom);
 	}
 
 	/**
@@ -167,9 +166,7 @@ export default class CameraController {
 	 * @param {{ reframe?: boolean }} [opts]
 	 */
 	setUserZoom(z, opts = {}) {
-		const n = Number(z);
-		if (!Number.isFinite(n)) return this.userZoom;
-		this.userZoom = Math.max(0.5, Math.min(2, n));
+		this.userZoom = normalizeCameraZoom(z);
 		const reframe = opts.reframe !== false;
 		const p = this.lastPreset;
 		if (reframe && p && p !== "free" && p !== "fly") {

@@ -779,19 +779,16 @@ body.basi-has-selection .basi-float-right {
 	font-weight: 500;
 }
 
-/* Expand when pointer near edge / over panel / keyboard focus inside */
+/* Expand: data-visibility=open, or desktop hover. Pin never implies open. */
 .basi-float-left:hover,
 .basi-float-left:focus-within,
-.basi-float-left.basi-float-open,
-.basi-float-left.basi-float-pinned,
-body.basi-no-selection .basi-float-left {
+.basi-float-left[data-visibility="open"] {
 	transform: translateX(0);
 	opacity: 1;
 }
 
 .basi-float-right:hover,
-.basi-float-right.basi-float-open,
-.basi-float-right.basi-float-pinned {
+.basi-float-right[data-visibility="open"] {
 	transform: translateX(0);
 	opacity: 1;
 }
@@ -878,11 +875,9 @@ body.basi-no-selection .basi-float-left {
 
 .basi-float-left:hover::after,
 .basi-float-left:focus-within::after,
-.basi-float-left.basi-float-pinned::after,
+.basi-float-left[data-visibility="open"]::after,
 .basi-float-right:hover::after,
-.basi-float-right.basi-float-open::after,
-.basi-float-right.basi-float-pinned::after,
-body.basi-no-selection .basi-float-left::after {
+.basi-float-right[data-visibility="open"]::after {
 	opacity: 0;
 }
 
@@ -900,12 +895,12 @@ body.basi-touch .basi-cam-hit {
 	touch-action: none;
 }
 
-body.basi-touch:not(.basi-no-selection) .basi-float-left:hover:not(:focus-within):not(.basi-float-open):not(.basi-float-pinned) {
+body.basi-touch .basi-float-left:hover:not(:focus-within):not([data-visibility="open"]) {
 	transform: translateX(calc(-100% + var(--basi-float-peek)));
 	opacity: 0.55;
 }
 
-body.basi-touch .basi-float-right:hover:not(.basi-float-open):not(.basi-float-pinned) {
+body.basi-touch .basi-float-right:hover:not([data-visibility="open"]) {
 	transform: translateX(calc(100% - var(--basi-float-peek)));
 	opacity: 0.45;
 }
@@ -921,36 +916,6 @@ body.basi-touch.basi-app:has(.basi-footer:hover) .basi-cam-dock:not(.basi-cam-op
 
 body.basi-touch .basi-cam-dock:hover:not(.basi-cam-open):not(:focus-within) .basi-cam-slide,
 body.basi-touch.basi-app:has(.basi-footer:hover) .basi-cam-dock:not(.basi-cam-open):not(:focus-within) .basi-cam-slide {
-	transform: translateY(calc(100% + 8px));
-}
-
-/* Tap the 3D view: hide docks even if pinned, hovered, or no-selection */
-body.basi-app .basi-float-left.basi-float-tucked,
-body.basi-app .basi-float-left.basi-float-tucked:hover,
-body.basi-app .basi-float-left.basi-float-tucked:focus-within,
-body.basi-app .basi-float-left.basi-float-tucked.basi-float-open,
-body.basi-app .basi-float-left.basi-float-tucked.basi-float-pinned,
-body.basi-app.basi-no-selection .basi-float-left.basi-float-tucked,
-body.basi-app.basi-no-selection .basi-float-left.basi-float-tucked:hover,
-body.basi-app.basi-no-selection .basi-float-left.basi-float-tucked:focus-within,
-body.basi-app.basi-no-selection .basi-float-left.basi-float-tucked.basi-float-open,
-body.basi-app.basi-no-selection .basi-float-left.basi-float-tucked.basi-float-pinned {
-	transform: translateX(calc(-100% + var(--basi-float-peek)));
-	opacity: 0.55;
-}
-
-body.basi-app .basi-float-right.basi-float-tucked,
-body.basi-app .basi-float-right.basi-float-tucked:hover,
-body.basi-app .basi-float-right.basi-float-tucked.basi-float-open,
-body.basi-app .basi-float-right.basi-float-tucked.basi-float-pinned {
-	transform: translateX(calc(100% - var(--basi-float-peek)));
-	opacity: 0.45;
-}
-
-body.basi-app .basi-cam-dock.basi-cam-tucked .basi-cam-slide,
-body.basi-app .basi-cam-dock.basi-cam-tucked:hover .basi-cam-slide,
-body.basi-app .basi-cam-dock.basi-cam-tucked:focus-within .basi-cam-slide,
-body.basi-app:has(.basi-footer:hover) .basi-cam-dock.basi-cam-tucked .basi-cam-slide {
 	transform: translateY(calc(100% + 8px));
 }
 
@@ -975,12 +940,9 @@ body.basi-app:has(.basi-footer:hover) .basi-cam-dock.basi-cam-tucked .basi-cam-s
 	}
 	.basi-float-left:hover,
 	.basi-float-left:focus-within,
-	.basi-float-left.basi-float-open,
-	.basi-float-left.basi-float-pinned,
-	body.basi-no-selection .basi-float-left,
+	.basi-float-left[data-visibility="open"],
 	.basi-float-right:hover,
-	.basi-float-right.basi-float-open,
-	.basi-float-right.basi-float-pinned {
+	.basi-float-right[data-visibility="open"] {
 		transform: translateY(0);
 	}
 	.basi-float-left .basi-float-panel,
@@ -1000,18 +962,6 @@ body.basi-app:has(.basi-footer:hover) .basi-cam-dock.basi-cam-tucked .basi-cam-s
 		right: 30%;
 		width: auto;
 		height: 3px;
-	}
-	body.basi-app .basi-float-left.basi-float-tucked,
-	body.basi-app .basi-float-left.basi-float-tucked:hover,
-	body.basi-app .basi-float-left.basi-float-tucked:focus-within,
-	body.basi-app .basi-float-left.basi-float-tucked.basi-float-open,
-	body.basi-app .basi-float-left.basi-float-tucked.basi-float-pinned,
-	body.basi-app.basi-no-selection .basi-float-left.basi-float-tucked,
-	body.basi-app .basi-float-right.basi-float-tucked,
-	body.basi-app .basi-float-right.basi-float-tucked:hover,
-	body.basi-app .basi-float-right.basi-float-tucked.basi-float-open,
-	body.basi-app .basi-float-right.basi-float-tucked.basi-float-pinned {
-		transform: translateY(calc(100% - var(--basi-float-peek)));
 	}
 }
 
@@ -1910,113 +1860,6 @@ body.basi-app:has(.basi-footer:hover) .basi-cam-slide,
 	max-width: min(520px, 94vw);
 }
 
-.basi-sign-tweaks {
-	margin: 0 0 8px;
-	padding: 8px 8px 6px;
-	background: #1e1824;
-	border: 1px solid #4a3a55;
-	border-radius: 4px;
-	color: #f0e8f0;
-}
-
-.basi-sign-tweaks-title {
-	font-size: 0.78rem;
-	font-weight: 700;
-	margin: 0 0 6px;
-	color: #ffe566;
-}
-
-.basi-sign-tweak-grid {
-	display: grid;
-	grid-template-columns: 1fr;
-	gap: 2px 8px;
-}
-
-.basi-sign-tweak-row {
-	display: grid;
-	grid-template-columns: 5.4rem 1fr 2.6rem;
-	align-items: center;
-	gap: 6px;
-	font-size: 0.7rem;
-}
-
-.basi-sign-tweak-row.basi-sign-tweak-select,
-.basi-sign-tweak-row.basi-sign-tweak-note {
-	grid-template-columns: 5.4rem 1fr;
-	margin-bottom: 4px;
-}
-
-.basi-sign-tweak-label {
-	color: #c8bdd0;
-	white-space: nowrap;
-}
-
-.basi-sign-tweak-val {
-	font-variant-numeric: tabular-nums;
-	text-align: right;
-	color: #ffe566;
-}
-
-.basi-sign-tweaks input[type="range"] {
-	width: 100%;
-	accent-color: #c9a227;
-}
-
-.basi-sign-tweaks select,
-.basi-sign-tweaks input[type="text"] {
-	width: 100%;
-	box-sizing: border-box;
-	background: #2a2030;
-	color: #f0e8f0;
-	border: 1px solid #4a3a55;
-	border-radius: 3px;
-	padding: 3px 6px;
-	font-size: 0.75rem;
-}
-
-.basi-sign-tweak-flags {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 6px 10px;
-	margin: 6px 0 4px;
-	font-size: 0.72rem;
-}
-
-.basi-sign-tweak-check {
-	display: inline-flex;
-	align-items: center;
-	gap: 4px;
-	cursor: pointer;
-	user-select: none;
-}
-
-.basi-sign-tweak-actions {
-	display: flex;
-	gap: 8px;
-	margin: 6px 0 4px;
-}
-
-.basi-sign-tweak-actions button {
-	flex: 1;
-	padding: 5px 8px;
-	font-size: 0.75rem;
-	font-weight: 700;
-	cursor: pointer;
-	background: #3a2a48;
-	color: #ffe566;
-	border: 1px solid #6a5080;
-	border-radius: 3px;
-}
-
-.basi-sign-tweak-actions button:hover {
-	background: #4a3858;
-}
-
-.basi-sign-tweak-hint {
-	font-size: 0.65rem;
-	color: #a898b0;
-	line-height: 1.3;
-}
 .mc-text-face {
 	margin-bottom: 8px;
 }
@@ -2026,19 +1869,6 @@ body.basi-app:has(.basi-footer:hover) .basi-cam-slide,
 	font-weight: 700;
 	color: #3f3f3f;
 	margin-bottom: 4px;
-}
-.mc-sign-debug {
-	margin: 0 0 8px;
-	padding: 6px 8px;
-	background: #2a2030;
-	color: #ffe566;
-	border: 1px solid #373737;
-	border-radius: 2px;
-	font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
-	font-size: 0.68rem;
-	line-height: 1.35;
-	white-space: pre-wrap;
-	word-break: break-word;
 }
 .mc-text-lines {
 	margin: 0;

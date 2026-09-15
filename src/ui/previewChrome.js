@@ -3,7 +3,16 @@
  */
 
 import { catalog, els, getSelectedId, primaryPreview, session } from "../app/state.js";
-import { escapeHtml, tuckFloatDock } from "../app/dom.js";
+import { escapeHtml, peekFloatDock } from "../app/dom.js";
+import {
+	CAMERA_PRESET_OPTIONS,
+	CAMERA_ZOOM_DEFAULT,
+	CAMERA_ZOOM_MAX,
+	CAMERA_ZOOM_MIN,
+	isIsoPreset,
+	normalizeCameraPreset,
+	normalizeCameraZoom
+} from "../viewer/systems/isoCamera.js";
 import { bindFloatingWindow } from "./floatingWindow.js";
 import { updatePreviewLoading, removePreviewLoading } from "./previewLoading.js";
 
@@ -20,42 +29,15 @@ export const ISO_LABELS = {
 	iso: "Iso N"
 };
 
-/** Valid default-camera option values (select + renderer). */
-export const CAMERA_PRESET_OPTIONS = [
-	"iso-north", "iso-south", "iso-east", "iso-west",
-	"north", "south", "east", "west",
-	"top", "layer", "free", "fly", "iso"
-];
-
-export function isIsoPreset(id) {
-	return id === "iso" || ISO_PRESETS.includes(/** @type {any} */ (id));
-}
-
-/**
- * @param {string|null|undefined} preset
- */
-export function normalizeCameraPreset(preset) {
-	if (!preset || typeof preset !== "string") return "iso-north";
-	if (preset === "iso" || preset === "default") return "iso-north";
-	if (CAMERA_PRESET_OPTIONS.includes(preset)) return preset;
-	return "iso-north";
-}
-
-/** Default opening zoom: 1 = current fit, 2 = twice as close, 0.5 = twice as far. */
-export const CAMERA_ZOOM_MIN = 0.5;
-export const CAMERA_ZOOM_MAX = 2;
-export const CAMERA_ZOOM_DEFAULT = 1;
-
-/**
- * @param {unknown} z
- * @returns {number}
- */
-export function normalizeCameraZoom(z) {
-	const n = Number(z);
-	if (!Number.isFinite(n)) return CAMERA_ZOOM_DEFAULT;
-	const clamped = Math.max(CAMERA_ZOOM_MIN, Math.min(CAMERA_ZOOM_MAX, n));
-	return Math.round(clamped * 20) / 20;
-}
+export {
+	CAMERA_PRESET_OPTIONS,
+	CAMERA_ZOOM_DEFAULT,
+	CAMERA_ZOOM_MAX,
+	CAMERA_ZOOM_MIN,
+	isIsoPreset,
+	normalizeCameraPreset,
+	normalizeCameraZoom
+};
 
 /**
  * Wheel over a &lt;select&gt;: scroll down → next option.
@@ -453,7 +435,6 @@ export function toggleCamDock(force) {
 	const on = force == null ? !dock.classList.contains("basi-cam-open") : !!force;
 	dock.classList.toggle("basi-cam-open", on);
 	dock.setAttribute("aria-expanded", on ? "true" : "false");
-	if (on) dock.classList.remove("basi-cam-tucked");
 	return on;
 }
 
@@ -461,11 +442,10 @@ export function toggleCamDock(force) {
  * Hide catalog, details, camera bar, and inspect (iPad tap on the 3D view).
  */
 export function hidePreviewChrome() {
-	tuckFloatDock(els?.catalogFloat);
-	tuckFloatDock(els?.detailFloat);
+	peekFloatDock(els?.catalogFloat);
+	peekFloatDock(els?.detailFloat);
 	const dock = document.getElementById("camDock");
 	if (dock) {
-		dock.classList.add("basi-cam-tucked");
 		dock.classList.remove("basi-cam-open");
 		dock.setAttribute("aria-expanded", "false");
 	}
