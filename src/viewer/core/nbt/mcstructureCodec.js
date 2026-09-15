@@ -49,7 +49,7 @@ export class McstructureCodecError extends Error {
 		const who = fileName ? `"${fileName}"` : "Structure file";
 		switch (this.code) {
 			case "STRUCTURE_EMPTY":
-				return `${who} is empty. If this file came from cloud storage, try exporting the structure again from Minecraft.`;
+				return `${who} is empty. Re-import the .mcstructure (Safari / iPad does not keep the original picker file after reload). If it came from cloud storage, export it again from Minecraft.`;
 			case "STRUCTURE_TOO_LARGE":
 				return `${who} is larger than 64 MiB`;
 			case "STRUCTURE_COMPRESSED":
@@ -78,6 +78,18 @@ export class McstructureCodecError extends Error {
 
 function fail(code, message, extra) {
 	throw new McstructureCodecError(code, message, extra);
+}
+
+/**
+ * @param {Blob} blob
+ * @returns {Promise<ArrayBuffer>}
+ */
+async function arrayBufferOrEmpty(blob) {
+	try {
+		return await blob.arrayBuffer();
+	} catch {
+		return new ArrayBuffer(0);
+	}
 }
 
 /**
@@ -270,7 +282,7 @@ export async function readMcstructure(input, opts = {}) {
 	if (typeof File !== "undefined" && input instanceof File && fileReadCache) {
 		const hit = fileReadCache.get(input);
 		if (hit) return hit;
-		const pending = readMcstructureFromBuffer(await input.arrayBuffer());
+		const pending = readMcstructureFromBuffer(await arrayBufferOrEmpty(input));
 		fileReadCache.set(input, pending);
 		try {
 			return await pending;
@@ -279,8 +291,8 @@ export async function readMcstructure(input, opts = {}) {
 			throw e;
 		}
 	}
-	const buffer = typeof File !== "undefined" && input instanceof File
-		? await input.arrayBuffer()
+	const buffer = typeof Blob !== "undefined" && input instanceof Blob
+		? await arrayBufferOrEmpty(input)
 		: input;
 	return readMcstructureFromBuffer(buffer);
 }

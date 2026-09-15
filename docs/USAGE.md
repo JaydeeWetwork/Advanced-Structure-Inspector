@@ -292,6 +292,8 @@ This is per **origin** (scheme + host + port). `localhost:5173` and `localhost:5
 
 **Details dock stays open** — unpin it, then click the 3D view. Category dropdowns keep it open until you click outside.
 
+**Preview failed: not a valid .mcstructure after reload** — the list survived in this browser, but the file bytes did not (common on **Safari / iPad** and GitHub Pages). **Import…** the `.mcstructure` again. New imports store a byte copy so reload keeps working.
+
 **Java / gzip / schematic files rejected** — ASI is Bedrock `.mcstructure` only.
 
 **Clear list** — destroys the whole catalog for this origin.

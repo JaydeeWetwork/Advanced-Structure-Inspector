@@ -57,13 +57,20 @@ function defaultPreviewConfig(partial = {}) {
 async function readStructureNBT(structureFile, signal) {
 	throwIfAborted(signal);
 	try {
+		if (structureFile && structureFile.size === 0) {
+			throw new McstructureCodecError(
+				"STRUCTURE_EMPTY",
+				"empty buffer"
+			);
+		}
 		const { nbt } = await readMcstructure(structureFile);
 		return nbt;
 	} catch (e) {
 		if (e instanceof McstructureCodecError) {
-			throw e.toError(structureFile.name, UserError);
+			throw e.toError(structureFile?.name, UserError);
 		}
-		throw new UserError(`"${structureFile.name}" is not a valid .mcstructure`);
+		const name = structureFile?.name || "structure";
+		throw new UserError(`"${name}" is not a valid .mcstructure`);
 	}
 }
 
