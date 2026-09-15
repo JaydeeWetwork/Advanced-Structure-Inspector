@@ -2,6 +2,7 @@
 dist
 tests/completedPacks
 tests/screenshots
+tests/sampleStructures/user/
 # Local debug probes
 tests/viewerUnit/debug-*.mjs
 tests/viewerUnit/scan-*.mjs

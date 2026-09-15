@@ -199,13 +199,6 @@ body.basi-app {
 	border: 1px solid var(--dark-border);
 }
 
-.basi-preview-keys {
-	font-size: 0.72rem;
-	color: var(--basi-muted);
-	user-select: none;
-	opacity: 0.9;
-}
-
 .basi-boot {
 	font-size: 0.8rem;
 	padding: 4px 10px;
@@ -730,12 +723,6 @@ body.basi-has-selection .basi-float-right {
 	letter-spacing: 0.02em;
 }
 
-.basi-float .basi-preview-keys {
-	color: #f5eef5;
-	font-size: 0.72rem;
-	opacity: 1;
-}
-
 /* Stat labels/values inside float — stronger contrast */
 .basi-float .basi-stat .label {
 	color: #5a3d5a;
@@ -862,6 +849,40 @@ body.basi-no-selection .basi-float-left {
 .basi-float-right.basi-float-pinned::after,
 body.basi-no-selection .basi-float-left::after {
 	opacity: 0;
+}
+
+/* iPad / coarse pointer: swipe opens chrome; sticky :hover must not keep docks out */
+body.basi-touch {
+	--basi-float-hit: 64px;
+}
+
+body.basi-touch .basi-float-hit,
+body.basi-touch .basi-cam-hit {
+	touch-action: none;
+}
+
+body.basi-touch:not(.basi-no-selection) .basi-float-left:hover:not(:focus-within):not(.basi-float-open):not(.basi-float-pinned) {
+	transform: translateX(calc(-100% + var(--basi-float-peek)));
+	opacity: 0.55;
+}
+
+body.basi-touch .basi-float-right:hover:not(.basi-float-open):not(.basi-float-pinned) {
+	transform: translateX(calc(100% - var(--basi-float-peek)));
+	opacity: 0.45;
+}
+
+body.basi-touch .basi-cam-hit {
+	height: calc(72px + env(safe-area-inset-bottom, 0px));
+}
+
+body.basi-touch .basi-cam-dock:hover:not(.basi-cam-open):not(:focus-within),
+body.basi-touch.basi-app:has(.basi-footer:hover) .basi-cam-dock:not(.basi-cam-open):not(:focus-within) {
+	z-index: 36;
+}
+
+body.basi-touch .basi-cam-dock:hover:not(.basi-cam-open):not(:focus-within) .basi-cam-slide,
+body.basi-touch.basi-app:has(.basi-footer:hover) .basi-cam-dock:not(.basi-cam-open):not(:focus-within) .basi-cam-slide {
+	transform: translateY(calc(100% + 8px));
 }
 
 /* Compact mobile: docks become bottom/top sheets peeks */
@@ -1647,11 +1668,6 @@ body.basi-app:has(.basi-footer:hover) .basi-cam-slide,
 	z-index: 1;
 }
 
-.basi-cam-bar .basi-preview-keys {
-	color: #c8bcc8;
-	margin-left: 4px;
-}
-
 .basi-cam-btn {
 	font: inherit;
 	font-size: 0.72rem;
@@ -2386,6 +2402,15 @@ body.basi-app:has(.basi-footer:hover) .basi-cam-slide,
 	inset: 0;
 	/* Stay under cam bar / inspect panel */
 	z-index: 1;
+	touch-action: none;
+	-webkit-touch-callout: none;
+	user-select: none;
+}
+
+.basi-preview-host canvas {
+	touch-action: none;
+	-webkit-touch-callout: none;
+	user-select: none;
 }
 
 /* Canvas fills host; kill base.css canvas/img { width: 400px } */

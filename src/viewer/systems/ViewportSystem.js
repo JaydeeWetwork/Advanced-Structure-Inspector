@@ -12,6 +12,8 @@ export default class ViewportSystem {
 	#onWindowResize = null;
 	/** @type {ResizeObserver|null} */
 	#hostResizeObserver = null;
+	/** @type {(() => void)|null} */
+	#onVisualViewport = null;
 	#disposed = false;
 
 	/**
@@ -88,6 +90,13 @@ export default class ViewportSystem {
 			this.requestRender();
 		};
 		window.addEventListener("resize", this.#onWindowResize);
+		this.#onVisualViewport = this.#onWindowResize;
+		try {
+			window.visualViewport?.addEventListener("resize", this.#onVisualViewport);
+			window.visualViewport?.addEventListener("scroll", this.#onVisualViewport);
+		} catch {
+			/* ignore */
+		}
 		try {
 			const host = this.ctx.hostEl;
 			if (host && typeof ResizeObserver !== "undefined") {
@@ -173,6 +182,15 @@ export default class ViewportSystem {
 		if (this.#onWindowResize) {
 			window.removeEventListener("resize", this.#onWindowResize);
 			this.#onWindowResize = null;
+		}
+		if (this.#onVisualViewport) {
+			try {
+				window.visualViewport?.removeEventListener("resize", this.#onVisualViewport);
+				window.visualViewport?.removeEventListener("scroll", this.#onVisualViewport);
+			} catch {
+				/* ignore */
+			}
+			this.#onVisualViewport = null;
 		}
 		try {
 			this.#hostResizeObserver?.disconnect?.();

@@ -97,7 +97,7 @@ Do not use `cd /d` (that is cmd.exe).
 
 1. Start the server and open the URL above.
 2. Wait until the header badge shows **Ready** (not Loading…).
-3. Hover the **left** edge of the window for the **Structures** list (or pin it).
+3. Hover the **left** edge of the window for the **Structures** list (or pin it). On iPad, swipe **right** from the left of the 3D view.
 4. **Import…** or drop files onto the page.
 5. Click a structure. A centered **progress** card appears while the preview builds, then the 3D view.
 
@@ -121,7 +121,7 @@ Imported files land in **Uncategorized** until you assign a category.
 
 ## Catalog (left dock)
 
-Hover the left edge to open; **pin** (« / ») to keep it open.
+Hover the left edge to open; **pin** (« / ») to keep it open. On iPad, swipe right from the left of the 3D view (see [Touch / iPad](#touch--ipad)).
 
 - **Search** filters names.
 - Tree: **Uncategorized** → **categories** → **entries** → structures.
@@ -134,7 +134,7 @@ Hover the left edge to open; **pin** (« / ») to keep it open.
 
 ## Details (right dock)
 
-Hover the right edge when a structure is selected; **pin** to keep it open. Click the 3D view (or outside the dock) to tuck it unless pinned.
+Hover the right edge when a structure is selected; **pin** to keep it open. Click the 3D view (or outside the dock) to tuck it unless pinned. On iPad, swipe left from the right of the 3D view.
 
 **Above Information:**
 
@@ -157,7 +157,7 @@ While loading, a **centered card** shows status and a **progress bar**. It disap
 
 - **Drag** on the canvas to orbit (not in Fly).
 - **Compass** (bottom-left) shows facing.
-- **Camera bar** — hover the **bottom** edge or press **C**.
+- **Camera bar** — hover the **bottom** edge or press **C**. On iPad / touch, swipe up from the bottom of the 3D view (see [Touch / iPad](#touch--ipad)).
 
 | Control | Meaning |
 |---------|---------|
@@ -197,6 +197,7 @@ Shortcuts apply when the preview is focused and you are **not** typing in a sear
 | **Fly:** Space / Shift | Up / down |
 | **Fly:** drag | Look |
 | **Double-click** canvas | Inspect block or entity |
+| **Long-press** canvas (touch) | Inspect block or entity |
 | Catalog row: **Enter** / **Space** | Select |
 | Catalog row: **Delete** / **Backspace** | Remove from catalog |
 
@@ -209,6 +210,27 @@ Double-click a block or entity on the canvas. A floating **Inspect** window open
 Opens inventories / mockups for chests (including double chests), hoppers, droppers, barrels, shulkers, brewing stands, composters, crafters, lecterns, signs, item frames, minecarts with cargo, and similar block entities. Other hits show a name chip.
 
 **Esc** or **×** closes inspect.
+
+---
+
+## Touch / iPad
+
+Designed for **iPad Safari** (tablets). The desktop layout stays: catalog on the left, details on the right, camera bar on the bottom. Start the swipe **on the 3D view**, not the iPad screen edge (Safari uses the bezel for Back).
+
+| Gesture | Action |
+|---------|--------|
+| Swipe **right** from the left of the view | Open **Structures** |
+| Swipe **left** from the right of the view | Open **Details** (when a structure is selected) |
+| Swipe **up** from the bottom of the view | Open the **camera bar** |
+| Swipe the open panel away (left / right / down) | Close that panel |
+| Tap the 3D view | Tuck unpinned panels and the camera bar |
+| One-finger drag (center of the view) | Orbit |
+| Two-finger pinch / pan | Zoom / pan |
+| Long-press a block or entity | Inspect (same as double-click on desktop) |
+
+**Pin** still keeps a dock open. Fly is look-drag only without a keyboard (WASD / Space / Shift).
+
+Move a structure to a category with the Details **Category** / **Entry** menus; catalog drag-and-drop is a desktop mouse gesture.
 
 ---
 

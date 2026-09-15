@@ -83,6 +83,13 @@ export function bindOrbitInteraction({
 		const snap = cameraCtrl.orbitSnapshot;
 		cameraCtrl.orbitSnapshot = null;
 		if (!snap) return;
+		if (canvas?.dataset?.basiSuppressOrbit === "1") {
+			camera.position.copy(snap.pos);
+			controls.target.copy(snap.target);
+			controls.update();
+			requestRender();
+			return;
+		}
 		const moved =
 			camera.position.distanceTo(snap.pos) > 0.35
 			|| controls.target.distanceTo(snap.target) > 0.35;

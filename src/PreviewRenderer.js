@@ -544,6 +544,11 @@ export default class PreviewRenderer extends AsyncFactory {
 		return this.#cameraCtrl.lastPreset || "iso";
 	}
 
+	/** OrbitControls instance, or null before init / after dispose. */
+	get orbitControls() {
+		return this.#ctx?.controls ?? null;
+	}
+
 	/**
 	 * @param {number} deg
 	 * @param {{ reframe?: boolean }} [opts]

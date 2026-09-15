@@ -16,8 +16,12 @@ import {
 } from "./app/state.js";
 import {
 	setStatus,
-	initFloatPins
+	initFloatPins,
+	openFloatDock,
+	closeFloatDock
 } from "./app/dom.js";
+import { initPointerMode } from "./ui/pointerMode.js";
+import { bindEdgeSwipe } from "./ui/edgeSwipe.js";
 import { initTheme } from "./app/theme.js";
 import {
 	bindCatalogHandlers,
@@ -38,6 +42,8 @@ import {
 	syncCamBarActive,
 	onPreviewKeydown,
 	onPreviewDblClick,
+	bindPreviewInspectLongPress,
+	toggleCamDock,
 	initInspectWindow
 } from "./ui/previewChrome.js";
 import { initCameraCompass } from "./ui/cameraCompass.js";
@@ -90,11 +96,44 @@ function goView(view) {
 	location.hash = next;
 }
 
+function suppressPreviewOrbit(on) {
+	const canvas = els.previewHost?.querySelector?.("canvas");
+	if (canvas) {
+		if (on) canvas.dataset.basiSuppressOrbit = "1";
+		else delete canvas.dataset.basiSuppressOrbit;
+	}
+	const controls = primaryPreview()?.orbitControls;
+	if (controls) controls.enabled = !on;
+}
+
 function wireUi() {
+	initPointerMode();
 	initTheme();
 	initFloatPins();
 	initInspectWindow();
 	initCameraCompass();
+	bindEdgeSwipe(els.appStage, {
+		openCatalog: () => openFloatDock(els.catalogFloat),
+		closeCatalog: () => closeFloatDock(els.catalogFloat),
+		openDetail: () => {
+			if (!getSelectedId()) return;
+			openFloatDock(els.detailFloat);
+		},
+		closeDetail: () => closeFloatDock(els.detailFloat),
+		openCam: () => toggleCamDock(true),
+		closeCam: () => toggleCamDock(false),
+		isCamOpen: () => !!els.camDock?.classList.contains("basi-cam-open"),
+		closeUnpinned: () => {
+			closeFloatDock(els.catalogFloat);
+			closeFloatDock(els.detailFloat);
+			toggleCamDock(false);
+		},
+		suppressOrbit: () => suppressPreviewOrbit(true),
+		releaseOrbit: () => {
+			requestAnimationFrame(() => suppressPreviewOrbit(false));
+		}
+	});
+	bindPreviewInspectLongPress(els.previewHost);
 	els.importInput?.addEventListener("change", () => {
 		handleFiles(els.importInput.files);
 	});

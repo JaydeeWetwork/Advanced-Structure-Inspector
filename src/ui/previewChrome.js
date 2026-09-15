@@ -369,18 +369,15 @@ export function toggleCamDock(force) {
 }
 
 /**
- * Double-click canvas → Minecraft-style inventory mockup for containers.
- * @param {MouseEvent} e
+ * Pick at client coords → Minecraft-style inventory mockup for containers.
+ * @param {number} clientX
+ * @param {number} clientY
  */
-export async function onPreviewDblClick(e) {
+export async function inspectAtClient(clientX, clientY) {
 	const p = primaryPreview();
 	if (!p?.pickAtClient) return;
-	const t = e.target;
-	if (!(t instanceof HTMLCanvasElement) && !(t instanceof Element && t.closest?.("canvas"))) {
-		return;
-	}
 
-	const hit = p.pickAtClient(e.clientX, e.clientY);
+	const hit = p.pickAtClient(clientX, clientY);
 	// Only open UI for containers / entities with inventory layouts; still show mockup for any block as generic if it has items or is known container
 	try {
 		const { renderContainerUi, resolveContainerKind } = await import("../viewer/containerUi.js");
@@ -453,5 +450,116 @@ export async function onPreviewDblClick(e) {
 		console.warn("[basi] container UI failed", err);
 		clearInspectPanel();
 	}
+}
+
+/**
+ * Double-click canvas → inspect (desktop).
+ * @param {MouseEvent} e
+ */
+export async function onPreviewDblClick(e) {
+	const t = e.target;
+	if (!(t instanceof HTMLCanvasElement) && !(t instanceof Element && t.closest?.("canvas"))) {
+		return;
+	}
+	return inspectAtClient(e.clientX, e.clientY);
+}
+
+const LONG_PRESS_MS = 500;
+const LONG_PRESS_MOVE_PX = 10;
+
+function setOrbitSuppressed(on) {
+	const host = els.previewHost;
+	const canvas = host?.querySelector?.("canvas");
+	if (canvas) {
+		if (on) canvas.dataset.basiSuppressOrbit = "1";
+		else delete canvas.dataset.basiSuppressOrbit;
+	}
+	const controls = primaryPreview()?.orbitControls;
+	if (controls) controls.enabled = !on;
+}
+
+/**
+ * Long-press canvas (touch) → same inspect path as double-click.
+ * @param {HTMLElement|null} host
+ */
+export function bindPreviewInspectLongPress(host) {
+	if (!host) return;
+	let timer = 0;
+	let startX = 0;
+	let startY = 0;
+	/** @type {number|null} */
+	let pointerId = null;
+	let fired = false;
+
+	const clearTimer = () => {
+		if (timer) {
+			clearTimeout(timer);
+			timer = 0;
+		}
+	};
+
+	const onDown = e => {
+		if (!(e instanceof PointerEvent) || e.pointerType !== "touch") return;
+		if (e.isPrimary === false) {
+			clearTimer();
+			return;
+		}
+		const t = e.target;
+		if (!(t instanceof Element) || !t.closest("canvas")) return;
+		startX = e.clientX;
+		startY = e.clientY;
+		pointerId = e.pointerId;
+		fired = false;
+		clearTimer();
+		timer = window.setTimeout(() => {
+			timer = 0;
+			fired = true;
+			setOrbitSuppressed(true);
+			void inspectAtClient(startX, startY);
+			try {
+				navigator.vibrate?.(10);
+			} catch {
+				/* ignore */
+			}
+		}, LONG_PRESS_MS);
+	};
+
+	const onMove = e => {
+		if (!(e instanceof PointerEvent) || pointerId == null || e.pointerId !== pointerId) return;
+		if (e.isPrimary === false) {
+			clearTimer();
+			return;
+		}
+		if (Math.hypot(e.clientX - startX, e.clientY - startY) > LONG_PRESS_MOVE_PX) {
+			clearTimer();
+		}
+	};
+
+	const onEnd = e => {
+		if (!(e instanceof PointerEvent)) return;
+		if (pointerId == null || e.pointerId !== pointerId) return;
+		clearTimer();
+		pointerId = null;
+		if (fired) {
+			const canvas = host.querySelector("canvas");
+			requestAnimationFrame(() => {
+				const controls = primaryPreview()?.orbitControls;
+				if (controls) controls.enabled = true;
+				if (canvas) delete canvas.dataset.basiSuppressOrbit;
+			});
+			fired = false;
+		}
+	};
+
+	const onContextMenu = e => {
+		if (!(e.target instanceof Element) || !e.target.closest("canvas")) return;
+		e.preventDefault();
+	};
+
+	host.addEventListener("pointerdown", onDown);
+	host.addEventListener("pointermove", onMove);
+	host.addEventListener("pointerup", onEnd);
+	host.addEventListener("pointercancel", onEnd);
+	host.addEventListener("contextmenu", onContextMenu);
 }
 

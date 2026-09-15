@@ -3,7 +3,7 @@
 	<head>
 		<title>Bedrock ASI</title>
 		<meta charset="UTF-8">
-		<meta name="viewport" content="width=device-width, initial-scale=1">
+		<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 		<meta name="description" content="Bedrock ASI — browse, preview, and inspect Minecraft Bedrock .mcstructure files.">
 
 		<link rel="manifest" href="manifest.webmanifest"/>
@@ -21,12 +21,12 @@
 				} catch (e) {}
 			})();
 		</script>
-		<link rel="stylesheet" href="styles/base.css?v=build87"/>
-		<link rel="stylesheet" href="styles/preview.css?v=build87"/>
-		<link rel="stylesheet" href="styles/theme.css?v=build87"/>
-		<link rel="stylesheet" href="viewer/viewer.css?v=build87"/>
-		<link rel="stylesheet" href="styles/paper.css?v=build87"/>
-		<link rel="stylesheet" href="styles/editor.css?v=build87"/>
+		<link rel="stylesheet" href="styles/base.css?v=build89"/>
+		<link rel="stylesheet" href="styles/preview.css?v=build89"/>
+		<link rel="stylesheet" href="styles/theme.css?v=build89"/>
+		<link rel="stylesheet" href="viewer/viewer.css?v=build89"/>
+		<link rel="stylesheet" href="styles/paper.css?v=build89"/>
+		<link rel="stylesheet" href="styles/editor.css?v=build89"/>
 		<script type="importmap">
 			{
 				"imports": {
@@ -42,14 +42,14 @@
 				}
 			}
 		</script>
-		<script src="index.js?v=build87" type="module"></script>
+		<script src="index.js?v=build89" type="module"></script>
 		<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
 		<meta http-equiv="Pragma" content="no-cache"/>
 	</head>
 	<body class="basi-app basi-no-selection basi-view-viewer">
 		<header class="basi-header">
 			<div class="basi-header-brand">
-				<h1>Bedrock ASI <span class="basi-build" id="buildLabel" title="Build / cache token">build87</span></h1>
+				<h1>Bedrock ASI <span class="basi-build" id="buildLabel" title="Build / cache token">build89</span></h1>
 				<nav class="basi-view-switch" aria-label="App view">
 					<button type="button" class="basi-view-link is-active" id="viewViewerBtn" data-view="viewer">Viewer</button>
 					<button type="button" class="basi-view-link" id="viewEditorBtn" data-view="editor">Editor</button>
@@ -108,7 +108,6 @@
 									<span id="camTiltVal" class="basi-cam-tilt-val">67°</span>
 								</label>
 								<span class="basi-layer-badge hidden" id="layerBadge" aria-live="polite">Layer 0</span>
-								<span class="basi-preview-keys" title="C camera bar · ↑↓ layer · ← all · → cam · Fly: WASD Space/Shift · drag look · dbl-click inspect">C cam · ↑↓ layer · ← all · → cam · Fly WASD · dbl-click inspect</span>
 							</div>
 							</div>
 						</div>

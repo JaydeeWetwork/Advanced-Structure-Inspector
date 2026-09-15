@@ -144,14 +144,42 @@ export function initFloatPins() {
 }
 
 /**
+ * @param {HTMLElement|null|undefined} el
+ * @returns {boolean}
+ */
+export function isFloatPinned(el) {
+	return !!el?.classList.contains("basi-float-pinned");
+}
+
+/**
+ * @param {HTMLElement|null|undefined} el
+ */
+export function openFloatDock(el) {
+	if (!el) return;
+	el.classList.add("basi-float-open");
+}
+
+/**
+ * @param {HTMLElement|null|undefined} el
+ * @param {{ force?: boolean }} [opts]
+ */
+export function closeFloatDock(el, opts = {}) {
+	if (!el) return;
+	if (!opts.force && el.classList.contains("basi-float-pinned")) return;
+	el.classList.remove("basi-float-open");
+}
+
+/**
  * Tuck the right details dock unless pinned or the pointer is still over it.
+ * On coarse-pointer (iPad), hover is meaningless — close unless pinned.
  * @param {{ force?: boolean }} [opts]
  */
 export function closeDetailFloatIfIdle(opts = {}) {
 	const el = els?.detailFloat;
 	if (!el) return;
 	if (el.classList.contains("basi-float-pinned")) return;
-	if (!opts.force && el.matches(":hover")) return;
+	const touch = document.body.classList.contains("basi-touch");
+	if (!opts.force && !touch && el.matches(":hover")) return;
 	el.classList.remove("basi-float-open");
 }
 
@@ -164,6 +192,10 @@ export function flashFloatDock(floatId, ms = 1500) {
 	if (!el) return;
 	if (el.classList.contains("basi-float-pinned")) return;
 	el.classList.add("basi-float-open");
+	if (document.body.classList.contains("basi-touch")) {
+		// Stay open until swipe-away or canvas tap; hover cannot hold it.
+		return;
+	}
 	const prev = _floatFlashTimers.get(floatId);
 	if (prev) clearTimeout(prev);
 	_floatFlashTimers.set(
