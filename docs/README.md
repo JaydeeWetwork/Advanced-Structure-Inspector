@@ -1,26 +1,13 @@
-# Docs index — Bedrock ASI research
+# Docs — Bedrock ASI
 
-Local-only. Product: **Bedrock ASI** is the Bedrock structure **renderer / viewer / inspector**. **HoloPrint** is an optional **gameplay hologram-pack export**, not required to see a structure.
+Product documentation for the Bedrock structure inspector.
 
-## Product & engine (this round of research)
+| Doc | Contents |
+|-----|----------|
+| [USAGE.md](./USAGE.md) | Hotkeys, catalog, preview, inspect, iPad Safari / touch, common issues |
+| [SETUP.md](./SETUP.md) | Install, run, build, tests, troubleshooting |
+| [RELEASE.md](./RELEASE.md) | 0.1.0 release notes and summary |
+| [apis/README.md](./apis/README.md) | Viewer APIs: catalog, ingest, NBT, inspect, preview, caches |
+| [official-resources.md](./official-resources.md) | Mojang/Microsoft sources ASI fetches or follows |
 
-| Doc | What it is |
-|-----|------------|
-| [renderer-engine.md](./renderer-engine.md) | Independent renderer pipeline; never-fail draw; [BedrockMap](https://github.com/bedrock-dev/BedrockMap) as AGPL **example** (do not copy) |
-| [sources-official-vs-community.md](./sources-official-vs-community.md) | Current look = Mojang/Microsoft; back-compat = community (pmmp, etc.) |
-| [pmmp-schema-vs-blockupdater.md](./pmmp-schema-vs-blockupdater.md) | pmmp upgrade JSON vs our `BlockUpdater.js` |
-| [holoprint-deps.md](./holoprint-deps.md) | What still touches HoloPrint; Path A (drop pack) vs Path B (keep as export) |
-| [NEXT.md](./NEXT.md) | Decision menu — next moves, not started until you pick |
-
-## Already in tree (older)
-
-| Doc | What it is |
-|-----|------------|
-| [APPEARANCE_ARCHITECTURE.md](./APPEARANCE_ARCHITECTURE.md) | Geometry / textures / version context (design, not fully built) |
-| [AUTHORING_CORE.md](./AUTHORING_CORE.md) | Editors + official-shaped documents (future) |
-| [BEDROCK_ARCHIVES.md](./BEDROCK_ARCHIVES.md) | File types vs `.brarchive` |
-| [NBT_VALIDATION.md](./NBT_VALIDATION.md) / [sec_nbt_findings.md](./sec_nbt_findings.md) / [sec_nbt_plan.md](./sec_nbt_plan.md) | nbtify gates |
-| [API.md](./API.md) | `viewer/api/*` map |
-| [SETUP.md](./SETUP.md) / [WORKFLOW.md](./WORKFLOW.md) / [BRANCHING.md](./BRANCHING.md) | Run, habits, `dev` → `staging` → `main` |
-
-Repo map: [`../FORK.md`](../FORK.md). License: [`../NOTICE.md`](../NOTICE.md).
+License and attribution: [`../NOTICE.md`](../NOTICE.md), [`../LICENSE`](../LICENSE).

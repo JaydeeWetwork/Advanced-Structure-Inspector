@@ -47,27 +47,14 @@ export function extractItemFramePlacements(inspectIndex) {
 			|| beId === "GlowItemFrame";
 		if (!isFrame) continue;
 
-		// Prefer Item from block entity NBT
-		const be = b.blockEntity || {};
-		const itemNbt = be.Item || be.item || null;
 		let itemName = null;
-		if (itemNbt && typeof itemNbt === "object") {
-			const n = itemNbt.Name ?? itemNbt.name ?? itemNbt.id;
-			if (typeof n === "string" && n) itemName = n.replace(/^minecraft:/i, "");
-		}
-		// Fallback to extracted items list
-		if (!itemName && Array.isArray(b.items) && b.items[0]?.name) {
+		if (Array.isArray(b.items) && b.items[0]?.name) {
 			itemName = String(b.items[0].name).replace(/^minecraft:/i, "");
 		}
 		if (!itemName) continue;
 
-		const facing = Number(
-			b.states?.facing_direction
-			?? be.Facing
-			?? be.facing
-			?? 2
-		);
-		const itemRotationDeg = Number(be.ItemRotation ?? be.itemRotation ?? 0) || 0;
+		const facing = Number(b.states?.facing_direction ?? 2);
+		const itemRotationDeg = Number(b.itemRotation ?? 0) || 0;
 		const glow =
 			name.includes("glow")
 			|| beId === "GlowItemFrame";

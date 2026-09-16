@@ -7,31 +7,17 @@
 import { disposeObject3D } from "./disposeObject3D.js";
 import { geoPointToThree } from "../previewSpace.js";
 import { signPlaneInstanceVerts } from "../signPlacement.js";
-import {
-	applySignTweaks,
-	signTweaks,
-	subscribeSignTweaks,
-	tweaksAffectSign,
-	tweaksAreIdentity
-} from "../signDebug.js";
 import { isOnActiveLayer } from "../layerVisibility.js";
-import { extractSignText, extractLecternBook } from "../inspectStructure.js";
 
 export default class SpecialBlockOverlay {
 	/** @type {import("three").Group|null} */
 	#root = null;
-	/** @type {(() => void)|null} */
-	#unsubTweaks = null;
 
 	/**
 	 * @param {import("./PreviewContext.js").default} ctx
 	 */
 	constructor(ctx) {
 		this.ctx = ctx;
-		this.#unsubTweaks = subscribeSignTweaks(() => {
-			if (this.ctx.isDisposed()) return;
-			this.applyLiveTweaks();
-		});
 	}
 
 	clear() {
@@ -80,40 +66,6 @@ export default class SpecialBlockOverlay {
 	}
 
 	/**
-	 * Slider-time path: rewrite existing sign verts (no texture rebuild).
-	 * @returns {boolean} true if live meshes were updated
-	 */
-	applyLiveTweaks() {
-		const THREE = this.ctx.THREE;
-		if (!THREE || !this.#root) return false;
-		/** @type {import("three").Mesh[]} */
-		const meshes = [];
-		this.#root.traverse(obj => {
-			if (obj.isMesh && obj.userData?.basiSignBaseline) meshes.push(obj);
-		});
-		if (!meshes.length) return false;
-		for (const obj of meshes) {
-			const baseline = obj.userData.basiSignBaseline;
-			const useTweak =
-				!tweaksAreIdentity(signTweaks)
-				&& tweaksAffectSign(obj.userData.basiSignBlock, obj.userData.basiSignName, signTweaks);
-			const baked = useTweak ? applySignTweaks(baseline, signTweaks) : baseline;
-			writeSignPlaneVerts(obj, baked);
-			if (obj.material) {
-				obj.material.side = signTweaks.doubleSide ? THREE.DoubleSide : THREE.FrontSide;
-				obj.material.needsUpdate = true;
-			}
-			const markers = obj.userData.basiSignMarkers;
-			if (markers) {
-				markers.visible = !!signTweaks.markers;
-				updateSignMarkers(THREE, markers, baked);
-			}
-		}
-		this.ctx.requestRender();
-		return true;
-	}
-
-	/**
 	 * @param {typeof import("three")} THREE
 	 * @param {import("three").Group} root
 	 * @param {import("../inspectStructure.js").InspectIndex} inspectIndex
@@ -125,7 +77,7 @@ export default class SpecialBlockOverlay {
 			const name = String(b.name || "").replace(/^minecraft:/, "");
 			if (!name.includes("sign")) continue;
 			if (!isOnActiveLayer(b.y, layerFilter)) continue;
-			const sign = extractSignText(b.blockEntity);
+			const sign = b.sign;
 			if (!sign) continue;
 
 			for (const { face, isBack } of [
@@ -149,10 +101,6 @@ export default class SpecialBlockOverlay {
 	 */
 	#makeSignTextMesh(THREE, b, name, lines, face, isBack) {
 		const baseline = signPlaneInstanceVerts(b, name, isBack);
-		let baked = baseline;
-		if (tweaksAffectSign(b, name, signTweaks) && !tweaksAreIdentity(signTweaks)) {
-			baked = applySignTweaks(baseline, signTweaks);
-		}
 		const glowing = !!face.glowing;
 		const tex = this.#makeTextTexture(THREE, lines, face.color, {
 			glowing,
@@ -161,7 +109,7 @@ export default class SpecialBlockOverlay {
 		const mat = new THREE.MeshBasicMaterial({
 			map: tex,
 			transparent: true,
-			side: signTweaks.doubleSide ? THREE.DoubleSide : THREE.FrontSide,
+			side: THREE.FrontSide,
 			depthWrite: true,
 			alphaTest: 0.08,
 			polygonOffset: true,
@@ -172,53 +120,11 @@ export default class SpecialBlockOverlay {
 
 		const geo = new THREE.PlaneGeometry(1, 1);
 		const mesh = new THREE.Mesh(geo, mat);
-		writeSignPlaneVerts(mesh, baked);
+		writeSignPlaneVerts(mesh, baseline);
 		mesh.renderOrder = 8;
 		mesh.userData.basiSpecialOverlay = true;
-		mesh.userData.basiSignBaseline = baseline;
-		mesh.userData.basiSignBlock = b;
-		mesh.userData.basiSignName = name;
-		mesh.userData.basiSignIsBack = isBack;
 		mesh.frustumCulled = false;
-
-		const g = new THREE.Group();
-		g.userData.basiSpecialOverlay = true;
-		g.add(mesh);
-		const markers = this.#makeSignMarkers(THREE, baked, isBack);
-		markers.visible = !!signTweaks.markers;
-		mesh.userData.basiSignMarkers = markers;
-		g.add(markers);
-		return g;
-	}
-
-	/**
-	 * Board dot + outward arrow so slider results are visible.
-	 * @param {typeof import("three")} THREE
-	 * @param {ReturnType<typeof signPlaneInstanceVerts>} baked
-	 * @param {boolean} isBack
-	 */
-	#makeSignMarkers(THREE, baked, isBack) {
-		const g = new THREE.Group();
-		g.userData.basiSpecialOverlay = true;
-		const board = baked.boardPos;
-		const dot = new THREE.Mesh(
-			new THREE.BoxGeometry(0.7, 0.7, 0.7),
-			new THREE.MeshBasicMaterial({ color: 0xff00ff, wireframe: true, depthTest: false })
-		);
-		dot.position.set(board.x, board.y, board.z);
-		dot.renderOrder = 20;
-		g.add(dot);
-
-		const origin = new THREE.Vector3(baked.placed.tx, baked.placed.ty, baked.placed.tz);
-		const dir = new THREE.Vector3(baked.basis.z[0], baked.basis.z[1], baked.basis.z[2]);
-		if (dir.lengthSq() < 1e-8) dir.set(0, 0, 1);
-		else dir.normalize();
-		const arrow = new THREE.ArrowHelper(dir, origin, 5, isBack ? 0xff8800 : 0x00e8ff, 1.2, 0.7);
-		arrow.renderOrder = 20;
-		g.add(arrow);
-		g.userData.basiSignDot = dot;
-		g.userData.basiSignArrow = arrow;
-		return g;
+		return mesh;
 	}
 
 	/**
@@ -235,7 +141,7 @@ export default class SpecialBlockOverlay {
 			const name = String(b.name || "").replace(/^minecraft:/, "");
 			if (name !== "lectern") continue;
 			if (!isOnActiveLayer(b.y, layerFilter)) continue;
-			const lec = extractLecternBook(b.blockEntity);
+			const lec = b.lectern;
 			if (!lec?.hasBook) continue;
 
 			const g = new THREE.Group();
@@ -290,9 +196,7 @@ export default class SpecialBlockOverlay {
 	 *   font?: string,
 	 *   fill?: string,
 	 *   outline?: boolean,
-	 *   glowing?: boolean,
-	 *   debugFooter?: string,
-	 *   debugLr?: boolean
+	 *   glowing?: boolean
 	 * }} [opts]
 	 */
 	#makeTextTexture(THREE, lines, argb = null, opts = {}) {
@@ -325,9 +229,8 @@ export default class SpecialBlockOverlay {
 		c2d.lineJoin = "round";
 		c2d.miterLimit = 2;
 
-		const footerH = opts.debugFooter || opts.debugLr ? 18 : 0;
 		const usable = lines.length ? lines : [""];
-		const lineH = (h - footerH) / Math.max(usable.length, 4);
+		const lineH = h / Math.max(usable.length, 4);
 
 		usable.slice(0, 8).forEach((line, i) => {
 			const text = String(line).slice(0, 42);
@@ -362,34 +265,6 @@ export default class SpecialBlockOverlay {
 			c2d.fillText(text, x, y, maxW);
 		});
 
-		if (opts.debugLr) {
-			c2d.save();
-			c2d.font = "bold 20px monospace";
-			c2d.lineWidth = 3;
-			c2d.strokeStyle = "rgba(0,0,0,0.85)";
-			c2d.textBaseline = "middle";
-			c2d.textAlign = "left";
-			c2d.strokeText("L", 6, (h - footerH) / 2);
-			c2d.fillStyle = "#22dd55";
-			c2d.fillText("L", 6, (h - footerH) / 2);
-			c2d.textAlign = "right";
-			c2d.strokeText("R", w - 6, (h - footerH) / 2);
-			c2d.fillStyle = "#ff4466";
-			c2d.fillText("R", w - 6, (h - footerH) / 2);
-			c2d.restore();
-		}
-		if (opts.debugFooter) {
-			c2d.save();
-			c2d.font = "bold 11px monospace";
-			c2d.textAlign = "center";
-			c2d.textBaseline = "middle";
-			c2d.fillStyle = "rgba(0,0,0,0.55)";
-			c2d.fillRect(0, h - footerH, w, footerH);
-			c2d.fillStyle = "#ffe566";
-			c2d.fillText(String(opts.debugFooter).slice(0, 48), w / 2, h - footerH / 2, w - 8);
-			c2d.restore();
-		}
-
 		const tex = new THREE.CanvasTexture(canvas);
 		tex.colorSpace = THREE.SRGBColorSpace;
 		tex.magFilter = THREE.LinearFilter;
@@ -398,12 +273,6 @@ export default class SpecialBlockOverlay {
 	}
 
 	dispose() {
-		try {
-			this.#unsubTweaks?.();
-		} catch {
-			/* ignore */
-		}
-		this.#unsubTweaks = null;
 		this.clear();
 	}
 }
@@ -429,21 +298,6 @@ function writeSignPlaneVerts(mesh, baked) {
  * @param {import("three").Object3D} markers
  * @param {ReturnType<typeof signPlaneInstanceVerts>} baked
  */
-function updateSignMarkers(THREE, markers, baked) {
-	const dot = markers.userData?.basiSignDot;
-	const arrow = markers.userData?.basiSignArrow;
-	if (dot && baked.boardPos) {
-		dot.position.set(baked.boardPos.x, baked.boardPos.y, baked.boardPos.z);
-	}
-	if (arrow) {
-		arrow.position.set(baked.placed.tx, baked.placed.ty, baked.placed.tz);
-		const dir = new THREE.Vector3(baked.basis.z[0], baked.basis.z[1], baked.basis.z[2]);
-		if (dir.lengthSq() < 1e-8) dir.set(0, 0, 1);
-		else dir.normalize();
-		arrow.setDirection(dir);
-	}
-}
-
 function lightenCss(css, amount) {
 	const m = /^rgb\((\d+),\s*(\d+),\s*(\d+)\)$/.exec(css);
 	if (!m) return css;

@@ -32,8 +32,13 @@ export async function handleFiles(files) {
 	if (els.importBtn) els.importBtn.disabled = true;
 
 	try {
+		const knownCrcs = catalog.list()
+			.map(e => e.contentCrc32)
+			.filter(Boolean);
 		const { entries, warnings, errors } = await ingestFiles(fileArr, {
-			onProgress: msg => setStatus(msg)
+			onProgress: msg => setStatus(msg),
+			signal: importState.abort?.signal,
+			knownCrcs
 		});
 
 		const added = [];
@@ -66,12 +71,14 @@ export async function handleFiles(files) {
 			? "warn"
 			: added.length
 				? "ok"
-				: "error";
+				: warnings.length
+					? "warn"
+					: "error";
 		if (added.length) {
 			setStatus(parts.join("\n"), kind);
 			selectEntry(added[added.length - 1].id);
 		} else {
-			setStatus(parts.join("\n") || "Nothing imported.", "error");
+			setStatus(parts.join("\n") || "Nothing imported.", kind);
 		}
 	} catch (e) {
 		console.error(e);

@@ -437,7 +437,7 @@ describe("StructureCatalog", () => {
 		assert.equal(tree.uncategorized.structures.some(x => x.id === s.id), true);
 	});
 
-	it("persists acquiredMaterials, defaultCameraPreset, userDetails, creator meta via patch", async () => {
+	it("persists acquiredMaterials, defaultCameraPreset, defaultCameraZoom, userDetails, creator meta via patch", async () => {
 		const cat = new StructureCatalog();
 		cat.setPersistEnabled(false);
 		const file = new File([new Uint8Array([0])], "x.mcstructure");
@@ -459,6 +459,7 @@ describe("StructureCatalog", () => {
 		});
 		assert.deepEqual(e.acquiredMaterials, []);
 		assert.equal(e.defaultCameraPreset, "iso-north");
+		assert.equal(e.defaultCameraZoom, 1);
 		assert.deepEqual(e.userDetails, []);
 		assert.equal(e.creator, "");
 		assert.equal(e.credits, "");
@@ -466,6 +467,7 @@ describe("StructureCatalog", () => {
 		await cat.patch(e.id, {
 			acquiredMaterials: ["stone"],
 			defaultCameraPreset: "iso-east",
+			defaultCameraZoom: 1.5,
 			userDetails: [{ id: "n1", text: "needs hopper" }],
 			creator: "Jay",
 			credits: "Team",
@@ -474,6 +476,11 @@ describe("StructureCatalog", () => {
 		const u = cat.get(e.id);
 		assert.deepEqual(u.acquiredMaterials, ["stone"]);
 		assert.equal(u.defaultCameraPreset, "iso-east");
+		assert.equal(u.defaultCameraZoom, 1.5);
+		await cat.patch(e.id, { defaultCameraZoom: 3 });
+		assert.equal(cat.get(e.id).defaultCameraZoom, 2);
+		await cat.patch(e.id, { defaultCameraZoom: 0 });
+		assert.equal(cat.get(e.id).defaultCameraZoom, 0.5);
 		assert.equal(u.userDetails.length, 1);
 		assert.equal(u.userDetails[0].text, "needs hopper");
 		assert.equal(u.creator, "Jay");
@@ -482,7 +489,129 @@ describe("StructureCatalog", () => {
 	});
 });
 
-// ---- sample structure smoke (NBT parse if nbtify available) --------------
+describe("copper state sample structures", () => {
+	async function loadSample(file) {
+		const { readMcstructure } = await import("../../src/viewer/core/nbt/mcstructureCodec.js");
+		const buf = readFileSync(join(root, "tests/sampleStructures", file));
+		return (await readMcstructure(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength))).nbt;
+	}
+	function palNames(nbt) {
+		return nbt.structure.palette.default.block_palette.map(b =>
+			String(b.name || "").replace(/^minecraft:/, "")
+		);
+	}
+
+	it("copper_bulbs covers 8 ids × lit × powered_bit", async () => {
+		const nbt = await loadSample("copper_bulbs.mcstructure");
+		const bulbs = palNames(nbt).filter(n => n.endsWith("copper_bulb"));
+		assert.equal(new Set(bulbs).size, 8);
+		assert.equal(new Set(bulbs.map((n, i) => {
+			const st = nbt.structure.palette.default.block_palette.find(b =>
+				String(b.name).replace(/^minecraft:/, "") === n
+			);
+			return n;
+		})).size, 8);
+		const variants = nbt.structure.palette.default.block_palette.filter(b =>
+			String(b.name).includes("copper_bulb")
+		);
+		assert.equal(variants.length, 32);
+	});
+
+	it("copper_chests covers 8 ids, 4 facings, and east double pairs", async () => {
+		const nbt = await loadSample("copper_chests.mcstructure");
+		const names = palNames(nbt).filter(n => n.endsWith("copper_chest"));
+		assert.equal(new Set(names).size, 8);
+		const { applyDoubleChestPalette } = await import("../../src/viewer/doubleChest.js");
+		const r = applyDoubleChestPalette(
+			nbt,
+			nbt.structure.palette.default.block_palette,
+			nbt.structure.block_indices
+		);
+		assert.equal(r.pairedCount, 16);
+	});
+
+	it("copper_golems covers 8 ids × 4 poses × 4 facings", async () => {
+		const nbt = await loadSample("copper_golems.mcstructure");
+		const names = palNames(nbt).filter(n => n.includes("copper_golem_statue"));
+		assert.equal(new Set(names).size, 8);
+		const bpd = nbt.structure.palette.default.block_position_data || {};
+		assert.equal(Object.keys(bpd).length, 128);
+		const poses = [0, 0, 0, 0];
+		for (const row of Object.values(bpd)) {
+			const p = Number(row.block_entity_data?.Pose);
+			assert.ok(p >= 0 && p <= 3);
+			poses[p]++;
+		}
+		assert.deepEqual(poses, [32, 32, 32, 32]);
+	});
+});
+
+describe("straw / shelf / poplar sample structures", () => {
+	async function loadSample(file) {
+		const { readMcstructure } = await import("../../src/viewer/core/nbt/mcstructureCodec.js");
+		const buf = readFileSync(join(root, "tests/sampleStructures", file));
+		return (await readMcstructure(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength))).nbt;
+	}
+	function palNames(nbt) {
+		return nbt.structure.palette.default.block_palette.map(b =>
+			String(b.name || "").replace(/^minecraft:/, "")
+		);
+	}
+
+	it("straw_beds is four complete NSEW pairs with no occupied/direction extras", async () => {
+		const nbt = await loadSample("straw_beds.mcstructure");
+		const beds = nbt.structure.palette.default.block_palette.filter(b =>
+			String(b.name).endsWith("straw_bed")
+		);
+		assert.equal(beds.length, 8);
+		const cards = new Set(beds.map(b => b.states?.["minecraft:cardinal_direction"]));
+		assert.deepEqual([...cards].sort(), ["east", "north", "south", "west"]);
+		assert.ok(beds.every(b => b.states?.occupied_bit == null && b.states?.direction == null));
+		const [sx, , sz] = [...nbt.size];
+		assert.ok(sx >= 10 && sz >= 6);
+	});
+
+	it("shelf_mushrooms covers growth 0/1 × 4 cardinals", async () => {
+		const nbt = await loadSample("shelf_mushrooms.mcstructure");
+		const m = nbt.structure.palette.default.block_palette.filter(b =>
+			String(b.name).includes("shelf_mushroom")
+		);
+		assert.equal(m.length, 8);
+	});
+
+	it("poplar_wood covers all 22 poplar block ids including three leaf colors", async () => {
+		const nbt = await loadSample("poplar_wood.mcstructure");
+		const ids = new Set(palNames(nbt).filter(n => /poplar/.test(n)));
+		for (const need of [
+			"poplar_log",
+			"poplar_wood",
+			"stripped_poplar_log",
+			"stripped_poplar_wood",
+			"poplar_planks",
+			"poplar_slab",
+			"poplar_stairs",
+			"poplar_fence",
+			"poplar_fence_gate",
+			"poplar_door",
+			"poplar_trapdoor",
+			"poplar_button",
+			"poplar_pressure_plate",
+			"poplar_standing_sign",
+			"poplar_wall_sign",
+			"poplar_hanging_sign",
+			"poplar_shelf",
+			"poplar_sapling",
+			"orange_poplar_leaves",
+			"red_poplar_leaves",
+			"yellow_poplar_leaves"
+		]) {
+			assert.ok(ids.has(need), need);
+		}
+		assert.equal(ids.size, 22);
+	});
+});
+
+// ---- sample structure smoke (optional nbtify) --------------
 
 describe("sample structure parse (optional nbtify)", () => {
 	const samplePath = join(root, "tests/sampleStructures/hoppers.mcstructure");
@@ -616,6 +745,27 @@ describe("inspect pick (first classified hit)", async () => {
 	});
 });
 
+describe("partitionTemplateFaces", async () => {
+	const { partitionTemplateFaces } = await import("../../src/viewer/systems/BlockGeoSystem.js");
+
+	it("splits doubleSide cards from volumetric faces", () => {
+		const faces = [
+			{ normal: [0, 1, 0] },
+			{ normal: [1, 0, 0], doubleSide: true },
+			{ normal: [0, 0, 1], doubleSide: false }
+		];
+		const { volume, cards } = partitionTemplateFaces(faces);
+		assert.equal(volume.length, 2);
+		assert.equal(cards.length, 1);
+		assert.equal(cards[0].normal[0], 1);
+	});
+
+	it("treats empty/missing templates as no geos", () => {
+		assert.deepEqual(partitionTemplateFaces(null), { volume: [], cards: [] });
+		assert.deepEqual(partitionTemplateFaces([]), { volume: [], cards: [] });
+	});
+});
+
 describe("scanStructureBlocks", async () => {
 	const { scanStructureBlocks } = await import("../../src/viewer/systems/BlockGeoSystem.js");
 
@@ -714,6 +864,18 @@ describe("preview systems", async () => {
 		assert.equal(pool.isSharedMaterial({}), false);
 		const policy = pool.disposePolicy();
 		assert.equal(policy.isSharedMaterial(fakeMat), true);
+	});
+
+	it("PreviewResourcePool caches volume and card geos separately", () => {
+		const pool = new PreviewResourcePool();
+		const volume = { id: "vol" };
+		const cards = { id: "cards" };
+		const other = { id: "other" };
+		const geos = pool.getOrCreateGeos(3, () => ({ volume, cards }));
+		assert.equal(pool.getOrCreateGeos(3, () => ({ volume: other, cards: other })), geos);
+		assert.equal(pool.isSharedGeometry(volume), true);
+		assert.equal(pool.isSharedGeometry(cards), true);
+		assert.equal(pool.isSharedGeometry(other), false);
 	});
 
 	it("PreviewSessionManager parks and restores order", () => {
@@ -892,7 +1054,7 @@ describe("signPlacement", async () => {
 	});
 
 	it("describeSignPlacement reports F/B and footer", async () => {
-		const { describeSignPlacement, signDebugFooter } = await import("../../src/viewer/signPlacement.js");
+		const { describeSignPlacement, signFaceTag } = await import("../../src/viewer/signPlacement.js");
 		const d = describeSignPlacement(
 			{ x: 2, y: 0, z: 0, states: { facing_direction: 4 } },
 			"oak_wall_sign"
@@ -901,7 +1063,7 @@ describe("signPlacement", async () => {
 		assert.equal(d.facing.includes("fd=4"), true);
 		assert.equal(d.front.side, -1);
 		assert.equal(d.back.side, 1);
-		assert.match(signDebugFooter(d, false), /^F wall fd=4/);
+		assert.match(signFaceTag(d, false), /^F wall fd=4/);
 	});
 
 	it("standing gsd=15 board sits between F and B", async () => {
@@ -1033,55 +1195,6 @@ describe("signPlacement", async () => {
 		assert.ok(baked.placed.tz > mid.z, "wall F is toward room (+Z after flip)");
 		const unflippedZ = -16 * 5 - 16 + baked.placed.localZ;
 		assert.ok(Math.abs(baked.placed.tz - unflippedZ) > 8, "must not use unflipped instance Z");
-	});
-
-	it("sign tweaks lift along outward and yaw spins basis", async () => {
-		const { signPlaneInstanceVerts } = await import("../../src/viewer/signPlacement.js");
-		const {
-			applySignTweaks,
-			DEFAULT_SIGN_TWEAKS,
-			formatSignTweakRecipe,
-			tweaksAreIdentity
-		} = await import("../../src/viewer/signDebug.js");
-		const block = { x: 0, y: 0, z: 0, states: { ground_sign_direction: 0 } };
-		const base = signPlaneInstanceVerts(block, "standing_sign", false);
-		assert.equal(tweaksAreIdentity(DEFAULT_SIGN_TWEAKS), true);
-		const lifted = applySignTweaks(base, { ...DEFAULT_SIGN_TWEAKS, liftAdd: 2 });
-		const dx = lifted.placed.tx - base.placed.tx;
-		const dy = lifted.placed.ty - base.placed.ty;
-		const dz = lifted.placed.tz - base.placed.tz;
-		const dot = dx * base.basis.z[0] + dy * base.basis.z[1] + dz * base.basis.z[2];
-		assert.ok(Math.abs(dot - 2) < 1e-6, `lift should move along +Z, dot=${dot}`);
-		const yawed = applySignTweaks(base, { ...DEFAULT_SIGN_TWEAKS, yawDeg: 90 });
-		const z = yawed.basis.z;
-		assert.ok(Math.abs(z[1]) < 1e-6, "yaw keeps Z horizontal");
-		assert.ok(Math.abs(Math.hypot(z[0], z[2]) - 1) < 1e-6);
-		const recipe = formatSignTweakRecipe({
-			tweaks: { ...DEFAULT_SIGN_TWEAKS, yawDeg: -45, note: "test" }
-		});
-		assert.match(recipe, /---SIGN_TWEAK---/);
-		assert.match(recipe, /yawDeg: -45/);
-		assert.match(recipe, /note: test/);
-		const { tweaksAffectSign, setSignDebugFocus } = await import("../../src/viewer/signDebug.js");
-		const wall = { x: 1, y: 0, z: 2, states: { facing_direction: 2 } };
-		const oak = { x: 8, y: 0, z: 0, states: { ground_sign_direction: 2 } };
-		setSignDebugFocus(null);
-		assert.equal(tweaksAffectSign(oak, "oak_standing_sign", { ...DEFAULT_SIGN_TWEAKS, applyTo: "this" }), false);
-		setSignDebugFocus(oak, "oak_standing_sign");
-		assert.equal(tweaksAffectSign(oak, "oak_standing_sign", { ...DEFAULT_SIGN_TWEAKS, applyTo: "this" }), true);
-		assert.equal(tweaksAffectSign(wall, "warped_wall_sign", { ...DEFAULT_SIGN_TWEAKS, applyTo: "this" }), false);
-		assert.equal(tweaksAffectSign(wall, "warped_wall_sign", { ...DEFAULT_SIGN_TWEAKS, applyTo: "wall" }), true);
-		const { subscribeSignTweaks, notifySignTweaksChanged, signTweaks } =
-			await import("../../src/viewer/signDebug.js");
-		let hits = 0;
-		const off = subscribeSignTweaks(() => {
-			hits++;
-		});
-		signTweaks.liftAdd = 1.25;
-		notifySignTweaksChanged();
-		assert.equal(hits >= 1, true, "overlay must hear slider notify");
-		off();
-		signTweaks.liftAdd = 0;
 	});
 
 	it("F minus B is along baked board +Z for gsd=15", async () => {
@@ -1294,11 +1407,7 @@ describe("itemFrameItems", async () => {
 			name: "frame",
 			states: { facing_direction: 3 },
 			blockEntityId: "ItemFrame",
-			blockEntity: {
-				id: "ItemFrame",
-				Item: { Name: "minecraft:diamond", Count: 1 },
-				ItemRotation: 90
-			},
+			itemRotation: 90,
 			items: [{ name: "diamond", count: 1, slot: null, damage: 0 }]
 		});
 		blocks.set("0,1,0", {
@@ -1306,19 +1415,15 @@ describe("itemFrameItems", async () => {
 			name: "glow_frame",
 			states: { facing_direction: 2 },
 			blockEntityId: "GlowItemFrame",
-			blockEntity: {
-				id: "GlowItemFrame",
-				Item: { Name: "minecraft:apple", Count: 1 },
-				ItemRotation: 0
-			},
-			items: []
+			itemRotation: 0,
+			items: [{ name: "apple", count: 1, slot: null, damage: 0 }]
 		});
 		blocks.set("2,0,0", {
 			x: 2, y: 0, z: 0,
 			name: "frame",
 			states: { facing_direction: 2 },
 			blockEntityId: "ItemFrame",
-			blockEntity: { id: "ItemFrame" },
+			itemRotation: 0,
 			items: []
 		});
 		const pl = extractItemFramePlacements({ blocks, entities: [] });
@@ -1520,24 +1625,29 @@ describe("doubleChest", async () => {
 		assert.equal(chestFacing({ "minecraft:cardinal_direction": "west" }), "west");
 	});
 
-	it("N/S double chests need preview instance X-mirror; E/W do not", async () => {
-		const { doubleChestNeedsPreviewXMirror } = await import(
-			"../../src/viewer/doubleChest.js"
-		);
-		assert.equal(
-			doubleChestNeedsPreviewXMirror({
-				basi_block_shape: "chest_large<textures/entity/chest/double_normal>",
-				states: { "minecraft:cardinal_direction": "north" }
-			}),
-			true
-		);
-		assert.equal(
-			doubleChestNeedsPreviewXMirror({
-				basi_block_shape: "chest_large<textures/entity/chest/double_normal>",
-				states: { "minecraft:cardinal_direction": "east" }
-			}),
-			false
-		);
+	it("N/S double chests need preview instance X-mirror; E/W need Z-mirror", async () => {
+		const {
+			doubleChestNeedsPreviewXMirror,
+			doubleChestNeedsPreviewZMirror
+		} = await import("../../src/viewer/doubleChest.js");
+		const ns = {
+			basi_block_shape: "chest_large<textures/entity/chest/double_normal>",
+			states: { "minecraft:cardinal_direction": "north" }
+		};
+		const ew = {
+			basi_block_shape: "chest_large<textures/entity/chest/double_normal>",
+			states: { "minecraft:cardinal_direction": "east" }
+		};
+		const west = {
+			basi_block_shape: "chest_large<textures/entity/chest/double_normal>",
+			states: { "minecraft:cardinal_direction": "west" }
+		};
+		assert.equal(doubleChestNeedsPreviewXMirror(ns), true);
+		assert.equal(doubleChestNeedsPreviewZMirror(ns), false);
+		assert.equal(doubleChestNeedsPreviewXMirror(ew), false);
+		assert.equal(doubleChestNeedsPreviewZMirror(ew), true);
+		assert.equal(doubleChestNeedsPreviewZMirror(west), true);
+		assert.equal(doubleChestNeedsPreviewXMirror(west), false);
 	});
 
 	it("nbtNumber unwraps typed values", async () => {
@@ -1605,6 +1715,34 @@ describe("doubleChest", async () => {
 		assert.equal(r.palette[r.indices[0][0]].states.basi_chest_half, "left");
 		assert.equal(r.palette[r.indices[0][1]].states.basi_chest_half, "right");
 		assert.match(r.palette[r.indices[0][0]].basi_block_shape, /chest_large</);
+
+		// East-facing pair along Z: player-left is the northern cell; mesh Z-mirror
+		// (not swapping halves) is what covers the southern partner.
+		const eastNbt = {
+			size: [1, 1, 2],
+			structure_world_origin: [0, 0, 0],
+			structure: {
+				palette: {
+					default: {
+						block_position_data: {
+							0: { block_entity_data: { id: "Chest", x: 0, y: 0, z: 0, pairx: 0, pairz: 1 } },
+							1: { block_entity_data: { id: "Chest", x: 0, y: 0, z: 1, pairx: 0, pairz: 0 } }
+						}
+					}
+				}
+			}
+		};
+		const eastPal = [{ name: "minecraft:chest", states: { "minecraft:cardinal_direction": "east" } }];
+		const eastIdx = [new Int32Array([0, 0]), new Int32Array([-1, -1])];
+		const er = applyDoubleChestPalette(eastNbt, eastPal, eastIdx);
+		assert.equal(er.pairedCount, 2);
+		assert.equal(er.palette[er.indices[0][0]].states.basi_chest_half, "left");
+		assert.equal(er.palette[er.indices[0][1]].states.basi_chest_half, "right");
+		assert.match(er.palette[er.indices[0][0]].basi_block_shape, /chest_large</);
+		const mesh = readFileSync(join(root, "src/viewer/systems/BlockGeoSystem.js"), "utf8");
+		assert.match(mesh, /mirrorZ/);
+		const layers = readFileSync(join(root, "src/viewer/systems/LayerMeshSystem.js"), "utf8");
+		assert.match(layers, /doubleChestNeedsPreviewZMirror/);
 		assert.equal(r.palette[r.indices[0][1]].basi_block_shape, "chest_double_skip");
 	});
 });
@@ -1682,6 +1820,8 @@ describe("inventory extract (minecarts / nbtify shapes)", async () => {
 		assert.equal(left.doubleItems.find(i => i.name === "dirt")?.slot, 0);
 		assert.equal(left.doubleItems.find(i => i.name === "diamond")?.slot, 27);
 		assert.equal(right.doubleItems.find(i => i.name === "diamond")?.slot, 27);
+		assert.equal(left.blockEntity, undefined);
+		assert.equal("raw" in left, false);
 	});
 
 	it("asList handles arrays, value wrappers, and numeric-key maps", () => {
@@ -2111,6 +2251,67 @@ describe("appearance fallback", async () => {
 			fallback: true
 		});
 	});
+
+	it("maps oak_standing_sign / oak_wall_sign to the oak sign entity texture, not prefix oak_sign", async () => {
+		const { stripJsonc } = await import("../../src/utils/conversions.js");
+		const shapes = JSON.parse(stripJsonc(readFileSync(join(root, "src/data/blockShapes.json"), "utf8")));
+		const individual = shapes.individual_blocks ?? {};
+		const patterns = Object.entries(shapes.patterns ?? {}).map(([rule, shape]) => [
+			new RegExp(rule),
+			shape
+		]);
+		assert.deepEqual(resolveBlockShapeName("straw_bed", individual, patterns), {
+			shape: "straw_bed",
+			fallback: false
+		});
+		assert.deepEqual(resolveBlockShapeName("shelf_mushroom", individual, patterns), {
+			shape: "shelf_mushroom",
+			fallback: false
+		});
+		const defsText = readFileSync(join(root, "src/data/blockStateDefinitions.json"), "utf8");
+		const strawSlice = defsText.slice(
+			defsText.indexOf('"straw_bed"'),
+			defsText.indexOf('"shelf_mushroom"')
+		);
+		assert.match(strawSlice, /"south": \[0, 0, 0\]/);
+		assert.match(strawSlice, /"east": \[0, -90, 0\]/);
+		assert.match(strawSlice, /"west": \[0, 90, 0\]/);
+		assert.doesNotMatch(strawSlice, /"direction":/);
+		assert.match(defsText, /"bed":\s*\{[\s\S]*?"0": \[0, 180, 0\]/);
+		const standing = resolveBlockShapeName("oak_standing_sign", individual, patterns);
+		const wall = resolveBlockShapeName("oak_wall_sign", individual, patterns);
+		const legacyStanding = resolveBlockShapeName("standing_sign", individual, patterns);
+		const legacyWall = resolveBlockShapeName("wall_sign", individual, patterns);
+		assert.equal(standing.shape, "standing_sign<textures/entity/sign>");
+		assert.equal(wall.shape, "wall_sign<textures/entity/sign>");
+		assert.equal(standing.shape, legacyStanding.shape);
+		assert.equal(wall.shape, legacyWall.shape);
+		assert.notEqual(standing.shape, "standing_sign_prefix");
+		assert.notEqual(wall.shape, "wall_sign_prefix");
+	});
+
+	it("coral floor fans stay in-cell; wall fans attach to the north face and tilt out", () => {
+		const geos = readFileSync(join(root, "src/data/blockShapeGeos.json"), "utf8");
+		const floor = geos.slice(geos.indexOf('"coral_fan":'), geos.indexOf('"coral_wall_fan":'));
+		assert.match(floor, /"size": \[16, 0, 8\]/);
+		assert.match(floor, /"uv_sizes": \{ "\*": \[16, 16\] \}/);
+		assert.match(floor, /"pos": \[0, 0, 8\]/);
+		assert.match(floor, /"pos": \[0, 0, 0\]/);
+		assert.match(floor, /"rot": \[22\.5, 0, 0\]/);
+		assert.match(floor, /"rot": \[-22\.5, 0, 0\]/);
+		assert.doesNotMatch(floor, /"size": \[16, 0, 16\]/);
+		assert.doesNotMatch(floor, /"pos": \[0, 1,/);
+		const wall = geos.slice(geos.indexOf('"coral_wall_fan":'), geos.indexOf('"lightning_rod":'));
+		assert.match(wall, /"size": \[16, 8, 0\]/);
+		assert.match(wall, /"uv_sizes": \{ "\*": \[16, 16\] \}/);
+		assert.match(wall, /"pos": \[0, 8, 0\]/);
+		assert.match(wall, /"pos": \[0, 0, 0\]/);
+		assert.match(wall, /"rot": \[22\.5, 0, 0\]/);
+		assert.match(wall, /"rot": \[-22\.5, 0, 0\]/);
+		assert.doesNotMatch(wall, /"size": \[16, 0, 8\]/);
+		assert.doesNotMatch(wall, /"rot": \[22\.5, 20,/);
+		assert.doesNotMatch(wall, /"rot": \[22\.5, -20,/);
+	});
 });
 
 describe("block upgrade apply (flatten + forgot-to-bump)", async () => {
@@ -2201,12 +2402,179 @@ describe("item upgrade schemas", async () => {
 	});
 });
 
+describe("true isometric showcase", async () => {
+	const {
+		ISO_ELEVATION_DEG,
+		ISO_OFFSETS,
+		applyOrthoFrustum,
+		isoDirectionInfo,
+		isoOffset,
+		isIsoCameraPreset,
+		normalizeCameraPreset,
+		normalizeCameraZoom,
+		normalizeIsoPreset,
+		orthoHalfExtents,
+		perspectiveDistanceFromOrthoHalfHeight
+	} = await import("../../src/viewer/systems/isoCamera.js");
+
+	it("uses cube-diagonal 45° / 35.264° offsets", () => {
+		assert.deepEqual(isoOffset("iso-north"), [1, 1, -1]);
+		assert.deepEqual(isoOffset("iso-south"), [-1, 1, 1]);
+		assert.deepEqual(isoOffset("iso-east"), [1, 1, 1]);
+		assert.deepEqual(isoOffset("iso-west"), [-1, 1, -1]);
+		assert.deepEqual(isoOffset("iso"), ISO_OFFSETS["iso-north"]);
+		assert.equal(normalizeIsoPreset("iso"), "iso-north");
+		assert.equal(isIsoCameraPreset("iso-east"), true);
+		assert.equal(isIsoCameraPreset("north"), false);
+		assert.ok(Math.abs(ISO_ELEVATION_DEG - 35.264) < 0.01);
+		for (const id of ["iso-north", "iso-south", "iso-east", "iso-west"]) {
+			const info = isoDirectionInfo(id);
+			assert.ok(Math.abs(info.elevationDeg - ISO_ELEVATION_DEG) < 0.05);
+			const az = ((info.azimuthDeg % 360) + 360) % 360;
+			const nearest45 = Math.round(az / 45) * 45;
+			assert.ok(Math.abs(az - nearest45) < 0.05 || Math.abs(az - nearest45 + 360) < 0.05);
+			assert.ok(nearest45 % 45 === 0);
+			assert.ok(az % 90 !== 0);
+		}
+		const n = isoDirectionInfo("iso-north");
+		assert.ok(Math.abs(n.azimuthDeg - 45) < 0.05);
+	});
+
+	it("ortho frustum grows with AABB and shrinks with user zoom", () => {
+		const a = orthoHalfExtents(20, 10, 2, 1, 1);
+		assert.equal(a.halfHeight, 10);
+		assert.equal(a.halfWidth, 20);
+		const close = orthoHalfExtents(20, 10, 2, 1, 2);
+		assert.equal(close.halfHeight, 5);
+		const bigger = orthoHalfExtents(40, 20, 1, 1, 1);
+		assert.ok(bigger.halfHeight > a.halfHeight);
+		const cam = { left: 0, right: 0, top: 0, bottom: 0 };
+		applyOrthoFrustum(cam, 10, 2);
+		assert.equal(cam.left, -20);
+		assert.equal(cam.right, 20);
+		assert.equal(cam.top, 10);
+		assert.equal(cam.bottom, -10);
+	});
+
+	it("omitted Bedrock default-0 states do not error; bed color falls back from id", async () => {
+		const {
+			bedColorIndex,
+			omittedStateDefault
+		} = await import("../../src/BlockGeoMaker.js");
+		assert.equal(omittedStateDefault("0"), 0);
+		assert.equal(omittedStateDefault("3"), 0);
+		assert.equal(omittedStateDefault("bottom"), undefined);
+		assert.equal(omittedStateDefault("north"), undefined);
+		const { pickTextureVariantIndex } = await import("../../src/BlockGeoMaker.js");
+		assert.equal(pickTextureVariantIndex([0, 1], 2), 1);
+		assert.equal(pickTextureVariantIndex([0, 1], 0), 0);
+		assert.equal(bedColorIndex({ name: "bed" }), 14);
+		assert.equal(bedColorIndex({ name: "minecraft:red_bed" }), 14);
+		assert.equal(bedColorIndex({ name: "white_bed" }), 0);
+		assert.equal(bedColorIndex({ name: "light_gray_bed" }), 8);
+		const shapes = readFileSync(join(root, "src/data/blockShapes.json"), "utf8");
+		assert.match(shapes, /\(\?<!straw\)_bed\$/);
+		const { preferTgaForVanillaPath } = await import(
+			"../../src/viewer/appearance/vanillaTextureExt.js"
+		);
+		assert.equal(preferTgaForVanillaPath("textures/blocks/grindstone_pivot"), true);
+		assert.equal(preferTgaForVanillaPath("textures/items/reeds"), false);
+	});
+
+	it("extended piston head uses the face texture, not the wood arm sheet", () => {
+		const geos = readFileSync(join(root, "src/data/blockShapeGeos.json"), "utf8");
+		const pistonAt = geos.indexOf('"piston":');
+		const nextShape = geos.indexOf('\n\t"dispenser"', pistonAt);
+		const piston = geos.slice(pistonAt, nextShape > 0 ? nextShape : pistonAt + 2500);
+		assert.match(piston, /entity\.State\?\?0 == 0/);
+		assert.match(piston, /entity\.State\?\?0 == 1/);
+		assert.match(piston, /"pos": \[0, 28, 0\]/);
+		const headAt = piston.indexOf('"pos": [0, 28, 0]');
+		assert.ok(headAt > 0);
+		const head = piston.slice(headAt, headAt + 280);
+		assert.match(head, /carried\.up/);
+		assert.doesNotMatch(head, /#tex/);
+		const maker = readFileSync(join(root, "src/BlockGeoMaker.js"), "utf8");
+		assert.match(maker, /usingBlockEntityData\) \{\s*return false;/);
+	});
+
+	it("iso path uses OrthographicCamera; other presets stay perspective", () => {
+		const ctrl = readFileSync(join(root, "src/viewer/systems/CameraController.js"), "utf8");
+		assert.match(ctrl, /OrthographicCamera/);
+		assert.match(ctrl, /#applyIso/);
+		assert.match(ctrl, /#ensurePerspective/);
+		assert.match(ctrl, /isIsoCameraPreset/);
+		assert.doesNotMatch(ctrl, /0\.5,\s*0\.72,\s*-1/);
+		const view = readFileSync(join(root, "src/viewer/systems/ViewportSystem.js"), "utf8");
+		assert.match(view, /isOrthographicCamera/);
+		assert.match(view, /orthoHalfHeight/);
+		const orbit = readFileSync(join(root, "src/viewer/systems/orbitBootstrap.js"), "utf8");
+		assert.match(orbit, /controls\.object/);
+	});
+
+	it("normalizes default camera zoom and iso aliases", () => {
+		assert.equal(normalizeCameraZoom(2.4), 2);
+		assert.equal(normalizeCameraZoom("nope"), 1);
+		assert.equal(normalizeCameraPreset("iso"), "iso-north");
+		assert.equal(normalizeCameraPreset("west"), "west");
+	});
+
+	it("iso→fly keeps orbit target and look; only dolly to match ortho size", () => {
+		const d = perspectiveDistanceFromOrthoHalfHeight(100, 70);
+		assert.ok(d > 16);
+		assert.ok(Math.abs(d - 100 / Math.tan((70 * Math.PI) / 360)) < 0.01);
+		const ctrl = readFileSync(join(root, "src/viewer/systems/CameraController.js"), "utf8");
+		const fly = ctrl.match(/#enterFly\(\) \{[\s\S]*?\n\t\}/);
+		assert.ok(fly, "#enterFly body");
+		assert.match(fly[0], /perspectiveDistanceFromOrthoHalfHeight/);
+		assert.match(fly[0], /wasOrtho/);
+		assert.match(fly[0], /controls\.target/);
+		assert.match(fly[0], /orthoHalfHeight \/ oldZoom/);
+		assert.doesNotMatch(fly[0], /boundsForLayer/);
+		assert.doesNotMatch(fly[0], /getCenter/);
+		assert.match(ctrl, /PerspectiveCamera[\s\S]*next\.zoom = ortho/);
+	});
+
+	it("free orbit does not switch iso ortho to perspective", () => {
+		const ctrl = readFileSync(join(root, "src/viewer/systems/CameraController.js"), "utf8");
+		const enter = ctrl.match(/enterFreeCamera\(\) \{[\s\S]*?\n\t\}/);
+		assert.ok(enter, "enterFreeCamera body");
+		assert.doesNotMatch(enter[0], /#ensurePerspective/);
+		const freePreset = ctrl.match(/if \(preset === "free"\) \{[\s\S]*?return true;\s*\}/);
+		assert.ok(freePreset, "setPreset free branch");
+		assert.doesNotMatch(freePreset[0], /#ensurePerspective/);
+	});
+});
+
 describe("paper theme", async () => {
 	const { getSavedTheme, resolvedTheme } = await import("../../src/app/theme.js");
 
 	it("treats missing localStorage as follow-OS", () => {
 		assert.equal(getSavedTheme(), null);
 		assert.ok(resolvedTheme() === "light" || resolvedTheme() === "dark");
+	});
+
+	it("catalog dock peeks on desktop after a structure is selected", () => {
+		const html = readFileSync(join(root, "src/index.html"), "utf8");
+		assert.match(html, /id="catalogFloat"[^>]*data-visibility="peek"/);
+		const css = readFileSync(join(root, "src/viewer/viewer.css"), "utf8");
+		assert.match(css, /body\.basi-no-selection \.basi-float-left/);
+		assert.match(css, /translateX\(0\)/);
+		assert.match(css, /\.basi-float-left\.basi-float-pinned/);
+		const life = readFileSync(join(root, "src/app/previewLifecycle.js"), "utf8");
+		assert.match(life, /peekFloatDock\(els\.catalogFloat\)/);
+		assert.match(life, /catalogFloat\?\.contains\(ae\)/);
+		const docks = readFileSync(join(root, "src/ui/docks.js"), "utf8");
+		assert.match(docks, /if \(!pins\.catalog\) peekFloatDock/);
+		assert.match(docks, /if \(isFloatPinned\(el\)\) return;/);
+		assert.match(docks, /peekFloatDock\(el\)/);
+		const persist = readFileSync(join(root, "src/viewer/catalogPersist.js"), "utf8");
+		assert.match(persist, /if \(ctx\.isStale\?\.\(\)\) return 0;/);
+		const cat = readFileSync(join(root, "src/viewer/catalog.js"), "utf8");
+		assert.match(cat, /from "\.\/cameraPrefs\.js"/);
+		assert.doesNotMatch(cat, /systems\/isoCamera/);
+		const cargo = readFileSync(join(root, "src/viewer/entityCargo.js"), "utf8");
+		assert.match(cargo, /polyMeshBufferGeo/);
 	});
 
 	it("paper stylesheet overlays peek docks, not magenta HoloPrint chrome", () => {
@@ -2241,9 +2609,10 @@ describe("paper theme", async () => {
 		assert.match(css, /\.basi-cam-slide/);
 		assert.match(css, /translateY\(calc\(100% \+ 8px\)\)/);
 		assert.match(css, /\.basi-cam-dock:hover \.basi-cam-slide/);
-		const chrome = readFileSync(join(root, "src/ui/previewChrome.js"), "utf8");
-		assert.match(chrome, /toggleCamDock/);
-		assert.match(chrome, /e\.key === "c"/);
+		const keys = readFileSync(join(root, "src/ui/previewChrome.js"), "utf8");
+		const cam = readFileSync(join(root, "src/ui/cameraBar.js"), "utf8");
+		assert.match(cam, /toggleCamDock/);
+		assert.match(keys, /e\.key === "c"/);
 	});
 
 	it("details dock scrolls as one column instead of clipping", () => {
@@ -2252,6 +2621,28 @@ describe("paper theme", async () => {
 		const css = readFileSync(join(root, "src/viewer/viewer.css"), "utf8");
 		assert.match(css, /\.basi-detail-scroll/);
 		assert.match(css, /overscroll-behavior:\s*contain/);
+	});
+
+	it("details dock camera selector includes a default zoom slider", async () => {
+		const html = readFileSync(join(root, "src/index.html"), "utf8");
+		assert.match(html, /id="defaultCamSelect"/);
+		assert.match(html, /id="defaultZoom"/);
+		assert.match(html, /id="defaultZoomVal"/);
+		const css = readFileSync(join(root, "src/viewer/viewer.css"), "utf8");
+		assert.match(css, /\.basi-default-zoom/);
+		const { normalizeCameraZoom } = await import("../../src/viewer/cameraPrefs.js");
+		const { stepSelectIndex, stepRangeValue } = await import("../../src/ui/cameraBar.js");
+		assert.equal(normalizeCameraZoom(undefined), 1);
+		assert.equal(normalizeCameraZoom(1.5), 1.5);
+		assert.equal(normalizeCameraZoom(3), 2);
+		assert.equal(normalizeCameraZoom(0), 0.5);
+		assert.equal(stepSelectIndex(0, 12, 100), 1);
+		assert.equal(stepSelectIndex(0, 12, -100), 0);
+		assert.equal(stepSelectIndex(11, 12, 100), 11);
+		assert.equal(stepRangeValue(100, 50, 200, 5, -80), 105);
+		assert.equal(stepRangeValue(100, 50, 200, 5, 80), 95);
+		assert.equal(stepRangeValue(50, 50, 200, 5, 80), 50);
+		assert.equal(stepRangeValue(200, 50, 200, 5, -80), 200);
 	});
 
 	it("details dock uses structure name, Information, Materials, and feature picker", () => {
@@ -2270,6 +2661,20 @@ describe("paper theme", async () => {
 		const actionsAt = html.indexOf('class="basi-detail-actions"');
 		const materialsAt = html.indexOf('id="materialsSection"');
 		assert.ok(materialsAt > 0 && actionsAt > materialsAt, "Reload/Download/Remove should sit below Materials");
+		const statsAt = html.indexOf('id="detailStats"');
+		const hopperAt = html.indexOf('id="hopperStatsChip"');
+		const headerBarAt = html.indexOf('id="selectionBar"');
+		assert.ok(statsAt > 0 && hopperAt > statsAt, "Hopper lock chip should sit below entity stats");
+		assert.ok(headerBarAt > 0 && hopperAt > headerBarAt, "Hopper lock chip should not live in the title bar");
+		assert.doesNotMatch(html.slice(headerBarAt, headerBarAt + 500), /hopperStatsChip/);
+	});
+
+	it("editor feature cards do not shrink and wrap label text", () => {
+		const css = readFileSync(join(root, "src/styles/editor.css"), "utf8");
+		assert.match(css, /\.basi-ed-feat-card\s*\{[^}]*flex:\s*0 0 auto/s);
+		assert.match(css, /\.basi-ed-feat-card\s*\{[^}]*min-height:\s*min-content/s);
+		assert.match(css, /\.basi-ed-feat-main\s*\{[^}]*white-space:\s*normal/s);
+		assert.match(css, /\.basi-ed-feat-name\s*\{[^}]*overflow-wrap:\s*anywhere/s);
 	});
 });
 
@@ -2292,6 +2697,8 @@ describe("preview load cache / preload", () => {
 		assert.match(atlas, /mapPool/);
 		const pool = readFileSync(join(root, "src/viewer/systems/PreviewResourcePool.js"), "utf8");
 		assert.match(pool, /materialSide === "front"/);
+		assert.match(pool, /getOrCreateGeos/);
+		assert.doesNotMatch(pool, /getOrCreateGeo\(/);
 		const renderer = readFileSync(join(root, "src/PreviewRenderer.js"), "utf8");
 		assert.match(renderer, /materialSide: "front"/);
 		assert.match(renderer, /logarithmicDepthBuffer: true/);
@@ -2299,8 +2706,13 @@ describe("preview load cache / preload", () => {
 		assert.match(geoMaker, /#templateMemo/);
 		const layer = readFileSync(join(root, "src/viewer/systems/LayerMeshSystem.js"), "utf8");
 		assert.match(layer, /doubleChestNeedsPreviewXMirror/);
+		assert.match(layer, /polyMeshTemplateToBufferGeos/);
+		assert.match(layer, /getOrCreateGeos/);
+		assert.doesNotMatch(layer, /paperThin/);
+		assert.doesNotMatch(layer, /some\(f => f\.doubleSide\)/);
 		const geoSys = readFileSync(join(root, "src/viewer/systems/BlockGeoSystem.js"), "utf8");
 		assert.match(geoSys, /mirrorX/);
+		assert.match(geoSys, /partitionTemplateFaces/);
 	});
 
 	it("TextureAtlas caches decoded ImageData; ResourcePackStack caches vanilla pack JSON", () => {
@@ -2336,6 +2748,11 @@ describe("preview load cache / preload", () => {
 		assert.match(codec, /compression:\s*null/);
 		assert.match(codec, /endian:\s*"little"/);
 		assert.match(codec, /NBT\.read\(buffer,\s*MCSTRUCTURE_READ_OPTIONS\)/);
+		assert.match(codec, /writeMcstructure/);
+		assert.doesNotMatch(codec, /ZIP_TOO_MANY_ENTRIES/);
+		const fill = readFileSync(join(root, "scripts/fill-sign-test-text.mjs"), "utf8");
+		assert.match(fill, /writeMcstructure/);
+		assert.doesNotMatch(fill, /NBT\.write\(root\)/);
 		for (const rel of [
 			"src/viewer/parseStructure.js",
 			"src/viewer/structurePreview.js",
@@ -2345,6 +2762,10 @@ describe("preview load cache / preload", () => {
 		]) {
 			const src = readFileSync(join(root, rel), "utf8");
 			assert.match(src, /readMcstructure/);
+			if (rel.endsWith("HoloPrint.js")) {
+				assert.match(src, /from \"..\/viewer\/palette.js\"/);
+				assert.doesNotMatch(src, /async function tweakBlockPalette/);
+			}
 			assert.doesNotMatch(src, /NBT\.read\(arrayBuffer\)/);
 			assert.doesNotMatch(src, /NBT\.read\(ab\)/);
 			assert.doesNotMatch(src, /NBT\.read\(arrayBuffer,\s*options\)/);
@@ -2412,6 +2833,18 @@ describe("mcstructureCodec", async () => {
 		);
 	});
 
+	it("strips dangerous NBT object keys", async () => {
+		const { assertNbtQuotas, stripDangerousNbtKeys } = await import(
+			"../../src/viewer/core/nbt/mcstructureCodec.js"
+		);
+		const o = { ok: 1 };
+		Object.defineProperty(o, "__proto__", { value: { polluted: true }, enumerable: true, configurable: true });
+		stripDangerousNbtKeys(o);
+		assert.equal(Object.prototype.polluted, undefined);
+		assert.equal(o.ok, 1);
+		assert.doesNotThrow(() => assertNbtQuotas({ ok: true, constructor: { x: 1 } }, 1));
+	});
+
 	it("rejects NBT depth over 64", async () => {
 		const { assertNbtQuotas } = await import("../../src/viewer/core/nbt/mcstructureCodec.js");
 		let nest = {};
@@ -2442,6 +2875,20 @@ describe("mcstructureCodec", async () => {
 		v.setUint32(4, 8, true);
 		buf[8] = 0x0a;
 		assert.throws(() => gateMcstructureBytes(buf), e => e.code === "STRUCTURE_LEVEL_DAT");
+	});
+
+	it("round-trips hoppers.mcstructure through writeMcstructure", async () => {
+		const p = join(root, "tests/sampleStructures/hoppers.mcstructure");
+		if (!existsSync(p)) return;
+		const { writeMcstructure } = await import("../../src/viewer/core/nbt/mcstructureCodec.js");
+		const buf = readFileSync(p);
+		const { nbt } = await readMcstructure(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength));
+		const out = await writeMcstructure(nbt);
+		const { nbt: again } = await readMcstructure(out);
+		assert.equal(isNBTValidMcstructure(again), true);
+		assert.ok(again.size instanceof Int32Array);
+		assert.ok(again.structure_world_origin instanceof Int32Array);
+		assert.equal(again.size.length, 3);
 	});
 });
 
@@ -2519,6 +2966,38 @@ describe("preview face winding (FrontSide)", () => {
 			);
 		}
 	});
+
+	it("tags only 0-thickness cubes as doubleSide", async () => {
+		const BlockGeoMaker = (await import("../../src/BlockGeoMaker.js")).default;
+		const { partitionTemplateFaces } = await import("../../src/viewer/systems/BlockGeoSystem.js");
+		const maker = new BlockGeoMaker(
+			{ SCALE: 1, IGNORED_BLOCKS: [] },
+			{ entityModelToCubes: async () => [] },
+			await loadJsonc("src/data/blockShapes.json"),
+			await loadJsonc("src/data/blockShapeGeos.json"),
+			await loadJsonc("src/data/blockStateDefinitions.json"),
+			await loadJsonc("src/data/blockEigenvariants.json")
+		);
+		const palette = [
+			{ name: "stone", states: {} },
+			{ name: "deadbush", states: {} },
+			{ name: "unpowered_repeater", states: { repeater_delay: 0, direction: 0 } },
+			{ name: "redstone_torch", states: { torch_facing_direction: "top" } }
+		];
+		const { templates } = await maker.makePolyMeshTemplates(palette);
+		const atlas = stubAtlas(maker.textureRefs.size);
+		const split = templates.map((t, i) => {
+			const resolved = BlockGeoMaker.resolveTemplateFaceUvs(structuredClone(t), atlas);
+			const { volume, cards } = partitionTemplateFaces(resolved);
+			return { name: palette[i].name, volume: volume.length, cards: cards.length };
+		});
+		assert.equal(split[0].cards, 0, "stone is volumetric");
+		assert.ok(split[0].volume > 0, "stone has volume faces");
+		assert.equal(split[1].volume, 0, "deadbush is all cards");
+		assert.ok(split[1].cards > 0, "deadbush has card faces");
+		assert.ok(split[2].volume > 0 && split[2].cards > 0, "repeater is mixed");
+		assert.ok(split[3].volume > 0 && split[3].cards > 0, "redstone torch is mixed");
+	});
 });
 
 describe("boot leftover", () => {
@@ -2533,6 +3012,10 @@ describe("boot leftover", () => {
 		assert.match(boot, /preloadVanillaAssets/);
 		const updater = readFileSync(join(root, "src/BlockUpdater.js"), "utf8");
 		assert.match(updater, /const schemaLoads = new Map/);
+		assert.match(updater, /data\/blockUpgradeSchemaList\.json/);
+		assert.match(updater, /location\.href/);
+		assert.doesNotMatch(updater, /import\.meta\.url/);
+		assert.doesNotMatch(updater, /schemaListHref/);
 		assert.doesNotMatch(updater, /getSharedBlockUpdater/);
 		const palette = readFileSync(join(root, "src/viewer/palette.js"), "utf8");
 		assert.match(palette, /new BlockUpdater\s*\(/);

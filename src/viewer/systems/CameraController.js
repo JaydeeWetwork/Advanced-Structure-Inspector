@@ -4,12 +4,26 @@
  */
 
 import FlyController from "./FlyController.js";
+import { DEFAULT_FOV } from "./orbitBootstrap.js";
+import {
+	applyOrthoFrustum,
+	isIsoCameraPreset,
+	isoOffset,
+	normalizeCameraZoom,
+	normalizeIsoPreset,
+	orthoHalfExtents,
+	perspectiveDistanceFromOrthoHalfHeight
+} from "./isoCamera.js";
 
 export default class CameraController {
 	/** @type {string} */
 	lastPreset = "iso";
 	/** @type {number} */
 	tiltDeg = 67;
+	/** Opening / slider zoom: 1 = fit, >1 closer, <1 farther. */
+	userZoom = 1;
+	/** Ortho half-height (world units) for Iso; used on resize. */
+	orthoHalfHeight = 100;
 	/** Snapshot at orbit start */
 	orbitSnapshot = null;
 	/** @type {FlyController} */
@@ -71,8 +85,13 @@ export default class CameraController {
 	enterFreeCamera() {
 		if (this.#fly.enabled) return;
 		if (this.lastPreset === "free") return;
+		// Keep ortho after iso (and perspective after N/S/E/W). Switching
+		// projection here made iso look zoomed-out on pointer-up.
+		this.setFlyMode(false);
 		this.lastPreset = "free";
+		this.#syncControlsFromCamera();
 		this.emitPreset("free");
+		this.#paint();
 	}
 
 	/**
@@ -139,6 +158,24 @@ export default class CameraController {
 		return this.tiltDeg;
 	}
 
+	#zoomFactor() {
+		return normalizeCameraZoom(this.userZoom);
+	}
+
+	/**
+	 * @param {number} z
+	 * @param {{ reframe?: boolean }} [opts]
+	 */
+	setUserZoom(z, opts = {}) {
+		this.userZoom = normalizeCameraZoom(z);
+		const reframe = opts.reframe !== false;
+		const p = this.lastPreset;
+		if (reframe && p && p !== "free" && p !== "fly") {
+			this.setPreset(p);
+		}
+		return this.userZoom;
+	}
+
 	/**
 	 * @param {import("three").Box3} box
 	 * @param {import("three").Vector3} dirFromCenter
@@ -192,6 +229,171 @@ export default class CameraController {
 		];
 	}
 
+	/**
+	 * @param {boolean} ortho
+	 */
+	#ensureProjection(ortho) {
+		const THREE = this.ctx.THREE;
+		const old = this.ctx.camera;
+		const controls = this.ctx.controls;
+		if (!THREE || !old) return old;
+		const isOrtho = !!old.isOrthographicCamera;
+		if (!!ortho === isOrtho) return old;
+
+		const aspect = Math.max(old.aspect || 1, 0.01);
+		const far = Math.max(old.far || 10000, 1000);
+		/** @type {import("three").Camera} */
+		let next;
+		if (ortho) {
+			next = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, far);
+		} else {
+			next = new THREE.PerspectiveCamera(DEFAULT_FOV, aspect, 0.1, far);
+		}
+		next.position.copy(old.position);
+		next.quaternion.copy(old.quaternion);
+		next.up.copy(old.up);
+		next.aspect = aspect;
+		// Perspective zoom must stay 1. Copying OrthographicCamera.zoom
+		// (iso wheel) into PerspectiveCamera makes FOV explode/collapse.
+		next.zoom = ortho ? (Number.isFinite(old.zoom) && old.zoom > 0 ? old.zoom : 1) : 1;
+		if (controls) controls.object = next;
+		this.ctx.camera = next;
+		return next;
+	}
+
+	#ensureOrtho() {
+		return this.#ensureProjection(true);
+	}
+
+	#ensurePerspective() {
+		return this.#ensureProjection(false);
+	}
+
+	/**
+	 * Fly keeps the current look and orbit target. From iso (ortho), only the
+	 * stand-off distance changes so the structure still fills the view.
+	 * Never lookAt the AABB center — that is what snapped the view.
+	 */
+	#enterFly() {
+		const THREE = this.ctx.THREE;
+		const src = this.ctx.camera;
+		const controls = this.ctx.controls;
+		if (!src || !controls || !THREE) return false;
+
+		const wasOrtho = !!src.isOrthographicCamera;
+		const oldZoom = Number(src.zoom) > 0 ? src.zoom : 1;
+		const target = controls.target.clone();
+		const look = new THREE.Vector3();
+		src.getWorldDirection(look);
+		if (look.lengthSq() < 1e-8) look.set(0, 0, -1);
+		else look.normalize();
+
+		this.#ensurePerspective();
+		const cam = this.ctx.camera;
+		if (!cam) return false;
+		this.ctx.fitCanvasToHost();
+		cam.zoom = 1;
+		cam.up.set(0, 1, 0);
+
+		this.lastPreset = "fly";
+		if (!this.#fly.enabled) {
+			const maxDim = this.ctx.maxDimPixels || 256;
+			if (wasOrtho) {
+				const apparentH = Math.max(this.orthoHalfHeight / oldZoom, 1);
+				const dist = perspectiveDistanceFromOrthoHalfHeight(apparentH, cam.fov);
+				cam.position.copy(target).addScaledVector(look, -dist);
+				cam.near = Math.max(0.1, dist / 500);
+				cam.far = Math.max(dist * 10, maxDim * 10);
+			}
+			cam.lookAt(target);
+			cam.updateProjectionMatrix();
+			controls.target.copy(target);
+		}
+		this.setFlyMode(true);
+		this.#fly.applyOrientation();
+		this.emitPreset("fly");
+		this.#paint();
+		return true;
+	}
+
+	/**
+	 * @param {import("three").Box3} box
+	 * @param {import("three").Vector3} dirFromCenter
+	 * @param {number} aspect
+	 * @param {number} [padding]
+	 */
+	fitOrthoHalfHeight(box, dirFromCenter, aspect, padding = 1.04) {
+		const THREE = this.ctx.THREE;
+		const center = box.getCenter(new THREE.Vector3());
+		const forward = dirFromCenter.clone().normalize().negate();
+		let up = new THREE.Vector3(0, 1, 0);
+		if (Math.abs(forward.dot(up)) > 0.98) {
+			up = new THREE.Vector3(0, 0, 1);
+		}
+		const right = new THREE.Vector3().crossVectors(up, forward).normalize();
+		const camUp = new THREE.Vector3().crossVectors(forward, right).normalize();
+		let maxRight = 0;
+		let maxUp = 0;
+		for (const p of this.#boxCorners(box)) {
+			const v = p.clone().sub(center);
+			maxRight = Math.max(maxRight, Math.abs(v.dot(right)));
+			maxUp = Math.max(maxUp, Math.abs(v.dot(camUp)));
+		}
+		return {
+			...orthoHalfExtents(maxRight, maxUp, aspect, padding, this.#zoomFactor()),
+			center
+		};
+	}
+
+	/**
+	 * True isometric 3/4 (orthographic, 45° / 35.264°).
+	 * @param {string} preset
+	 */
+	#applyIso(preset) {
+		const THREE = this.ctx.THREE;
+		this.setFlyMode(false);
+		this.lastPreset = preset;
+		const camera = this.#ensureOrtho();
+		const controls = this.ctx.controls;
+		if (!camera || !controls || !THREE) return false;
+
+		this.ctx.fitCanvasToHost();
+		const aspect = Math.max(camera.aspect || 1, 0.01);
+		const layer = this.ctx.selectedLayer;
+		const b = this.ctx.boundsForLayer(layer);
+		const size = b.getSize(new THREE.Vector3());
+		const radius = Math.max(size.length() * 0.5, 16);
+		const maxDim = this.ctx.maxDimPixels || 256;
+		const [ox, oy, oz] = isoOffset(preset);
+		const dir = new THREE.Vector3(ox, oy, oz);
+		if (dir.lengthSq() < 1e-8) dir.set(1, 1, -1);
+		dir.normalize();
+
+		const { halfHeight, center } = this.fitOrthoHalfHeight(b, dir, aspect, 1.04);
+		this.orthoHalfHeight = halfHeight;
+		camera.zoom = 1;
+		applyOrthoFrustum(camera, halfHeight, aspect);
+
+		const dist = Math.max(size.length() * 2, radius * 4, 64);
+		camera.up.set(0, 1, 0);
+		camera.position.copy(center).addScaledVector(dir, dist);
+		camera.lookAt(center);
+		camera.near = 0.1;
+		camera.far = Math.max(dist * 8, maxDim * 10);
+		camera.updateProjectionMatrix();
+		controls.target.copy(center);
+		controls.minDistance = Math.max(4, radius * 0.05);
+		controls.maxDistance = Math.max(dist * 5, maxDim * 6);
+		if ("minZoom" in controls) controls.minZoom = 0.25;
+		if ("maxZoom" in controls) controls.maxZoom = 8;
+		controls.minPolarAngle = 0.001;
+		controls.maxPolarAngle = Math.PI - 0.001;
+		this.#syncControlsFromCamera();
+		this.emitPreset(preset);
+		this.#paint();
+		return true;
+	}
+
 	/** Force OrbitControls internal spherical to match current camera pose. */
 	#syncControlsFromCamera() {
 		const controls = this.ctx.controls;
@@ -237,40 +439,28 @@ export default class CameraController {
 			return false;
 		}
 
-		this.ctx.fitCanvasToHost();
-
 		if (preset === "free") {
 			this.setFlyMode(false);
 			this.lastPreset = "free";
+			this.#syncControlsFromCamera();
 			this.emitPreset("free");
 			this.#paint();
 			return true;
 		}
 
-		if (preset === "fly") {
-			this.lastPreset = "fly";
-			camera.up.set(0, 1, 0);
-			if (!this.#fly.enabled) {
-				const b = this.ctx.boundsForLayer(this.ctx.selectedLayer);
-				const center = b.getCenter(new THREE.Vector3());
-				const dist = camera.position.distanceTo(center);
-				if (dist < 8 || dist > this.ctx.maxDimPixels * 8) {
-					const r = Math.max(b.getSize(new THREE.Vector3()).length() * 0.4, 48);
-					camera.position.set(
-						center.x + r * 0.6,
-						center.y + r * 0.35,
-						center.z + r * 0.6
-					);
-				}
-				camera.lookAt(center);
-				controls.target.copy(center);
-			}
-			this.setFlyMode(true);
-			this.#fly.applyOrientation();
-			this.emitPreset("fly");
-			this.#paint();
-			return true;
+		if (isIsoCameraPreset(preset)) {
+			return this.#applyIso(normalizeIsoPreset(preset));
 		}
+
+		if (preset === "fly") {
+			return this.#enterFly();
+		}
+
+		this.#ensurePerspective();
+		const perspCam = this.ctx.camera;
+		if (!perspCam) return false;
+
+		this.ctx.fitCanvasToHost();
 
 		this.setFlyMode(false);
 		this.lastPreset = preset;
@@ -285,22 +475,27 @@ export default class CameraController {
 		const radius = Math.max(size.length() * 0.5, 16);
 		const maxDim = this.ctx.maxDimPixels || 256;
 
-		camera.up.set(0, 1, 0);
+		perspCam.up.set(0, 1, 0);
 
 		if (preset === "top") {
-			camera.up.set(0, 0, -1);
-			const vFov = (camera.fov * Math.PI) / 180;
-			const aspect = Math.max(camera.aspect || 1, 0.01);
+			perspCam.up.set(0, 0, -1);
+			const vFov = (perspCam.fov * Math.PI) / 180;
+			const aspect = Math.max(perspCam.aspect || 1, 0.01);
 			const hFov = 2 * Math.atan(Math.tan(vFov / 2) * aspect);
 			const halfX = Math.max(size.x * 0.5, 8);
 			const halfZ = Math.max(size.z * 0.5, 8);
 			const dist =
-				Math.max(halfX / Math.tan(hFov / 2), halfZ / Math.tan(vFov / 2), 20) * 1.04;
-			camera.position.set(center.x + 0.001, center.y + dist, center.z);
-			camera.lookAt(center);
-			camera.near = Math.max(0.1, dist / 500);
-			camera.far = Math.max(dist * 10, maxDim * 10);
-			camera.updateProjectionMatrix();
+				Math.max(
+					Math.max(halfX / Math.tan(hFov / 2), halfZ / Math.tan(vFov / 2), 20)
+						* 1.04
+						/ this.#zoomFactor(),
+					8
+				);
+			perspCam.position.set(center.x + 0.001, center.y + dist, center.z);
+			perspCam.lookAt(center);
+			perspCam.near = Math.max(0.1, dist / 500);
+			perspCam.far = Math.max(dist * 10, maxDim * 10);
+			perspCam.updateProjectionMatrix();
 			controls.target.copy(center);
 			controls.minDistance = Math.max(4, radius * 0.06);
 			controls.maxDistance = Math.max(dist * 5, maxDim * 6);
@@ -342,45 +537,22 @@ export default class CameraController {
 				pad = 1.0;
 				zoom = 0.92;
 				break;
-			case "iso-north":
-				dir = new THREE.Vector3(0.5, 0.72, -1);
-				pad = 0.96;
-				zoom = 0.686;
-				break;
-			case "iso-south":
-				dir = new THREE.Vector3(-0.5, 0.72, 1);
-				pad = 0.96;
-				zoom = 0.686;
-				break;
-			case "iso-east":
-				dir = new THREE.Vector3(1, 0.72, 0.5);
-				pad = 0.96;
-				zoom = 0.686;
-				break;
-			case "iso-west":
-				dir = new THREE.Vector3(-1, 0.72, -0.5);
-				pad = 0.96;
-				zoom = 0.686;
-				break;
-			case "iso":
-			case "default":
 			default:
-				dir = new THREE.Vector3(0.5, 0.72, -1);
-				pad = 0.96;
-				zoom = 0.686;
+				dir = new THREE.Vector3(0, sinT, -cosT);
+				pad = 1.03;
 				break;
 		}
 		if (dir.lengthSq() < 1e-8) dir.set(1, 1, 1);
 		dir.normalize();
 
 		let { dist } = this.fitDistanceForBox(b, dir, pad);
-		dist = Math.max(dist * zoom, 8);
+		dist = Math.max((dist * zoom) / this.#zoomFactor(), 8);
 
-		camera.position.copy(center).addScaledVector(dir, dist);
-		camera.lookAt(center);
-		camera.near = Math.max(0.1, dist / 500);
-		camera.far = Math.max(dist * 10, maxDim * 10);
-		camera.updateProjectionMatrix();
+		perspCam.position.copy(center).addScaledVector(dir, dist);
+		perspCam.lookAt(center);
+		perspCam.near = Math.max(0.1, dist / 500);
+		perspCam.far = Math.max(dist * 10, maxDim * 10);
+		perspCam.updateProjectionMatrix();
 		controls.target.copy(center);
 		controls.minDistance = Math.max(4, radius * 0.05);
 		controls.maxDistance = Math.max(dist * 5, maxDim * 6);

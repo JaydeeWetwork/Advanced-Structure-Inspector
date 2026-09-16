@@ -5,6 +5,10 @@
 		"trip_wire": "tripWire",
 		"sea_lantern": "seaLantern",
 		"iron_chain": "chain",
+		"oak_door": "wooden_door.0",
+		"oak_trapdoor": "trapdoor",
+		"oak_fence_gate": "fence_gate",
+		"oak_button": "wooden_button.0",
 		"unknown": "info_update" // shows missing_tile.png
 	},
 	"blocks_to_use_carried_textures": ["acacia_leaves", "birch_leaves", "bush", "dark_oak_leaves", "fern", "firefly_bush", "leaves", "leaves2", "mangrove_leaves", "oak_leaves", "open_eyeblossom", "short_grass", "spruce_leaves", "vine", "waterlily"],

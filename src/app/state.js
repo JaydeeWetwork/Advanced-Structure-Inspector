@@ -77,9 +77,13 @@ export function primaryPreview() {
 /**
  * @param {string} id
  */
-function $(id) {
+function $(id, required = false) {
 	const el = document.getElementById(id);
-	if (!el) console.warn(`[basi] missing #${id}`);
+	if (!el) {
+		const msg = `[basi] missing #${id}`;
+		if (required) throw new Error(msg);
+		console.warn(msg);
+	}
 	return el;
 }
 
@@ -103,6 +107,8 @@ export function createEls() {
 		detailMaterialList: $("detailMaterialList"),
 		materialListHint: $("materialListHint"),
 		defaultCamSelect: /** @type {HTMLSelectElement|null} */ ($("defaultCamSelect")),
+		defaultZoom: /** @type {HTMLInputElement|null} */ ($("defaultZoom")),
+		defaultZoomVal: $("defaultZoomVal"),
 		metaCreator: /** @type {HTMLInputElement|null} */ ($("metaCreator")),
 		metaCredits: /** @type {HTMLInputElement|null} */ ($("metaCredits")),
 		metaSourceLink: /** @type {HTMLInputElement|null} */ ($("metaSourceLink")),
@@ -120,10 +126,13 @@ export function createEls() {
 		materialsCollapseBody: $("materialsCollapseBody"),
 		detailsCollapseBtn: $("detailsCollapseBtn"),
 		detailsCollapseBody: $("detailsCollapseBody"),
+		detailCategorySelect: /** @type {HTMLSelectElement|null} */ ($("detailCategorySelect")),
+		detailEntrySelect: /** @type {HTMLSelectElement|null} */ ($("detailEntrySelect")),
+		detailEntryField: $("detailEntryField"),
 		camIsoBtn: $("camIsoBtn"),
 		camDock: $("camDock"),
 		camBar: $("camBar"),
-		previewHost: $("previewHost"),
+		previewHost: $("previewHost", true),
 		previewBtn: /** @type {HTMLButtonElement|null} */ ($("previewBtn")),
 		downloadBtn: $("downloadBtn"),
 		removeBtn: $("removeBtn"),
@@ -142,13 +151,13 @@ export function createEls() {
 		hopperStatsDetail: $("hopperStatsDetail"),
 		pinCatalogBtn: /** @type {HTMLButtonElement|null} */ ($("pinCatalogBtn")),
 		pinDetailBtn: /** @type {HTMLButtonElement|null} */ ($("pinDetailBtn")),
-		catalogFloat: $("catalogFloat"),
-		detailFloat: $("detailFloat"),
+		catalogFloat: $("catalogFloat", true),
+		detailFloat: $("detailFloat", true),
 		viewViewerBtn: $("viewViewerBtn"),
 		viewEditorBtn: $("viewEditorBtn"),
 		openEditorBtn: $("openEditorBtn"),
 		editorStage: $("editorStage"),
-		appStage: $("appStage"),
+		appStage: $("appStage", true),
 		editorTree: $("editorTree"),
 		editorDbBar: $("editorDbBar"),
 		editorTreeToolbar: $("editorTreeToolbar"),

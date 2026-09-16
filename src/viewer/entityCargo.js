@@ -5,6 +5,9 @@
  */
 
 import { vanillaModelDefFor } from "./entityModels.js";
+import { facesToBufferGeometry } from "./polyMeshBufferGeo.js";
+
+export { facesToBufferGeometry as polyMeshTemplateToGeometry };
 
 /** Vanilla in-cart scale (Java 0.75F). */
 export const CARGO_SCALE = 0.75;
@@ -54,45 +57,6 @@ export function cargoPaletteEntries(entities) {
 }
 
 /**
- * Poly-mesh template (resolved UVs) → BufferGeometry.
- * Same Z-flip + winding as BlockGeoSystem.polyMeshTemplateToBufferGeo.
- *
- * @param {typeof import("three")} THREE
- * @param {any[]} faces
- * @returns {import("three").BufferGeometry|null}
- */
-export function polyMeshTemplateToGeometry(THREE, faces) {
-	if (!THREE || !Array.isArray(faces) || !faces.length) return null;
-	const positions = [];
-	const normals = [];
-	const uvs = [];
-	const indices = [];
-	let i = 0;
-	for (const face of faces) {
-		const verts = face?.vertices;
-		if (!Array.isArray(verts) || verts.length < 4) continue;
-		const n = Array.isArray(face.normal) ? face.normal : [0, 1, 0];
-		for (const v of verts) {
-			const p = v?.pos ?? [0, 0, 0];
-			const uv = v?.uv ?? [0, 0];
-			positions.push(Number(p[0]) || 0, Number(p[1]) || 0, 16 - (Number(p[2]) || 0));
-			normals.push(Number(n[0]) || 0, Number(n[1]) || 0, Number(n[2]) || 0);
-			uvs.push(Number(uv[0]) || 0, 1 - (Number(uv[1]) || 0));
-		}
-		indices.push(i + 2, i + 1, i, i + 2, i, i + 3);
-		i += verts.length;
-	}
-	if (!positions.length) return null;
-	const geo = new THREE.BufferGeometry();
-	geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(positions), 3));
-	geo.setAttribute("normal", new THREE.BufferAttribute(new Float32Array(normals), 3));
-	geo.setAttribute("uv", new THREE.BufferAttribute(new Float32Array(uvs), 2));
-	geo.setIndex(indices);
-	geo.computeVertexNormals();
-	return geo;
-}
-
-/**
  * @param {import("three").Object3D} mesh
  */
 export function placeCargoMesh(mesh) {
@@ -126,7 +90,7 @@ export function buildCargoKit(THREE, templates, pool) {
 	}
 
 	for (const [kind, faces] of Object.entries(templates)) {
-		const geo = polyMeshTemplateToGeometry(THREE, faces);
+		const geo = facesToBufferGeometry(THREE, faces);
 		if (!geo) continue;
 		kit.set(kind, { geometry: geo, material: pool.cargoMat });
 	}

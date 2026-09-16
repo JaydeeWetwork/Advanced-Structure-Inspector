@@ -247,7 +247,7 @@ export function describeSignPlacement(block, name) {
  * @param {ReturnType<typeof describeSignPlacement>} desc
  * @param {boolean} isBack
  */
-export function signDebugFooter(desc, isBack) {
+export function signFaceTag(desc, isBack) {
 	const tag = isBack ? "B" : "F";
 	return `${tag} ${desc.kind} ${desc.facing}`;
 }

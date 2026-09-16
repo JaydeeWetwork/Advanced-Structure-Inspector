@@ -2,12 +2,12 @@
  * Single chokepoint for .mcstructure bytes → NBT.
  * Never call option-less NBT.read. Never decompress.
  *
- * Residual (P5): nbtify still does `new Int32Array(untrustedLength)` before a
- * remaining-bytes check. A tiny file with length 0x7FFFFFFF can OOM before
- * quotas run. Do not treat this module as a complete F2 fix.
+ * Array lengths are checked by nbtArrayLengthGate before nbtify. nbtify still
+ * allocates INT_ARRAY after that walk rejects huge lengths.
  */
 
 import * as NBT from "nbtify-readonly-typeless";
+import { assertNbtArrayLengths } from "./nbtArrayLengthGate.js";
 
 export const MCSTRUCTURE_MAX_BYTES = 64 * 1024 * 1024;
 export const MCSTRUCTURE_MAX_CELLS = 8_388_608;
@@ -49,7 +49,7 @@ export class McstructureCodecError extends Error {
 		const who = fileName ? `"${fileName}"` : "Structure file";
 		switch (this.code) {
 			case "STRUCTURE_EMPTY":
-				return `${who} is empty. If this file came from cloud storage, try exporting the structure again from Minecraft.`;
+				return `${who} is empty. Re-import the .mcstructure (Safari / iPad does not keep the original picker file after reload). If it came from cloud storage, export it again from Minecraft.`;
 			case "STRUCTURE_TOO_LARGE":
 				return `${who} is larger than 64 MiB`;
 			case "STRUCTURE_COMPRESSED":
@@ -78,6 +78,18 @@ export class McstructureCodecError extends Error {
 
 function fail(code, message, extra) {
 	throw new McstructureCodecError(code, message, extra);
+}
+
+/**
+ * @param {Blob} blob
+ * @returns {Promise<ArrayBuffer>}
+ */
+async function arrayBufferOrEmpty(blob) {
+	try {
+		return await blob.arrayBuffer();
+	} catch {
+		return new ArrayBuffer(0);
+	}
 }
 
 /**
@@ -227,6 +239,7 @@ export function assertNbtQuotas(nbt, volume) {
 			}
 			continue;
 		}
+		stripDangerousNbtKeys(value);
 		for (const [k, v] of Object.entries(value)) {
 			stringBytes += k.length;
 			if (stringBytes > MCSTRUCTURE_MAX_STRING_BYTES) {
@@ -260,6 +273,24 @@ export function assertNbtQuotas(nbt, volume) {
 	return { nodes, stringBytes, entityCount, warnings };
 }
 
+const DANGEROUS_NBT_KEYS = new Set(["__proto__", "prototype", "constructor"]);
+
+/**
+ * Drop keys that would pollute Object.prototype if assigned on a parsed compound.
+ * @param {object} obj
+ */
+export function stripDangerousNbtKeys(obj) {
+	if (!obj || typeof obj !== "object") return;
+	for (const k of Object.getOwnPropertyNames(obj)) {
+		if (!DANGEROUS_NBT_KEYS.has(k)) continue;
+		try {
+			delete obj[k];
+		} catch {
+			/* ignore */
+		}
+	}
+}
+
 /**
  * @param {ArrayBuffer|ArrayBufferView|File} input
  * @param {{ fileName?: string }} [opts]
@@ -270,7 +301,7 @@ export async function readMcstructure(input, opts = {}) {
 	if (typeof File !== "undefined" && input instanceof File && fileReadCache) {
 		const hit = fileReadCache.get(input);
 		if (hit) return hit;
-		const pending = readMcstructureFromBuffer(await input.arrayBuffer());
+		const pending = readMcstructureFromBuffer(await arrayBufferOrEmpty(input));
 		fileReadCache.set(input, pending);
 		try {
 			return await pending;
@@ -279,8 +310,8 @@ export async function readMcstructure(input, opts = {}) {
 			throw e;
 		}
 	}
-	const buffer = typeof File !== "undefined" && input instanceof File
-		? await input.arrayBuffer()
+	const buffer = typeof Blob !== "undefined" && input instanceof Blob
+		? await arrayBufferOrEmpty(input)
 		: input;
 	return readMcstructureFromBuffer(buffer);
 }
@@ -290,6 +321,7 @@ export async function readMcstructure(input, opts = {}) {
  */
 async function readMcstructureFromBuffer(buffer) {
 	gateMcstructureBytes(buffer);
+	assertNbtArrayLengths(buffer, fail);
 	let parsed;
 	try {
 		parsed = await NBT.read(buffer, MCSTRUCTURE_READ_OPTIONS);
@@ -317,4 +349,25 @@ async function readMcstructureFromBuffer(buffer) {
 		}
 		throw e;
 	}
+}
+
+const WRITE_OPTIONS = {
+	endian: "little",
+	compression: null,
+	bedrockLevel: false
+};
+
+/**
+ * Product write: little-endian uncompressed .mcstructure. Re-reads with P1.
+ * @param {object} nbt
+ * @returns {Promise<Uint8Array>}
+ */
+export async function writeMcstructure(nbt) {
+	const layer = assertMcstructureLayers(nbt);
+	assertNbtQuotas(nbt, layer.volume);
+	const writable = await import("nbtify");
+	const bytes = await writable.write(nbt, WRITE_OPTIONS);
+	const u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+	await readMcstructureFromBuffer(u8);
+	return u8;
 }

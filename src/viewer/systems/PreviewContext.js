@@ -8,7 +8,7 @@ export default class PreviewContext {
 	THREE = null;
 	/** @type {import("three").Scene|null} */
 	scene = null;
-	/** @type {import("three").PerspectiveCamera|null} */
+	/** @type {import("three").PerspectiveCamera|import("three").OrthographicCamera|null} */
 	camera = null;
 	/** @type {import("three").OrbitControls|null} */
 	controls = null;
@@ -32,6 +32,8 @@ export default class PreviewContext {
 	inspectIndex = null;
 	/** @type {any[]|null} */
 	blockPalette = null;
+	/** @type {string[]|null} */
+	shapeByPalette = null;
 	/** @type {any[]|null} */
 	polyMeshTemplatePalette = null;
 	/** @type {any} */

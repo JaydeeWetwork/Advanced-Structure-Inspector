@@ -137,6 +137,7 @@ export function fillHydratedMaps({ rows, cats, ents, feats, entries, categories,
 				? [...row.acquiredMaterials]
 				: [],
 			defaultCameraPreset: row.defaultCameraPreset || "iso-north",
+			defaultCameraZoom: Number.isFinite(row.defaultCameraZoom) ? row.defaultCameraZoom : 1,
 			userDetails: Array.isArray(row.userDetails)
 				? row.userDetails.map(d => ({ ...d }))
 				: [],
@@ -145,7 +146,32 @@ export function fillHydratedMaps({ rows, cats, ents, feats, entries, categories,
 			sourceLink: typeof row.sourceLink === "string" ? row.sourceLink : "",
 			addedAt: row.addedAt,
 			file: row.file,
+			contentCrc32: typeof row.contentCrc32 === "string" ? row.contentCrc32 : "",
 			parseError: row.parseError
 		});
 	}
+}
+
+export function newCatalogId(prefix = "basi") {
+	if (typeof crypto !== "undefined" && crypto.randomUUID) {
+		return crypto.randomUUID();
+	}
+	return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+export function slugFromName(name) {
+	const slug = String(name || "")
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, "-")
+		.replace(/^-+|-+$/g, "");
+	return slug || "item";
+}
+
+export function uniqueSlug(base, taken) {
+	if (!taken.has(base)) return base;
+	for (let i = 2; i < 1000; i++) {
+		const next = `${base}-${i}`;
+		if (!taken.has(next)) return next;
+	}
+	return `${base}-${newCatalogId("s")}`;
 }

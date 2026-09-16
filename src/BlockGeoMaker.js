@@ -4,6 +4,65 @@
 
 import { hexColorToClampedTriplet, JSONSet, max, rotateDeg, conditionallyGroup, mulMat4, tuple, vec2, vec3, PatternMap } from "./utils.js";
 import { resolveBlockShapeName } from "./viewer/appearanceFallback.js";
+import { GEO_SPACE_BLOCK, loadPackGeometryCubes } from "./geoToEngineCubes.js";
+
+const BED_COLOR_NAMES = [
+	"white", "orange", "magenta", "light_blue", "yellow", "lime", "pink", "gray",
+	"silver", "cyan", "purple", "blue", "brown", "green", "red", "black"
+];
+
+/**
+ * Terrain-texture array index for a block-state value. Out-of-range growth
+ * (e.g. torchflower 2) clamps to the last stage instead of logging.
+ * @param {unknown} blockStateVariants
+ * @param {unknown} blockStateValue
+ * @returns {number|undefined}
+ */
+export function pickTextureVariantIndex(blockStateVariants, blockStateValue) {
+	if(blockStateVariants == null) return undefined;
+	if(blockStateValue in /** @type {object} */ (blockStateVariants)) {
+		return /** @type {any} */ (blockStateVariants)[/** @type {any} */ (blockStateValue)];
+	}
+	if(!Array.isArray(blockStateVariants) || !blockStateVariants.length) return undefined;
+	const n = Number(blockStateValue);
+	const i = Number.isFinite(n)
+		? Math.max(0, Math.min(blockStateVariants.length - 1, Math.trunc(n)))
+		: 0;
+	return blockStateVariants[i];
+}
+
+/** Joined two-cell models stay unscaled so the seam stays flush. */
+export function skipHologramScale(shape) {
+	const s = String(shape ?? "");
+	return s.startsWith("chest_large") || s.startsWith("chest_double") || s === "straw_bed";
+}
+
+/**
+ * Bedrock omits default-0 integer states from NBT.
+ * String `if`s (`vertical_half == bottom`) have no numeric default.
+ * @param {string} expectedBlockState
+ * @returns {0|undefined}
+ */
+export function omittedStateDefault(expectedBlockState) {
+	return /^-?\d+$/.test(String(expectedBlockState)) ? 0 : undefined;
+}
+
+/**
+ * Vanilla `bed` NBT color, or flattened `red_bed` / `light_gray_bed` ids.
+ * Default is red (legacy `bed`).
+ * @param {{ name?: string }} block
+ * @param {string[]} [array]
+ */
+export function bedColorIndex(block, array = BED_COLOR_NAMES) {
+	const n = String(block?.name || "").replace(/^minecraft:/, "");
+	if (n.endsWith("_bed") && n !== "bed" && n !== "straw_bed") {
+		let c = n.slice(0, -4);
+		if (c === "light_gray") c = "silver";
+		const i = array.indexOf(c);
+		return i >= 0 ? i : 14;
+	}
+	return 14;
+}
 
 // https://wiki.bedrock.dev/visuals/material-creations.html#overlay-color-in-render-controllers
 // https://wiki.bedrock.dev/documentation/materials.html#entity-alphatest
@@ -80,7 +139,7 @@ export default class BlockGeoMaker {
 	/**
 	 * Makes poly mesh templates (unscaled) and their centers of mass from a block palette.
 	 * @param {Block[]} blockPalette
-	 * @returns {Promise<{ templates: PolyMeshTemplateFace[][], centersOfMass: Vec3[] }>}
+	 * @returns {Promise<{ templates: PolyMeshTemplateFace[][], centersOfMass: Vec3[], shapes: string[] }>}
 	 */
 	async makePolyMeshTemplates(blockPalette) {
 		const results = [];
@@ -94,7 +153,8 @@ export default class BlockGeoMaker {
 		}
 		return {
 			templates: results.map(result => result.faces),
-			centersOfMass: results.map(result => result.centerOfMass)
+			centersOfMass: results.map(result => result.centerOfMass),
+			shapes: results.map(result => result.shape)
 		};
 	}
 	/**
@@ -103,54 +163,54 @@ export default class BlockGeoMaker {
 	 * @template {PolyMeshTemplateFace | PolyMeshTemplateFaceWithUvs} T
 	 * @param {T[][]} polyMeshTemplatePalette
 	 * @param {Vec3[]} centersOfMass
-	 * @param {Block[]} [blockPalette]
+	 * @param {string[]} [shapes] from makePolyMeshTemplates (not palette NBT)
 	 * @returns {T[][]}
 	 */
-	scalePolyMeshTemplates(polyMeshTemplatePalette, centersOfMass, blockPalette) {
+	scalePolyMeshTemplates(polyMeshTemplatePalette, centersOfMass, shapes) {
 		if (this.config.SCALE === 1) {
 			return polyMeshTemplatePalette;
 		}
 		return polyMeshTemplatePalette.map((faces, i) => {
-			const shape = String(blockPalette?.[i]?.basi_block_shape ?? "");
-			if (shape.startsWith("chest_large") || shape.startsWith("chest_double")) {
-				return faces;
-			}
+			if (skipHologramScale(shapes?.[i])) return faces;
 			return this.#scaleFaces(structuredClone(faces), centersOfMass[i]);
 		});
 	}
 	/**
 	 * Makes a poly mesh template (i.e. an array of poly mesh template faces) from a block. Texture UVs are unresolved, and are indices for the textureRefs property.
 	 * @param {Block} block
-	 * @returns {Promise<{ faces: PolyMeshTemplateFace[], centerOfMass: Vec3 }>}
+	 * @returns {Promise<{ faces: PolyMeshTemplateFace[], centerOfMass: Vec3, shape: string }>}
 	 */
 	async #makePolyMeshTemplate(block) {
-		const memoKey = `${block["name"]}|${block["basi_block_shape"] ?? ""}|${JSON.stringify(block["states"] ?? {})}`;
+		const blockName = block["name"];
+		const blockShape = block["basi_block_shape"] || this.#getBlockShape(blockName);
+		const memoKey = `${blockName}|${blockShape}|${JSON.stringify(block["states"] ?? {})}`;
 		const hit = this.#templateMemo.get(memoKey);
 		if (hit) {
 			return {
 				faces: structuredClone(hit.faces),
-				centerOfMass: /** @type {Vec3} */ ([...hit.centerOfMass])
+				centerOfMass: /** @type {Vec3} */ ([...hit.centerOfMass]),
+				shape: hit.shape
 			};
 		}
-		const made = await this.#makePolyMeshTemplateUncached(block);
+		const made = await this.#makePolyMeshTemplateUncached(block, blockShape);
 		this.#templateMemo.set(memoKey, {
 			faces: structuredClone(made.faces),
-			centerOfMass: /** @type {Vec3} */ ([...made.centerOfMass])
+			centerOfMass: /** @type {Vec3} */ ([...made.centerOfMass]),
+			shape: made.shape
 		});
 		return made;
 	}
 	/**
 	 * @param {Block} block
-	 * @returns {Promise<{ faces: PolyMeshTemplateFace[], centerOfMass: Vec3 }>}
+	 * @param {string} blockShape
+	 * @returns {Promise<{ faces: PolyMeshTemplateFace[], centerOfMass: Vec3, shape: string }>}
 	 */
-	async #makePolyMeshTemplateUncached(block) {
+	async #makePolyMeshTemplateUncached(block, blockShape) {
 		let blockName = block["name"];
-		// ASI synthetic shapes (e.g. double-chest halves) override name lookup
-		let blockShape = block["basi_block_shape"] || this.#getBlockShape(blockName);
 		let { faces, centerOfMass } = await this.#makePolyMeshTemplateFaces(block, blockShape);
 		if(!faces) {
 			console.debug(`No faces are being rendered for block ${blockName}`);
-			return { faces: [], centerOfMass: [-1, -1, -1] };
+			return { faces: [], centerOfMass: [-1, -1, -1], shape: blockShape };
 		}
 		if(blockShape.includes("<")) {
 			blockShape = blockShape.slice(0, blockShape.indexOf("<"));
@@ -173,7 +233,7 @@ export default class BlockGeoMaker {
 			}
 			delete face["fullbright"];
 		});
-		return { faces, centerOfMass };
+		return { faces, centerOfMass, shape: blockShape };
 	}
 	/**
 	 * Gets the block shape for a specific block.
@@ -273,7 +333,6 @@ export default class BlockGeoMaker {
 					if("rot" in cube) {
 						if("rot" in copiedCube) {
 							// maths for combining both rotations is hard so we handle it differently and create a list of extra rotations.
-							// HoloPrint.js will create a wrapper bone for each rotation
 							copiedCube["extra_rots"] ??= [];
 							copiedCube["extra_rots"].unshift({
 								"rot": cube["rot"],
@@ -313,6 +372,12 @@ export default class BlockGeoMaker {
 					});
 				}
 				allFaces.push(...newFaces);
+			} else if("copy_geometry" in cube) {
+				unfilteredCubes.push(...await loadPackGeometryCubes(
+					this.#entityGeoMaker.resourcePackStack,
+					cube["copy_geometry"],
+					GEO_SPACE_BLOCK
+				));
 			} else if("copy_entity_model" in cube) {
 				unfilteredCubes.push(...await this.#entityGeoMaker.entityModelToCubes(cube["copy_entity_model"]));
 			} else {
@@ -334,8 +399,9 @@ export default class BlockGeoMaker {
 		cubes.forEach(cube => {
 			let uv = this.#calculateUv(cube);
 			
-			// 0-size in an axis: keep one face. Preview materials are FrontSide, so
-			// that face must wind toward the usual view (up for floors, not down).
+			// 0-size in an axis: keep one face and tag it doubleSide. HoloPrint
+			// stays single-faced (DoubleSide materials). Preview compiles those
+			// faces into a separate card geo so volumetric faces stay FrontSide.
 			if(cube.w == 0) {
 				["east", "down", "up", "north", "south"].forEach(faceName => delete uv[faceName]);
 			}
@@ -367,6 +433,7 @@ export default class BlockGeoMaker {
 			/** @type {(PolyMeshTemplateFace & { fullbright: boolean })[]} */
 			let faces = [];
 			let textureSize = cube["texture_size"] ?? [16, 16];
+			const paperThin = cube.w == 0 || cube.h == 0 || cube.d == 0;
 			// add generic keys to all faces, and convert texture references into indices
 			Object.entries(uv).forEach(([faceName, face]) => {
 				let isSideFace = ["west", "east", "north", "south"].includes(faceName);
@@ -463,7 +530,8 @@ export default class BlockGeoMaker {
 					"normal": this.#getSurfaceNormal(vertices),
 					"textureRefI": this.textureRefs.indexOf(textureRef),
 					"vertices": vertices,
-					"fullbright": Boolean(cube["fullbright"])
+					"fullbright": Boolean(cube["fullbright"]),
+					"doubleSide": paperThin
 				});
 			});
 			if(faces.length == 1 && !("culled_faces" in cube)) {
@@ -741,11 +809,9 @@ export default class BlockGeoMaker {
 			statesAndBlockEntityData.forEach(([blockStateName, blockStateValue]) => {
 				if(blockStateName in blockShapeSpecificVariants) {
 					let blockStateVariants = blockShapeSpecificVariants[blockStateName];
-					if(!(blockStateValue in blockStateVariants)) {
-						console.error(`Block state value ${blockStateValue} for texture-variating block state ${blockStateName} not found on ${blockName}...`, block);
-						return;
-					}
-					variant += blockStateVariants[blockStateValue];
+					const add = pickTextureVariantIndex(blockStateVariants, blockStateValue);
+					if(add == undefined) return;
+					variant += add;
 				}
 			});
 			return variant;
@@ -756,11 +822,9 @@ export default class BlockGeoMaker {
 			statesAndBlockEntityData.forEach(([blockStateName, blockStateValue]) => {
 				if(blockStateName in blockNameSpecificVariants) {
 					let blockStateVariants = blockNameSpecificVariants[blockStateName];
-					if(!(blockStateValue in blockStateVariants)) {
-						console.error(`Block state value ${blockStateValue} for texture-variating block state ${blockStateName} not found...`);
-						return;
-					}
-					variant += blockStateVariants[blockStateValue];
+					const add = pickTextureVariantIndex(blockStateVariants, blockStateValue);
+					if(add == undefined) return;
+					variant += add;
 				}
 			});
 			return variant;
@@ -772,11 +836,10 @@ export default class BlockGeoMaker {
 				return;
 			}
 			
-			if(!(blockStateValue in blockStateVariants)) {
-				console.error(`Block state value ${blockStateValue} for texture-variating block state ${blockStateName} not found...`);
+			let newVariant = pickTextureVariantIndex(blockStateVariants, blockStateValue);
+			if(newVariant == undefined) {
 				return;
 			}
-			let newVariant = blockStateVariants[blockStateValue];
 			if(variant != -1) {
 				console.warn(`Multiple texture-variating block states for block ${block["name"]}; using ${blockStateName}`);
 			}
@@ -974,19 +1037,30 @@ export default class BlockGeoMaker {
 			}
 			let [, usingBlockEntityData, blockStateName, blockStateOperator, blockStateOperandString] = blockStateOperation;
 			let dataObjectName = usingBlockEntityData? "block_entity_data" : "states";
-			if(!(dataObjectName in block)) {
-				console.error(`No ${dataObjectName} in block ${block["name"]}!`);
-				return true;
-			}
 			let dataObject = block[dataObjectName];
-			if(blockStateOperator != "??" && !(blockStateName in dataObject)) {
+			let actualBlockState;
+			if(!dataObject) {
+				if(blockStateOperator == "??") {
+					actualBlockState = undefined;
+				} else if(usingBlockEntityData) {
+					return false;
+				} else {
+					actualBlockState = omittedStateDefault(expectedBlockState);
+				}
+			} else if(blockStateOperator != "??" && !(blockStateName in dataObject)) {
 				if(blockStateName.startsWith("basi_") || blockStateName.startsWith("sdb_")) {
 					return false;
 				}
-				console.error(`Cannot find ${dataObjectName} ${blockStateName} on block ${block["name"]}`);
-				return true;
+				if(usingBlockEntityData) {
+					return false;
+				}
+				actualBlockState = omittedStateDefault(expectedBlockState);
+			} else {
+				actualBlockState = dataObject[blockStateName];
 			}
-			let actualBlockState = dataObject[blockStateName];
+			if(actualBlockState != null && typeof actualBlockState == "object" && "value" in actualBlockState) {
+				actualBlockState = actualBlockState.value;
+			}
 			
 			if(blockStateOperator) {
 				let blockStateOperand = Number(blockStateOperandString);
@@ -1051,16 +1125,24 @@ export default class BlockGeoMaker {
 				if(arrayIndexVar.startsWith("entity.")) {
 					let blockEntityProperty = arrayIndexVar.slice(7);
 					if(!("block_entity_data" in block) || !(blockEntityProperty in block["block_entity_data"])) {
-						console.error(`Cannot find block entity property ${blockEntityProperty} in ${block["name"]}:`, block);
-						return "";
+						if(arrayName === "colors") {
+							arrayIndex = bedColorIndex(block, array);
+						} else {
+							console.error(`Cannot find block entity property ${blockEntityProperty} in ${block["name"]}:`, block);
+							return "";
+						}
+					} else {
+						arrayIndex = block["block_entity_data"][blockEntityProperty];
 					}
-					arrayIndex = block["block_entity_data"][blockEntityProperty];
 				} else {
 					if(!("states" in block) || !(arrayIndexVar in block["states"])) {
 						console.error(`Cannot find block state ${arrayIndexVar} in ${block["name"]}:`, block);
 						return "";
 					}
 					arrayIndex = block["states"][arrayIndexVar];
+				}
+				if(arrayIndex != null && typeof arrayIndex == "object" && "value" in arrayIndex) {
+					arrayIndex = arrayIndex.value;
 				}
 				if(!(arrayIndex in array)) {
 					console.error(`Array index out of bounds: ${JSON.stringify(array)}[${arrayIndex}]`);
@@ -1147,6 +1229,7 @@ export default class BlockGeoMaker {
 			return {
 				"normal": face["normal"],
 				"transparency": imageUv["transparency"],
+				"doubleSide": !!face["doubleSide"],
 				"vertices": vertices.map(vertex => ({
 					"pos": vertex["pos"],
 					"uv": tuple([

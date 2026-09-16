@@ -7,6 +7,7 @@ import { max, min, round } from "../../utils/math.js";
 import { tuple } from "../../utils/meta.js";
 import { JSONSet } from "../../utils/containers.js";
 import * as vec2 from "../../utils/vec2.js";
+import { facesToBufferGeometry } from "../polyMeshBufferGeo.js";
 
 /**
  * Scan structure indices once: collect per-palette positions and optional point lights.
@@ -100,6 +101,58 @@ export function defaultMatchBlock(stringifiedBlock, block) {
 	return true;
 }
 
+/**
+ * Early-exit atlas alpha walk. `pred(alpha)` true stops and returns true.
+ * @param {ImageData|null|undefined} imageBlobData
+ * @param {any[]|null|undefined} polyMeshTemplate
+ * @param {(alpha: number) => boolean} pred
+ */
+function atlasAlphaMatches(imageBlobData, polyMeshTemplate, pred) {
+	if (!imageBlobData || !polyMeshTemplate?.length) return false;
+	const allUvs = polyMeshTemplate.map(face => {
+		const uvCoords = face["vertices"].map(v => v["uv"]);
+		const xs = uvCoords.map(([x]) => round(x * imageBlobData.width));
+		const ys = uvCoords.map(([, y]) => round((1 - y) * imageBlobData.height));
+		const minUvCoords = tuple([min(...xs), min(...ys)]);
+		const maxUvCoords = tuple([max(...xs), max(...ys)]);
+		const unscaledUvSize = vec2.sub(maxUvCoords, minUvCoords);
+		return {
+			uv: [minUvCoords[0], minUvCoords[1]],
+			uvSize: [unscaledUvSize[0], unscaledUvSize[1]]
+		};
+	});
+	const uvs = Array.from(new JSONSet(allUvs));
+	const w = imageBlobData.width;
+	const h = imageBlobData.height;
+	const data = imageBlobData.data;
+	for (const { uv, uvSize } of uvs) {
+		for (let x = uv[0]; x < uv[0] + uvSize[0]; x++) {
+			for (let y = uv[1]; y < uv[1] + uvSize[1]; y++) {
+				if (x < 0 || y < 0 || x >= w || y >= h) continue;
+				const alpha = data[(y * w + x) * 4 + 3];
+				if (pred(alpha)) return true;
+			}
+		}
+	}
+	return false;
+}
+
+/**
+ * Split 0-thickness card faces from volumetric faces. Preview instances each
+ * group with its own material (FrontSide volume, DoubleSide cards).
+ * @param {any[]|null|undefined} faces
+ * @returns {{ volume: any[], cards: any[] }}
+ */
+export function partitionTemplateFaces(faces) {
+	const volume = [];
+	const cards = [];
+	for (const face of faces || []) {
+		if (face?.doubleSide) cards.push(face);
+		else volume.push(face);
+	}
+	return { volume, cards };
+}
+
 export default class BlockGeoSystem {
 	/**
 	 * @param {import("./PreviewContext.js").default} ctx
@@ -114,74 +167,51 @@ export default class BlockGeoSystem {
 	#dummy;
 
 	/**
+	 * Volume geo (FrontSide) and card geo (0-thickness, DoubleSide) for one palette entry.
 	 * @param {number} polyMeshTemplatePaletteI
-	 * @returns {import("three").BufferGeometry}
+	 * @returns {{ volume: import("three").BufferGeometry|null, cards: import("three").BufferGeometry|null }}
 	 */
-	polyMeshTemplateToBufferGeo(polyMeshTemplatePaletteI) {
-		const THREE = this.ctx.THREE;
-		const maker = this.ctx.polyMeshMaker;
-		maker.add(polyMeshTemplatePaletteI);
-		const polyMesh = maker.export();
-		maker.clear();
-		let i = 0;
-		const positions = [], normals = [], uvs = [], indices = [];
-		polyMesh["polys"].forEach(face => {
-			face.forEach(([posIndex, normalIndex, uvIndex]) => {
-				const pos = polyMesh.positions[posIndex];
-				positions.push(pos[0], pos[1], 16 - pos[2]);
-				normals.push(...polyMesh.normals[normalIndex]);
-				uvs.push(polyMesh.uvs[uvIndex][0], 1 - polyMesh.uvs[uvIndex][1]);
-			});
-			indices.push(i + 2, i + 1, i, i + 2, i, i + 3);
-			i += face.length;
-		});
-		const geo = new THREE.BufferGeometry();
-		geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(positions), 3));
-		geo.setAttribute("normal", new THREE.BufferAttribute(new Float32Array(normals), 3));
-		geo.setAttribute("uv", new THREE.BufferAttribute(new Float32Array(uvs), 2));
-		geo.setIndex(indices);
-		geo.computeVertexNormals();
-		return geo;
+	polyMeshTemplateToBufferGeos(polyMeshTemplatePaletteI) {
+		const { volume, cards } = partitionTemplateFaces(
+			this.ctx.polyMeshTemplatePalette?.[polyMeshTemplatePaletteI]
+		);
+		return {
+			volume: facesToBufferGeometry(this.ctx.THREE, volume),
+			cards: facesToBufferGeometry(this.ctx.THREE, cards)
+		};
 	}
 
 	/**
-	 * Pixel-scan atlas for translucent faces in a template.
+	 * Pixel-scan atlas for translucent faces in a template (blend: 0 < a < 255).
 	 * @param {any[]} polyMeshTemplate
 	 * @returns {boolean}
 	 */
 	isPolyMeshTemplateTranslucent(polyMeshTemplate) {
-		const imageBlobData = this.ctx.imageBlobData;
-		if (!imageBlobData || !polyMeshTemplate?.length) return false;
-		const allUvs = polyMeshTemplate.map(face => {
-			const uvCoords = face["vertices"].map(v => v["uv"]);
-			const xs = uvCoords.map(([x]) => round(x * imageBlobData.width));
-			const ys = uvCoords.map(([, y]) => round((1 - y) * imageBlobData.height));
-			const minUvCoords = tuple([min(...xs), min(...ys)]);
-			const maxUvCoords = tuple([max(...xs), max(...ys)]);
-			const unscaledUvSize = vec2.sub(maxUvCoords, minUvCoords);
-			return {
-				uv: [minUvCoords[0], minUvCoords[1]],
-				uvSize: [unscaledUvSize[0], unscaledUvSize[1]]
-			};
+		return atlasAlphaMatches(this.ctx.imageBlobData, polyMeshTemplate, a => a > 0 && a < 255);
+	}
+
+	/**
+	 * True only if the template has atlas coverage and every sampled texel is a === 255.
+	 * Cutout (a === 0) and blend fail. Empty templates do not occlude.
+	 * @param {any[]} polyMeshTemplate
+	 * @returns {boolean}
+	 */
+	isPolyMeshTemplateFullyOpaque(polyMeshTemplate) {
+		const image = this.ctx.imageBlobData;
+		if (!image || !polyMeshTemplate?.length) return false;
+		let saw = false;
+		const leak = atlasAlphaMatches(image, polyMeshTemplate, a => {
+			saw = true;
+			return a < 255;
 		});
-		const uvs = Array.from(new JSONSet(allUvs));
-		return uvs.some(({ uv, uvSize }) => {
-			for (let x = uv[0]; x < uv[0] + uvSize[0]; x++) {
-				for (let y = uv[1]; y < uv[1] + uvSize[1]; y++) {
-					const i = (y * imageBlobData.width + x) * 4;
-					const alpha = imageBlobData.data[i + 3];
-					if (alpha > 0 && alpha < 255) return true;
-				}
-			}
-			return false;
-		});
+		return saw && !leak;
 	}
 
 	/**
 	 * @param {import("three").BufferGeometry} bufferGeo
 	 * @param {[number,number,number][]} positions
 	 * @param {import("three").Material} material
-	 * @param {{ mirrorX?: boolean }} [opts]
+	 * @param {{ mirrorX?: boolean, mirrorZ?: boolean }} [opts]
 	 * @returns {import("three").InstancedMesh}
 	 */
 	instanceBufferGeoAtPositions(bufferGeo, positions, material, opts = {}) {
@@ -190,10 +220,15 @@ export default class BlockGeoSystem {
 		if (!this.#dummy) this.#dummy = new THREE.Object3D();
 		const dummy = this.#dummy;
 		const mirrorX = !!opts.mirrorX;
+		const mirrorZ = !!opts.mirrorZ;
 		for (let i = 0; i < positions.length; i++) {
 			const [px, py, pz] = positions[i];
-			dummy.position.set(mirrorX ? px + 16 : px, py, pz);
-			dummy.scale.set(mirrorX ? -1 : 1, 1, 1);
+			dummy.position.set(
+				mirrorX ? px + 16 : px,
+				py,
+				mirrorZ ? pz + 16 : pz
+			);
+			dummy.scale.set(mirrorX ? -1 : 1, 1, mirrorZ ? -1 : 1);
 			dummy.updateMatrix();
 			instancedMesh.setMatrixAt(i, dummy.matrix);
 		}

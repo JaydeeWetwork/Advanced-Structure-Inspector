@@ -13,6 +13,7 @@ export {
 	parseSignTextLines,
 	extractLecternBook,
 	extractBookPages,
+	parseDisabledSlots,
 	readRedstoneSignal,
 	formatInspectText
 } from "../inspectStructure.js";
@@ -27,6 +28,6 @@ export {
 export {
 	kindOfSign,
 	describeSignPlacement,
-	signDebugFooter,
+	signFaceTag,
 	placeSignFace
 } from "../signPlacement.js";

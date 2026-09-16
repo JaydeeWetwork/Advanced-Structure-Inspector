@@ -2512,7 +2512,7 @@
 	],
 	"piston": [
 		{
-			"if": "entity.State == 0 || entity.State == 3", // unextended or pulling
+			"if": "entity.State??0 == 0 || entity.State??0 == 3", // unextended or pulling; missing BE = retracted
 			"pos": [0, 0, 0],
 			"size": [16, 16, 16],
 			"textures": {
@@ -2522,12 +2522,17 @@
 			"flip_textures_vertically": ["up"]
 		},
 		{
-			"if": "entity.State == 1 || entity.State == 2", // pushing or extended
+			"if": "entity.State??0 == 1 || entity.State??0 == 2", // pushing or extended
 			"pos": [0, 0, 0],
-			"size": [16, 12, 16]
+			"size": [16, 12, 16],
+			"textures": {
+				"up": "up",
+				"down": "down",
+				"*": "side"
+			}
 		},
 		{
-			"if": "entity.State == 1 || entity.State == 2", // pushing or extended
+			"if": "entity.State??0 == 1 || entity.State??0 == 2",
 			"pos": [5, 12, 5],
 			"size": [6, 8, 6],
 			"textures": {
@@ -2537,11 +2542,11 @@
 			"uv": {
 				"side": [64, 24],
 				"up": [70, 18],
-				"down": [70, 18] // todo: cull this face
+				"down": [70, 18]
 			}
 		},
 		{
-			"if": "entity.State == 1 || entity.State == 2", // pushing or extended
+			"if": "entity.State??0 == 1 || entity.State??0 == 2",
 			"pos": [6, 20, 6],
 			"size": [4, 8, 4],
 			"textures": {
@@ -2553,17 +2558,13 @@
 			}
 		},
 		{
-			"if": "entity.State == 1 || entity.State == 2", // pushing or extended
+			"if": "entity.State??0 == 1 || entity.State??0 == 2",
 			"pos": [0, 28, 0],
 			"size": [16, 4, 16],
 			"textures": {
-				"*": "#tex"
-			},
-			"texture_size": [128, 32],
-			"uv": {
-				"side": [0, 16],
-				"down": [32, 0],
-				"up": [16, 0]
+				"up": "carried.up",
+				"down": "up",
+				"*": "side"
 			},
 			"flip_textures_horizontally": ["up"],
 			"flip_textures_vertically": ["up"]
@@ -3441,48 +3442,42 @@
 	],
 	"coral_fan": [
 		{
-			"pos": [0, 1, 8],
-			"size": [16, 0, 16],
+			"pos": [0, 0, 8],
+			"size": [16, 0, 8],
 			"rot": [22.5, 0, 0],
 			"pivot": [8, 0, 8],
-			"uv": {
-				"*": [0, 0]
-			}
+			"textures": { "*": "up" },
+			"uv": { "*": [0, 0] },
+			"uv_sizes": { "*": [16, 16] }
 		},
 		{
-			"pos": [0, 1, 8],
-			"size": [16, 0, 16],
-			"rot": [22.5, 90, 0],
+			"pos": [0, 0, 0],
+			"size": [16, 0, 8],
+			"rot": [-22.5, 0, 0],
 			"pivot": [8, 0, 8],
-			"uv": {
-				"*": [0, 0]
-			}
-		},
-		{
-			"pos": [0, 1, 8],
-			"size": [16, 0, 16],
-			"rot": [22.5, 180, 0],
-			"pivot": [8, 0, 8],
-			"uv": {
-				"*": [0, 0]
-			}
-		},
-		{
-			"pos": [0, 1, 8],
-			"size": [16, 0, 16],
-			"rot": [22.5, -90, 0],
-			"pivot": [8, 0, 8],
-			"uv": {
-				"*": [0, 0]
-			}
+			"textures": { "*": "up" },
+			"uv": { "*": [0, 0] },
+			"uv_sizes": { "*": [16, 16] }
 		}
 	],
 	"coral_wall_fan": [
 		{
 			"pos": [0, 8, 0],
-			"size": [16, 0, 16],
-			"rot": [11.25, 0, 0],
-			"pivot": [8, 8, 0]
+			"size": [16, 8, 0],
+			"rot": [-22.5, 0, 0],
+			"pivot": [8, 8, 0],
+			"textures": { "*": "up" },
+			"uv": { "*": [0, 0] },
+			"uv_sizes": { "*": [16, 16] }
+		},
+		{
+			"pos": [0, 0, 0],
+			"size": [16, 8, 0],
+			"rot": [22.5, 0, 0],
+			"pivot": [8, 8, 0],
+			"textures": { "*": "up" },
+			"uv": { "*": [0, 0] },
+			"uv_sizes": { "*": [16, 16] }
 		}
 	],
 	"lightning_rod": [
@@ -5581,6 +5576,49 @@
 				"geo_file": "models/entity/copper_golem_star.geo.json",
 				"texture": "textures/entity/copper_golem/${#tex}"
 			}
+		}
+	],
+	"straw_bed": [
+		{
+			"if": "head_piece_bit == 1",
+			"copy_geometry": {
+				"identifier": "minecraft:geometry.straw_bed_head",
+				"geo_file": "models/blocks/straw_bed_head.geo.json",
+				"texture": "textures/blocks/straw_bed"
+			}
+		},
+		{
+			"if": "head_piece_bit == 0",
+			"copy_geometry": {
+				"identifier": "minecraft:geometry.straw_bed_foot",
+				"geo_file": "models/blocks/straw_bed_foot.geo.json",
+				"texture": "textures/blocks/straw_bed"
+			}
+		}
+	],
+	"shelf_mushroom": [
+		{
+			"if": "growth ?? 0 == 0",
+			"copy_geometry": {
+				"identifier": "minecraft:geometry.shelf_mushroom_small",
+				"geo_file": "models/blocks/shelf_mushroom_small.geo.json",
+				"texture": "textures/blocks/shelf_mushroom_small"
+			}
+		},
+		{
+			"if": "growth ?? 0 == 1",
+			"copy_geometry": {
+				"identifier": "minecraft:geometry.shelf_mushroom_large",
+				"geo_file": "models/blocks/shelf_mushroom_large.geo.json",
+				"texture": "textures/blocks/shelf_mushroom_large"
+			}
+		}
+	],
+	"structure_void": [],
+	"camera": [
+		{
+			"pos": [4, 0, 5],
+			"size": [8, 8, 6]
 		}
 	],
 	//"debug_auto_uv_4": [{"pos":[0,0,0],"size":[4,4,4]},{"pos":[0,0,4],"size":[4,4,4]},{"pos":[0,0,8],"size":[4,4,4]},{"pos":[0,0,12],"size":[4,4,4]},{"pos":[0,4,0],"size":[4,4,4]},{"pos":[0,4,4],"size":[4,4,4]},{"pos":[0,4,8],"size":[4,4,4]},{"pos":[0,4,12],"size":[4,4,4]},{"pos":[0,8,0],"size":[4,4,4]},{"pos":[0,8,4],"size":[4,4,4]},{"pos":[0,8,8],"size":[4,4,4]},{"pos":[0,8,12],"size":[4,4,4]},{"pos":[0,12,0],"size":[4,4,4]},{"pos":[0,12,4],"size":[4,4,4]},{"pos":[0,12,8],"size":[4,4,4]},{"pos":[0,12,12],"size":[4,4,4]},{"pos":[4,0,0],"size":[4,4,4]},{"pos":[4,0,4],"size":[4,4,4]},{"pos":[4,0,8],"size":[4,4,4]},{"pos":[4,0,12],"size":[4,4,4]},{"pos":[4,4,0],"size":[4,4,4]},{"pos":[4,4,12],"size":[4,4,4]},{"pos":[4,8,0],"size":[4,4,4]},{"pos":[4,8,12],"size":[4,4,4]},{"pos":[4,12,0],"size":[4,4,4]},{"pos":[4,12,4],"size":[4,4,4]},{"pos":[4,12,8],"size":[4,4,4]},{"pos":[4,12,12],"size":[4,4,4]},{"pos":[8,0,0],"size":[4,4,4]},{"pos":[8,0,4],"size":[4,4,4]},{"pos":[8,0,8],"size":[4,4,4]},{"pos":[8,0,12],"size":[4,4,4]},{"pos":[8,4,0],"size":[4,4,4]},{"pos":[8,4,12],"size":[4,4,4]},{"pos":[8,8,0],"size":[4,4,4]},{"pos":[8,8,12],"size":[4,4,4]},{"pos":[8,12,0],"size":[4,4,4]},{"pos":[8,12,4],"size":[4,4,4]},{"pos":[8,12,8],"size":[4,4,4]},{"pos":[8,12,12],"size":[4,4,4]},{"pos":[12,0,0],"size":[4,4,4]},{"pos":[12,0,4],"size":[4,4,4]},{"pos":[12,0,8],"size":[4,4,4]},{"pos":[12,0,12],"size":[4,4,4]},{"pos":[12,4,0],"size":[4,4,4]},{"pos":[12,4,4],"size":[4,4,4]},{"pos":[12,4,8],"size":[4,4,4]},{"pos":[12,4,12],"size":[4,4,4]},{"pos":[12,8,0],"size":[4,4,4]},{"pos":[12,8,4],"size":[4,4,4]},{"pos":[12,8,8],"size":[4,4,4]},{"pos":[12,8,12],"size":[4,4,4]},{"pos":[12,12,0],"size":[4,4,4]},{"pos":[12,12,4],"size":[4,4,4]},{"pos":[12,12,8],"size":[4,4,4]},{"pos":[12,12,12],"size":[4,4,4]}] // function genDebugGeo(step) {let boneCubes = [];for(let x = 0; x < 16; x += step) {for(let y = 0; y < 16; y += step) {for(let z = 0; z < 16; z += step) {if(!x || !y || !z || x == 16 - step || y == 16 - step || z == 16 - step) {boneCubes.push({ pos: [x, y, z], size: [step, step, step] });}}}}return JSON.stringify(boneCubes);}

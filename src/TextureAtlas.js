@@ -3,6 +3,7 @@ import { ceil, floor, fnv1a, getPixelBytesInSquare, hexColorToClampedTriplet, JS
 import ResourcePackStack from "./ResourcePackStack.js";
 import { packAssetStore } from "./viewer/appearance/PackAssetStore.js";
 import { VANILLA_SAMPLES_TAG } from "./data/packPins.js";
+import { applyBlocksJsonPatch } from "./viewer/blocksJsonPatch.js";
 
 /** @type {Map<string, { uvs: ImageUv[], atlasImageData: ImageData|null, imageBlobs: [string, Blob|null][], textureWidth: number, textureHeight: number, textureFillEfficiency: number }>} */
 const packedAtlasCache = new Map();
@@ -230,12 +231,11 @@ export default class TextureAtlas {
 		}
 		let blockName = textureRef["block_name"];
 		if(!(blockName in this.blocksDotJson) && blockName in this.#blocksDotJsonPatches) {
-			blockName = this.#blocksDotJsonPatches[blockName];
-			if(blockName?.includes(".")) {
-				// This is only from this.blocksDotJsonPatches to indicate patches
-				textureRef["variant"] = +blockName.split(".")[1]; // Hacky but that's a future me problem
-				blockName = blockName.split(".")[0];
+			const patched = applyBlocksJsonPatch(blockName, this.#blocksDotJsonPatches);
+			if(patched.variant != null) {
+				textureRef["variant"] = patched.variant;
 			}
+			blockName = patched.name;
 		}
 		let blockEntry = this.blocksDotJson[blockName];
 		let terrainTextureKeys;
@@ -371,10 +371,22 @@ export default class TextureAtlas {
 				imageH = imageW = imageW / size; // animation would be a pain and totally overkill
 				console.debug(`Using flipbook texture for ${texturePath}, ${imageW}x${imageH}`);
 			}
-			let sourceX = sourceUv[0] * imageW;
-			let sourceY = sourceUv[1] * imageH;
-			let w = uvSize[0] * imageW;
-			let h = uvSize[1] * imageH;
+			let u0 = sourceUv[0];
+			let v0 = sourceUv[1];
+			let uw = uvSize[0];
+			let vh = uvSize[1];
+			if(uw < 0) {
+				u0 += uw;
+				uw = -uw;
+			}
+			if(vh < 0) {
+				v0 += vh;
+				vh = -vh;
+			}
+			let sourceX = u0 * imageW;
+			let sourceY = v0 * imageH;
+			let w = uw * imageW;
+			let h = vh * imageH;
 			let crop = null;
 			if(!this.config.SKIP_TEXTURE_CROP && Number.isInteger(sourceX) && Number.isInteger(sourceY) && Number.isInteger(w) && Number.isInteger(h)) { // textures with non-integral dimensions are wacky so I'm just going to say they can't be cropped... there aren't many blocks like this fortunately
 				let old = { sourceX, sourceY, w, h };

@@ -56,6 +56,7 @@
  * @typedef {object} PolyMeshTemplateFace
  * @property {Vec3} normal
  * @property {number} textureRefI
+ * @property {boolean} [doubleSide] 0-thickness cube face; preview compiles a separate card geo
  * @property {[PolyMeshTemplateVertex, PolyMeshTemplateVertex, PolyMeshTemplateVertex, PolyMeshTemplateVertex]} vertices
  */
 /**
@@ -67,6 +68,7 @@
  * @typedef {object} PolyMeshTemplateFaceWithUvs
  * @property {Vec3} normal
  * @property {number} transparency Average transparency per texture pixel. 255 = fully transparent, 0 = fully opaque
+ * @property {boolean} [doubleSide] 0-thickness cube face; preview compiles a separate card geo
  * @property {[PolyMeshTemplateVertexWithUv, PolyMeshTemplateVertexWithUv, PolyMeshTemplateVertexWithUv, PolyMeshTemplateVertexWithUv]} vertices
  */
 /**

@@ -1,7 +1,19 @@
-﻿**/node_modules
+﻿# Generated / local — never GitHub
+**/node_modules
 dist
 tests/completedPacks
 tests/screenshots
+
+# Personal structure dumps (dev machine only)
+tests/sampleStructures/user/
+
+# Local Minecraft Bedrock Dedicated Server (EULA). Not a preview source.
+tests/bds/**
+!tests/bds/README.md
+
+# Private orientation atlas binaries (regenerate via priv-docs/scripts)
+priv-docs/sample-structures/*.mcstructure
+
 # Local debug probes
 tests/viewerUnit/debug-*.mjs
 tests/viewerUnit/scan-*.mjs

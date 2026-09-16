@@ -98,9 +98,10 @@ function looksLikeItemStack(o) {
 
 /**
  * @param {any} item
- * @returns {{ name: string, count: number, slot: number|null, damage: number|null, raw: any }|null}
+ * @param {{ includeRaw?: boolean }} [opts]
+ * @returns {{ name: string, count: number, slot: number|null, damage: number|null, raw?: any }|null}
  */
-export function normalizeItemStack(item) {
+export function normalizeItemStack(item, opts = {}) {
 	if (!item || typeof item !== "object") return null;
 
 	if (
@@ -114,7 +115,7 @@ export function normalizeItemStack(item) {
 			...item.Item,
 			Slot: item.Slot ?? item.slot ?? item.Item.Slot,
 			slot: item.slot ?? item.Item.slot
-		});
+		}, opts);
 	}
 
 	const name =
@@ -147,13 +148,15 @@ export function normalizeItemStack(item) {
 	const damageRaw = item.Damage ?? item.damage ?? item.tag?.Damage ?? item.Item?.Damage;
 	const damage = damageRaw == null || damageRaw === "" ? null : coerceNumber(damageRaw, NaN);
 
-	return {
+	/** @type {{ name: string, count: number, slot: number|null, damage: number|null, raw?: any }} */
+	const out = {
 		name: stripNs(name),
 		count: Number.isFinite(count) && count > 0 ? count : 1,
 		slot: Number.isFinite(slot) ? slot : null,
-		damage: Number.isFinite(damage) ? damage : null,
-		raw: item
+		damage: Number.isFinite(damage) ? damage : null
 	};
+	if (opts.includeRaw) out.raw = item;
+	return out;
 }
 
 const INVENTORY_LIST_KEYS = [
@@ -210,9 +213,11 @@ function deepCollectItemStacks(nbt, out, depth, seen) {
 
 /**
  * @param {any} nbt
- * @returns {{ name: string, count: number, slot: number|null, damage: number|null, raw: any }[]}
+ * @param {any[]} [itemSchemas]
+ * @param {{ includeRaw?: boolean }} [opts]
+ * @returns {{ name: string, count: number, slot: number|null, damage: number|null, raw?: any }[]}
  */
-export function extractInventoryItems(nbt, itemSchemas = []) {
+export function extractInventoryItems(nbt, itemSchemas = [], opts = {}) {
 	if (!nbt || typeof nbt !== "object") return [];
 
 	/** @type {any[]} */
@@ -231,13 +236,77 @@ export function extractInventoryItems(nbt, itemSchemas = []) {
 		deepCollectItemStacks(nbt, lists, 0, new WeakSet());
 	}
 
-	/** @type {ReturnType<typeof normalizeItemStack>[]} */
+	/** @type {NonNullable<ReturnType<typeof normalizeItemStack>>[]} */
 	const out = [];
 	for (const raw of lists) {
-		const n = normalizeItemStack(raw);
+		const n = normalizeItemStack(raw, opts);
 		if (n) out.push(itemSchemas.length ? upgradeItemStack(n, itemSchemas) : n);
 	}
 	return out;
+}
+
+/**
+ * Crafter disabled slots from block-entity NBT (int array or bitmask).
+ * @param {any} blockEntity
+ * @returns {Set<number>}
+ */
+export function parseDisabledSlots(blockEntity) {
+	/** @type {Set<number>} */
+	const disabled = new Set();
+	if (!blockEntity || typeof blockEntity !== "object") return disabled;
+	const raw =
+		blockEntity.disabled_slots
+		?? blockEntity.disabledSlots
+		?? blockEntity.DisabledSlots
+		?? null;
+	if (raw == null) return disabled;
+	if (Array.isArray(raw) || ArrayBuffer.isView(raw)) {
+		for (const v of raw) {
+			const n = Number(v);
+			if (Number.isFinite(n) && n >= 0 && n < 9) disabled.add(n);
+		}
+		return disabled;
+	}
+	if (typeof raw === "object" && Array.isArray(raw.value)) {
+		for (const v of raw.value) {
+			const n = Number(v);
+			if (Number.isFinite(n) && n >= 0 && n < 9) disabled.add(n);
+		}
+		return disabled;
+	}
+	const mask = Number(raw);
+	if (Number.isFinite(mask) && mask > 0) {
+		for (let i = 0; i < 9; i++) {
+			if (mask & (1 << i)) disabled.add(i);
+		}
+	}
+	return disabled;
+}
+
+/**
+ * @param {any} be
+ * @returns {number[]}
+ */
+function inspectDisabledSlots(be) {
+	return [...parseDisabledSlots(be)];
+}
+
+function inspectPairCoord(v) {
+	if (v == null) return null;
+	if (typeof v === "object" && v && "value" in v) return Number(/** @type {{ value: unknown }} */ (v).value);
+	const n = Number(v);
+	return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Coerce NBT / state flag to boolean. Unknown values are null.
+ * @param {unknown} v
+ * @returns {boolean|null}
+ */
+export function nbtBool(v) {
+	if (v === true || v === 1 || v === "1" || v === "true") return true;
+	if (v === false || v === 0 || v === "0" || v === "false") return false;
+	return null;
 }
 
 export const CONTAINER_BLOCK_ENTITY_IDS = new Set([
@@ -266,19 +335,6 @@ export const CONTAINER_BLOCK_ENTITY_IDS = new Set([
 ]);
 
 /**
- * @param {any} be
- * @returns {any}
- */
-function stripBlockEntityCoords(be) {
-	if (!be || typeof be !== "object") return be;
-	const copy = { ...be };
-	delete copy.x;
-	delete copy.y;
-	delete copy.z;
-	return copy;
-}
-
-/**
  * @typedef {object} InspectBlock
  * @property {number} x
  * @property {number} y
@@ -286,9 +342,15 @@ function stripBlockEntityCoords(be) {
  * @property {string} name
  * @property {Record<string, unknown>|undefined} states
  * @property {string|null} blockEntityId
- * @property {any|null} blockEntity
  * @property {{ name: string, count: number, slot: number|null, damage: number|null }[]} items
  * @property {string|null} waterlogName
+ * @property {number|null} [pairx]
+ * @property {number|null} [pairz]
+ * @property {boolean} [forceunpair]
+ * @property {ReturnType<typeof extractSignText>|null} [sign]
+ * @property {ReturnType<typeof extractLecternBook>|null} [lectern]
+ * @property {number} [itemRotation]
+ * @property {number[]} [disabledSlots]
  * @property {{ half: "left"|"right", partnerKey: string }} [doubleChest]
  * @property {{ name: string, count: number, slot: number|null, damage: number|null }[]} [doubleItems]
  */
@@ -300,7 +362,7 @@ function stripBlockEntityCoords(be) {
  * @property {[number, number, number]} pos
  * @property {{ name: string, count: number, slot: number|null, damage: number|null }[]} items
  * @property {string|null} customName
- * @property {any} raw
+ * @property {boolean|null} [enabled]
  */
 
 /**
@@ -393,16 +455,14 @@ export function buildInspectIndex(data, opts = {}) {
 			if (n1 && n1 !== "air") waterlogName = n1;
 		}
 
-		let be = null;
-		if (beRaw) {
-			try {
-				be = stripBlockEntityCoords(structuredClone(beRaw));
-			} catch {
-				be = stripBlockEntityCoords({ ...beRaw });
-			}
-		}
-		const beId = be?.id != null ? String(be.id) : null;
-		const items = extractInventoryItems(be, itemSchemas);
+		const beId = beRaw?.id != null ? String(beRaw.id) : null;
+		const items = beRaw ? extractInventoryItems(beRaw, itemSchemas) : [];
+		const sign = beRaw ? extractSignText(beRaw) : null;
+		const lectern = beRaw ? extractLecternBook(beRaw) : null;
+		const pairx = inspectPairCoord(beRaw?.pairx);
+		const pairz = inspectPairCoord(beRaw?.pairz);
+		const fu = beRaw?.forceunpair;
+		const rotRaw = beRaw?.ItemRotation ?? beRaw?.itemRotation;
 
 		let states;
 		if (block?.states && typeof block.states === "object") {
@@ -421,9 +481,15 @@ export function buildInspectIndex(data, opts = {}) {
 			name,
 			states,
 			blockEntityId: beId,
-			blockEntity: be,
 			items,
-			waterlogName
+			waterlogName,
+			pairx,
+			pairz,
+			forceunpair: fu === 1 || fu === true,
+			sign,
+			lectern,
+			itemRotation: Number(rotRaw) || 0,
+			disabledSlots: beRaw ? inspectDisabledSlots(beRaw) : []
 		});
 	};
 
@@ -494,7 +560,7 @@ export function buildInspectIndex(data, opts = {}) {
 			pos,
 			items: extractInventoryItems(ent, itemSchemas),
 			customName: customName != null ? String(customName) : null,
-			raw: ent
+			enabled: nbtBool(ent.Enabled ?? ent.enabled)
 		});
 	}
 
@@ -697,8 +763,7 @@ export function extractLecternBook(blockEntity) {
 		hasBook: !!hasBookFlag,
 		page,
 		totalPages,
-		book,
-		rawBook
+		book
 	};
 }
 
@@ -743,7 +808,7 @@ export function formatInspectText(hit) {
 		if (b.waterlogName) lines.push(`Also: ${b.waterlogName}`);
 		if (b.blockEntityId) lines.push(`Block entity: ${b.blockEntityId}`);
 
-		const sign = extractSignText(b.blockEntity);
+		const sign = b.sign;
 		if (sign) {
 			const d = describeSignPlacement(b, b.name);
 			lines.push(`Sign ${d.kind} ${d.wood} ${d.facing}`);
@@ -765,7 +830,7 @@ export function formatInspectText(hit) {
 			if (sign.waxed) lines.push("Waxed");
 		}
 
-		const lectern = extractLecternBook(b.blockEntity);
+		const lectern = b.lectern;
 		if (lectern) {
 			if (!lectern.hasBook) {
 				lines.push("Lectern: no book");
@@ -799,9 +864,6 @@ export function formatInspectText(hit) {
 			}
 		} else if (b.blockEntityId && CONTAINER_BLOCK_ENTITY_IDS.has(b.blockEntityId) && !lectern) {
 			lines.push("Inventory: empty");
-		} else if (b.blockEntity && !inv?.length && !sign && !lectern) {
-			const keys = Object.keys(b.blockEntity).filter(k => !["id", "isMovable"].includes(k)).slice(0, 8);
-			if (keys.length) lines.push(`Entity data keys: ${keys.join(", ")}`);
 		}
 	} else if (hit.kind === "entity" && hit.entity) {
 		const e = hit.entity;

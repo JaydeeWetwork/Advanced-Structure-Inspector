@@ -154,7 +154,7 @@ body.basi-app .basi-main {
 	box-shadow: none;
 }
 
-/* Do not steal transform/position from viewer.css hover docks */
+/* Do not steal transform/position from viewer.css (peek width --basi-float-peek). */
 body.basi-app .basi-float {
 	top: var(--basi-chrome-top);
 	bottom: var(--basi-chrome-bottom);
@@ -167,28 +167,7 @@ body.basi-app.basi-no-selection .basi-float-right {
 	pointer-events: none;
 }
 
-/* Catalog also auto-hides when nothing is selected (hover / pin to open) */
-body.basi-app.basi-no-selection .basi-float-left {
-	transform: translateX(calc(-100% + var(--basi-float-peek)));
-	opacity: 0.55;
-}
-
-body.basi-app.basi-no-selection .basi-float-left:hover,
-body.basi-app.basi-no-selection .basi-float-left:focus-within,
-body.basi-app.basi-no-selection .basi-float-left.basi-float-open,
-body.basi-app.basi-no-selection .basi-float-left.basi-float-pinned {
-	transform: translateX(0);
-	opacity: 1;
-}
-
 body.basi-app.basi-no-selection .basi-float-left::after {
-	opacity: 0.55;
-}
-
-body.basi-app.basi-no-selection .basi-float-left:hover::after,
-body.basi-app.basi-no-selection .basi-float-left:focus-within::after,
-body.basi-app.basi-no-selection .basi-float-left.basi-float-pinned::after,
-body.basi-app.basi-no-selection .basi-float-left.basi-float-open::after {
 	opacity: 0;
 }
 
@@ -215,6 +194,7 @@ body.basi-app .basi-float .basi-list-header,
 body.basi-app .basi-float .basi-material-header,
 body.basi-app .basi-float .basi-layer-toolbar,
 body.basi-app .basi-default-cam-label,
+body.basi-app .basi-cat-assign-label,
 body.basi-app .basi-meta-field-label,
 body.basi-app .basi-collapse-header {
 	background: transparent;
@@ -262,19 +242,31 @@ body.basi-app .basi-float-pinned .basi-float-pin {
 
 body.basi-app .basi-search,
 body.basi-app .basi-meta-input,
-body.basi-app .basi-default-cam-select {
+body.basi-app .basi-default-cam-select,
+body.basi-app .basi-cat-assign-select {
 	background: var(--basi-input);
 	border: 1px solid var(--basi-border);
 	color: var(--text-col);
 	border-radius: 6px;
 }
 
-body.basi-app .basi-default-cam-select {
+body.basi-app .basi-default-cam-select,
+body.basi-app .basi-cat-assign-select {
 	border-radius: 6px;
+}
+
+body.basi-app .basi-default-zoom-text,
+body.basi-app .basi-default-zoom-val {
+	color: var(--text-col);
+}
+
+body.basi-app .basi-default-zoom input[type="range"] {
+	accent-color: var(--basi-accent);
 }
 
 body.basi-app .basi-meta-input:focus,
 body.basi-app .basi-default-cam-select:focus,
+body.basi-app .basi-cat-assign-select:focus,
 body.basi-app .basi-search:focus {
 	outline: 2px solid color-mix(in srgb, var(--basi-accent) 45%, transparent);
 	outline-offset: 0;
@@ -391,6 +383,24 @@ body.basi-app .basi-layer-badge {
 	color: var(--basi-accent-text);
 }
 
+body.basi-app .basi-preview-loading-card {
+	background: color-mix(in srgb, var(--basi-panel, #1a151a) 90%, transparent);
+	border-color: var(--basi-border);
+}
+
+body.basi-app .basi-preview-loading-msg {
+	color: var(--text-col);
+}
+
+body.basi-app .basi-preview-progress {
+	background: var(--basi-input, #2a222c);
+	border-color: var(--basi-border);
+}
+
+body.basi-app .basi-preview-progress-fill {
+	background: var(--basi-accent);
+}
+
 body.basi-app .basi-empty {
 	color: var(--basi-muted);
 	background: color-mix(in srgb, var(--basi-panel) 90%, transparent);
@@ -415,11 +425,16 @@ body.basi-app .basi-preview-host {
 	border-radius: 0;
 }
 
-body.basi-app:has(.basi-footer:hover) .basi-cam-slide,
-body.basi-app .basi-cam-dock:hover .basi-cam-slide,
 body.basi-app .basi-cam-dock:focus-within .basi-cam-slide,
 body.basi-app .basi-cam-dock.basi-cam-open .basi-cam-slide {
 	transform: translateY(0);
+}
+
+@media (hover: hover) and (pointer: fine) {
+	body.basi-app:has(.basi-footer:hover) .basi-cam-slide,
+	body.basi-app .basi-cam-dock:hover .basi-cam-slide {
+		transform: translateY(0);
+	}
 }
 
 body.basi-view-editor .basi-cam-dock,
@@ -480,28 +495,6 @@ body.basi-app .basi-cam-tilt input[type="range"] {
 	accent-color: var(--basi-accent);
 }
 
-body.basi-app .basi-preview-keys {
-	position: absolute;
-	width: 1px;
-	height: 1px;
-	overflow: hidden;
-	clip: rect(0 0 0 0);
-	white-space: nowrap;
-}
-
-body.basi-app .basi-cam-bar:hover .basi-preview-keys,
-body.basi-app .basi-cam-bar:focus-within .basi-preview-keys {
-	position: static;
-	width: auto;
-	height: auto;
-	overflow: visible;
-	clip: auto;
-	white-space: normal;
-	color: var(--basi-muted);
-	margin-left: 6px;
-	max-width: 22rem;
-}
-
 /* Inspect: Notion card chrome; slot grid inside stays MC */
 body.basi-app .basi-inspect-panel.basi-win {
 	box-shadow: 0 12px 40px rgba(15, 15, 15, 0.18);
@@ -529,45 +522,6 @@ body.basi-app .basi-win-close {
 body.basi-app .basi-win-collapse:hover,
 body.basi-app .basi-win-close:hover {
 	background: var(--basi-row-hover);
-}
-
-body.basi-app .basi-sign-tweaks {
-	background: var(--basi-chip);
-	border-color: var(--basi-border);
-	color: var(--text-col);
-}
-
-body.basi-app .basi-sign-tweaks-title,
-body.basi-app .basi-sign-tweak-val {
-	color: var(--text-col);
-}
-
-body.basi-app .basi-sign-tweak-label,
-body.basi-app .basi-sign-tweak-hint {
-	color: var(--basi-muted);
-}
-
-body.basi-app .basi-sign-tweaks select,
-body.basi-app .basi-sign-tweaks input[type="text"] {
-	background: var(--basi-input);
-	color: var(--text-col);
-	border-color: var(--basi-border);
-}
-
-body.basi-app .basi-sign-tweak-actions button {
-	background: var(--basi-chip);
-	color: var(--text-col);
-	border-color: var(--basi-border);
-}
-
-body.basi-app .basi-sign-tweak-actions button:hover {
-	background: var(--basi-row-hover);
-}
-
-body.basi-app .mc-sign-debug {
-	background: var(--basi-input);
-	color: var(--text-col);
-	border-color: var(--basi-border);
 }
 
 body.basi-app .basi-status {
@@ -619,32 +573,4 @@ body.basi-app .basi-preview-host .previewCont lil-gui {
 	filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.25));
 }
 
-@media (max-width: 720px) {
-	body.basi-app {
-		--basi-chrome-top: 4.6rem;
-		--basi-chrome-bottom: 0px;
-	}
 
-	body.basi-app .basi-float {
-		top: auto;
-		bottom: 0;
-	}
-
-	body.basi-app.basi-no-selection .basi-float-left {
-		transform: translateY(calc(100% - var(--basi-float-peek)));
-	}
-
-	body.basi-app.basi-no-selection .basi-float-left:hover,
-	body.basi-app.basi-no-selection .basi-float-left:focus-within,
-	body.basi-app.basi-no-selection .basi-float-left.basi-float-open,
-	body.basi-app.basi-no-selection .basi-float-left.basi-float-pinned {
-		transform: translateY(0);
-	}
-
-	body.basi-app .basi-float-left .basi-float-panel,
-	body.basi-app .basi-float-right .basi-float-panel {
-		border-radius: var(--basi-radius-lg) var(--basi-radius-lg) 0 0;
-		border: 1px solid var(--basi-border);
-		border-bottom: none;
-	}
-}

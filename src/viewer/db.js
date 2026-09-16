@@ -3,6 +3,8 @@
  * (metadata + file blobs + categories + entries + features).
  */
 
+import { crc32Hex } from "./crc32.js";
+
 export const DEFAULT_DB_NAME = "asi-db-viewer";
 export const LEGACY_DEFAULT_DB_NAME = "structure-db-viewer";
 const DB_VERSION = 4;
@@ -45,6 +47,7 @@ const META_STORE = "meta";
  * @property {string[]} [featureIds]
  * @property {string[]} [acquiredMaterials]
  * @property {string} [defaultCameraPreset]
+ * @property {number} [defaultCameraZoom]
  * @property {{ id: string, text: string, addedAt?: number }[]} [userDetails]
  * @property {string} [creator]
  * @property {string} [credits]
@@ -205,7 +208,57 @@ function serializeFeature(feature) {
  * @param {Omit<StoredStructure, "blob"|"fileName"> & { file: File, parseError?: string, hopperStats?: import("./hopperStats.js").HopperStats|null, entryId?: string|null, featureIds?: string[] }} entry
  * @returns {Promise<void>}
  */
-function serializeStructure(entry) {
+/**
+ * Copy picker/File/Blob bytes into a standalone ArrayBuffer.
+ * Safari (esp. iPad) stores File in IndexedDB as a reference that is empty
+ * after reload; GitHub Pages + reopen then fails NBT parse.
+ * @param {Blob|ArrayBuffer|ArrayBufferView|null|undefined} blob
+ * @returns {Promise<ArrayBuffer>}
+ */
+export async function bytesFromStoredBlob(blob) {
+	if (!blob) return new ArrayBuffer(0);
+	if (blob instanceof ArrayBuffer) return blob.slice(0);
+	if (ArrayBuffer.isView(blob)) {
+		return blob.buffer.slice(blob.byteOffset, blob.byteOffset + blob.byteLength);
+	}
+	if (typeof blob.arrayBuffer === "function") {
+		try {
+			return await blob.arrayBuffer();
+		} catch {
+			return new ArrayBuffer(0);
+		}
+	}
+	return new ArrayBuffer(0);
+}
+
+/**
+ * @param {ArrayBuffer|ArrayBufferView} buffer
+ * @param {string} [fileName]
+ * @returns {File}
+ */
+export function fileFromBytes(buffer, fileName) {
+	const name = fileName || "structure.mcstructure";
+	return new File([buffer ?? new ArrayBuffer(0)], name, {
+		type: "application/mcstructure"
+	});
+}
+
+/**
+ * @param {Blob|ArrayBuffer|ArrayBufferView|null|undefined} blob
+ * @param {string} [fileName]
+ * @returns {Promise<File>}
+ */
+export async function fileFromStoredBlob(blob, fileName) {
+	const buf = await bytesFromStoredBlob(blob);
+	return fileFromBytes(buf, fileName);
+}
+
+const EMPTY_STORED_FILE =
+	"Stored copy is empty. Re-import this .mcstructure — the original file-picker file is not kept after reload.";
+
+async function serializeStructure(entry) {
+	const fileName = entry.file?.name || `${entry.name}.mcstructure`;
+	const buf = await bytesFromStoredBlob(entry.file);
 	return {
 		id: entry.id,
 		name: entry.name,
@@ -223,23 +276,29 @@ function serializeStructure(entry) {
 		featureIds: Array.isArray(entry.featureIds) ? entry.featureIds : [],
 		acquiredMaterials: Array.isArray(entry.acquiredMaterials) ? entry.acquiredMaterials : [],
 		defaultCameraPreset: entry.defaultCameraPreset || "iso-north",
+		defaultCameraZoom: Number.isFinite(entry.defaultCameraZoom) ? entry.defaultCameraZoom : 1,
 		userDetails: Array.isArray(entry.userDetails) ? entry.userDetails : [],
 		creator: typeof entry.creator === "string" ? entry.creator : "",
 		credits: typeof entry.credits === "string" ? entry.credits : "",
 		sourceLink: typeof entry.sourceLink === "string" ? entry.sourceLink : "",
 		addedAt: entry.addedAt,
-		blob: entry.file,
-		fileName: entry.file?.name || `${entry.name}.mcstructure`,
-		parseError: entry.parseError
+		blob: buf,
+		fileName,
+		contentCrc32: entry.contentCrc32 || (buf.byteLength ? crc32Hex(buf) : ""),
+		parseError: entry.parseError || (buf.byteLength === 0 ? EMPTY_STORED_FILE : undefined)
 	};
 }
 
 export async function dbPutStructure(entry, dbName) {
 	const db = await openDb(dbName);
 	try {
+		const row = await serializeStructure(entry);
 		const tx = db.transaction(STORE, "readwrite");
-		await idbReq(tx.objectStore(STORE).put(serializeStructure(entry)));
+		await idbReq(tx.objectStore(STORE).put(row));
 		await idbTxDone(tx);
+		if (row.blob?.byteLength > 0 && entry.file) {
+			entry.file = fileFromBytes(row.blob, row.fileName);
+		}
 	} finally {
 		db.close();
 	}
@@ -302,14 +361,16 @@ export async function dbLoadAll(dbName) {
 		/** @type {StoredStructure[]} */
 		const rows = await idbReq(tx.objectStore(STORE).getAll());
 		await idbTxDone(tx);
-		return rows.map(row => {
-			const file = new File([row.blob], row.fileName || `${row.name}.mcstructure`, {
-				type: "application/mcstructure"
-			});
+		return Promise.all(rows.map(async row => {
+			const fileName = row.fileName || `${row.name}.mcstructure`;
+			const buf = await bytesFromStoredBlob(row.blob);
+			const file = fileFromBytes(buf, fileName);
 			const { blob: _b, fileName: _f, ...meta } = row;
+			const empty = file.size === 0;
 			return {
 				...meta,
 				file,
+				contentCrc32: row.contentCrc32 || (buf.byteLength ? crc32Hex(buf) : ""),
 				entityCount: row.entityCount ?? 0,
 				hopperStats: row.hopperStats ?? null,
 				materials: row.materials ?? [],
@@ -319,12 +380,14 @@ export async function dbLoadAll(dbName) {
 					? row.acquiredMaterials
 					: [],
 				defaultCameraPreset: row.defaultCameraPreset || "iso-north",
+				defaultCameraZoom: Number.isFinite(row.defaultCameraZoom) ? row.defaultCameraZoom : 1,
 				userDetails: Array.isArray(row.userDetails) ? row.userDetails : [],
 				creator: typeof row.creator === "string" ? row.creator : "",
 				credits: typeof row.credits === "string" ? row.credits : "",
-				sourceLink: typeof row.sourceLink === "string" ? row.sourceLink : ""
+				sourceLink: typeof row.sourceLink === "string" ? row.sourceLink : "",
+				parseError: row.parseError || (empty ? EMPTY_STORED_FILE : undefined)
 			};
-		});
+		}));
 	} finally {
 		db.close();
 	}

@@ -62,7 +62,8 @@ export function classifyChestPair(facing, dx, dz) {
 
 /**
  * Preview instances negate X (`-16*x`) but already flip Z in BufferGeometry.
- * North/south pairs sit on X, so those meshes need instance scale.x = -1.
+ * North/south pairs sit on X, so those meshes need instance scale.x = -1
+ * or the 30-wide geo grows the wrong way (into the neighbor, not the partner).
  *
  * @param {any} block palette entry
  */
@@ -70,6 +71,19 @@ export function doubleChestNeedsPreviewXMirror(block) {
 	if (!String(block?.basi_block_shape ?? "").startsWith("chest_large")) return false;
 	const s = String(chestFacing(block.states)).toLowerCase();
 	return s === "north" || s === "south";
+}
+
+/**
+ * East/west pairs sit on Z. The same 30-wide geo + yaw maps width onto Z,
+ * and without scale.z = -1 it grows north/south into non-chest blocks
+ * (e.g. JD-Semi-Universal-V4 east chests over hoppers).
+ *
+ * @param {any} block palette entry
+ */
+export function doubleChestNeedsPreviewZMirror(block) {
+	if (!String(block?.basi_block_shape ?? "").startsWith("chest_large")) return false;
+	const s = String(chestFacing(block.states)).toLowerCase();
+	return s === "east" || s === "west";
 }
 
 /** Coerce nbtify wrappers and primitives to a number. */
@@ -282,20 +296,19 @@ export function linkInspectDoubleChests(blocks, ox, oz) {
 	let n = 0;
 	for (const block of blocks.values()) {
 		if (block.doubleChest) continue;
-		const be = block.blockEntity;
-		if (!be || be.pairx == null || be.pairz == null) continue;
-		if (be.forceunpair === 1 || be.forceunpair === true) continue;
+		if (block.pairx == null || block.pairz == null) continue;
+		if (block.forceunpair === true) continue;
 		if (!isChestBlockName(block.name)) continue;
 
-		const pairx = nbtNumber(be.pairx);
-		const pairz = nbtNumber(be.pairz);
+		const pairx = nbtNumber(block.pairx);
+		const pairz = nbtNumber(block.pairz);
 		if (!Number.isFinite(pairx) || !Number.isFinite(pairz)) continue;
 		const px = Math.floor(pairx - Number(ox || 0));
 		const pz = Math.floor(pairz - Number(oz || 0));
 		const partner = blocks.get(`${px},${block.y},${pz}`);
-		if (!partner?.blockEntity || partner.doubleChest) continue;
-		const backX = Math.floor(nbtNumber(partner.blockEntity.pairx) - Number(ox || 0));
-		const backZ = Math.floor(nbtNumber(partner.blockEntity.pairz) - Number(oz || 0));
+		if (!partner || partner.pairx == null || partner.pairz == null || partner.doubleChest) continue;
+		const backX = Math.floor(nbtNumber(partner.pairx) - Number(ox || 0));
+		const backZ = Math.floor(nbtNumber(partner.pairz) - Number(oz || 0));
 		if (backX !== block.x || backZ !== block.z) continue;
 
 		const dx = px - block.x;

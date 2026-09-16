@@ -29,16 +29,19 @@ import {
 	SpecialBlockOverlay
 } from "./viewer/systems/index.js";
 import { disposeObject3D } from "./viewer/systems/disposeObject3D.js";
-import { SIGN_TWEAK_EVENT } from "./viewer/signDebug.js";
+import { filterBuriedUnitCubes, occludesAsUnitCube } from "./viewer/occupancySkip.js";
 
-import Stats from "stats.js";
 
 /** @type {typeof import("three")} */
 let THREE;
 /** @type {typeof import("three/examples/jsm/controls/OrbitControls.js").OrbitControls} */
 let OrbitControls;
 
-const IN_PRODUCTION = false;
+const IN_PRODUCTION =
+	typeof location !== "undefined"
+	&& location.hostname !== ""
+	&& location.hostname !== "localhost"
+	&& location.hostname !== "127.0.0.1";
 
 export default class PreviewRenderer extends AsyncFactory {
 	static #WEAK_DEVICE_OPTIONS = {
@@ -101,8 +104,8 @@ export default class PreviewRenderer extends AsyncFactory {
 		directionalLightShadowMapResolution: 2,
 		highResolution: false,
 		debugHelpersVisible: false,
-		showFps: true,
-		showOptions: true,
+		showFps: false,
+		showOptions: false,
 		shadowsEnabled: true,
 		antialias: true,
 		maxPixelRatio: 2,
@@ -126,13 +129,6 @@ export default class PreviewRenderer extends AsyncFactory {
 	#optionsGui;
 	/** @type {import("three").Object3D[]} */
 	#debugHelpers = [];
-	/** @type {() => void} */
-	#onSignTweaks = () => {
-		if (this.#ctx?.isDisposed()) return;
-		if (this.#overlays?.applyLiveTweaks?.()) return;
-		this.#rebuildOverlays();
-	};
-
 	/**
 	 * Sole public list accessor — storage lives on EntityAttachSystem.
 	 * @returns {import("./viewer/entityExtract.js").PreviewEntity[]}
@@ -218,21 +214,6 @@ export default class PreviewRenderer extends AsyncFactory {
 		this.#loadingMessage.appendChild(p);
 		this.cont.appendChild(this.#loadingMessage);
 
-		if (this.options.showFps) {
-			const stats = new Stats();
-			stats.showPanel(0);
-			stats.dom.classList.add("statsPanel");
-			stats.dom.childNodes.forEach(can => {
-				if (!(can instanceof HTMLCanvasElement)) return;
-				const c2d = can.getContext("2d");
-				const defaultFontFamilies = "Helvetica";
-				c2d.font = c2d.font.replace(
-					defaultFontFamilies,
-					`"Space Grotesk", ${defaultFontFamilies}`
-				);
-			});
-			this.#ctx.stats = stats;
-		}
 		if (this.options.showOptions) {
 			try {
 				const guiEl = document.createElement("lil-gui");
@@ -274,6 +255,7 @@ export default class PreviewRenderer extends AsyncFactory {
 		ctx.structureSize = this.structureSize;
 		ctx.blockIndices = this.blockIndices;
 		ctx.blockPalette = this.blockPalette;
+		ctx.shapeByPalette = this.options?.shapeByPalette ?? null;
 		ctx.polyMeshTemplatePalette = this.polyMeshTemplatePalette;
 		ctx.polyMeshMaker = this.#polyMeshMaker;
 		ctx.maxDim = max(...this.structureSize);
@@ -318,6 +300,30 @@ export default class PreviewRenderer extends AsyncFactory {
 		if (this.#ctx.isDisposed()) return true;
 		const signal = this.options?.abortSignal;
 		return !!(signal && signal.aborted);
+	}
+
+	/**
+	 * Occupancy next to the index scan (after atlas ImageData exists).
+	 * LayerMeshSystem only chooses this list vs the unculled scan.
+	 */
+	#culledBlockPositions() {
+		const layer0 = this.blockIndices?.[0];
+		if (!this.structureSize || !layer0) return this.#blockPositions;
+		const templates = this.polyMeshTemplatePalette || [];
+		const shapes = this.options?.shapeByPalette || [];
+		const occludesByPalette = [];
+		for (let i = 0; i < templates.length; i++) {
+			occludesByPalette[i] = occludesAsUnitCube(
+				shapes[i],
+				this.#geo.isPolyMeshTemplateFullyOpaque(templates[i])
+			);
+		}
+		return filterBuriedUnitCubes(
+			this.structureSize,
+			layer0,
+			occludesByPalette,
+			this.#blockPositions
+		);
 	}
 
 	async init() {
@@ -408,8 +414,17 @@ export default class PreviewRenderer extends AsyncFactory {
 		await this.#lighting.initBackground(this.#pool);
 		if (this.#initAborted()) return;
 
-		if (this.options.showFps && ctx.stats) {
-			this.cont.appendChild(ctx.stats.dom);
+		if (this.options.showFps) {
+			try {
+				const { default: Stats } = await import("stats.js");
+				const stats = new Stats();
+				stats.showPanel(0);
+				stats.dom.classList.add("statsPanel");
+				ctx.stats = stats;
+				this.cont.appendChild(stats.dom);
+			} catch (e) {
+				console.warn("[basi] stats.js skipped:", e);
+			}
 		}
 		if (this.options.showOptions && this.#optionsGui) {
 			wirePreviewOptionsGui({
@@ -440,15 +455,10 @@ export default class PreviewRenderer extends AsyncFactory {
 		this.#pool.atlasTexture = texture;
 		this.#pool.ensureMaterials(THREE, texture, this.options);
 
-		this.#layers.mount(ctx.scene, this.#blockPositions);
+		this.#layers.mount(ctx.scene, this.#blockPositions, this.#culledBlockPositions());
 		this.#inspect.init();
 		this.#layers.rebuildBlockMeshes(null);
 		this.#rebuildOverlays();
-		try {
-			globalThis.addEventListener(SIGN_TWEAK_EVENT, this.#onSignTweaks);
-		} catch {
-			/* ignore */
-		}
 		if (this.#initAborted()) return;
 
 		try {
@@ -552,6 +562,11 @@ export default class PreviewRenderer extends AsyncFactory {
 		return this.#cameraCtrl.lastPreset || "iso";
 	}
 
+	/** OrbitControls instance, or null before init / after dispose. */
+	get orbitControls() {
+		return this.#ctx?.controls ?? null;
+	}
+
 	/**
 	 * @param {number} deg
 	 * @param {{ reframe?: boolean }} [opts]
@@ -565,6 +580,18 @@ export default class PreviewRenderer extends AsyncFactory {
 	 */
 	setCameraPreset(preset = "iso") {
 		this.#cameraCtrl.setPreset(preset);
+	}
+
+	getCameraZoom() {
+		return this.#cameraCtrl.userZoom ?? 1;
+	}
+
+	/**
+	 * @param {number} z
+	 * @param {{ reframe?: boolean }} [opts]
+	 */
+	setCameraZoom(z, opts = {}) {
+		return this.#cameraCtrl.setUserZoom(z, opts);
 	}
 
 	resetCamera() {
@@ -651,11 +678,6 @@ export default class PreviewRenderer extends AsyncFactory {
 		}
 		try {
 			this.#lighting?.dispose?.();
-		} catch {
-			/* ignore */
-		}
-		try {
-			globalThis.removeEventListener(SIGN_TWEAK_EVENT, this.#onSignTweaks);
 		} catch {
 			/* ignore */
 		}

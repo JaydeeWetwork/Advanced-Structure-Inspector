@@ -43,8 +43,10 @@ export interface Cube {
 	copy?: string;
 	/** Copies an entire block. Must resolve to an object with the same structure as a block palette entry. */
 	copy_block?: string;
-	/** Copies an entity's model. */
+	/** Copies an entity's model (`models/entity`, `geometry.*`). */
 	copy_entity_model?: EntityModelInfo;
+	/** Copies an official block geo.json (`models/blocks`, `minecraft:geometry.*`). Flattened in block space. */
+	copy_geometry?: BlockGeometryInfo;
 	/** Block states to be passed to the block shape copy specified in the "copy" property. */
 	block_states?: Record<string, string | number>;
 	/** Forces this cube to use a specific terrain_texture.json key. */
@@ -76,6 +78,14 @@ export interface EntityModelInfo {
 	identifier: `geometry.${string}`;
 	/** A file path to the geometry file which contains the identifier. */
 	geo_file: `models/${string}`;
+	/** Path to the texture to be used for this model. */
+	texture: TextureFilePath
+}
+export interface BlockGeometryInfo {
+	/** The geometry identifier of the model. */
+	identifier: `minecraft:geometry.${string}`;
+	/** A file path to the geometry file which contains the identifier. */
+	geo_file: `models/blocks/${string}`;
 	/** Path to the texture to be used for this model. */
 	texture: TextureFilePath
 }

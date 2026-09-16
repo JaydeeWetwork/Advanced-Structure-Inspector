@@ -10,6 +10,8 @@ import {
 } from "../../data/packPins.js";
 import { jsonc, stringToImageData, toImage, toImageData } from "../../utils.js";
 import { defaultVersionContext, packTags } from "./VersionContext.js";
+import { preferTgaForVanillaPath } from "./vanillaTextureExt.js";
+
 
 /**
  * @param {string} p
@@ -115,9 +117,10 @@ export default class PackAssetStore {
 		const p = normPath(pathNoExt);
 		for (const tag of packTags(ctx)) {
 			const known = this.#extByTag.get(tag)?.get(p);
-			if (known === ".png" || known === ".tga") return [known];
+			if (known === ".tga") return [".tga"];
+			if (known === ".png") return [".png"];
 		}
-		return [".png", ".tga"];
+		return preferTgaForVanillaPath(p) ? [".tga"] : [".png"];
 	}
 
 	/**
@@ -193,10 +196,12 @@ export default class PackAssetStore {
 	 * @param {{ tryLocal?: (pathWithExt: string) => Promise<Response|null>|Response|null }} [opts]
 	 */
 	async fetchTexture(pathNoExt, ctx, opts = {}) {
+		await this.prewarm(ctx);
 		const p = normPath(pathNoExt);
 		const exts = this.extensionsToTry(p, ctx);
 		if (opts.tryLocal) {
-			for (const ext of exts) {
+			const localExts = [".png", ".tga"];
+			for (const ext of localExts) {
 				try {
 					const local = await opts.tryLocal(`${p}${ext}`);
 					if (local?.ok) return { imageRes: local, ext, tag: "local" };
