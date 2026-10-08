@@ -32,5 +32,7 @@
 	{"filename":"0301_1.21.20.24_beta_to_1.21.30.24_beta.json","maxVersionMajor":1,"maxVersionMinor":21,"maxVersionPatch":30,"maxVersionRevision":7},
 	{"filename":"0311_1.21.30.24_beta_to_1.21.40.25_beta.json","maxVersionMajor":1,"maxVersionMinor":21,"maxVersionPatch":40,"maxVersionRevision":1},
 	{"filename":"0321_1.21.50.29_beta_to_1.21.60.28_beta.json","maxVersionMajor":1,"maxVersionMinor":21,"maxVersionPatch":60,"maxVersionRevision":33},
-	{"filename":"0331_1.21.100.23_beta_to_1.21.110.26_beta.json","maxVersionMajor":1,"maxVersionMinor":21,"maxVersionPatch":60,"maxVersionRevision":33}
+	{"filename":"0331_1.21.100.23_beta_to_1.21.110.26_beta.json","maxVersionMajor":1,"maxVersionMinor":21,"maxVersionPatch":60,"maxVersionRevision":33},
+	{"filename":"0341_1.26.20_to_1.26.30.json","maxVersionMajor":1,"maxVersionMinor":21,"maxVersionPatch":60,"maxVersionRevision":33},
+	{"filename":"0351_1.26.40_to_1.26.50.json","path":"0351_1.26.40_to_1.26.50.json","maxVersionMajor":1,"maxVersionMinor":21,"maxVersionPatch":60,"maxVersionRevision":33}
 ]

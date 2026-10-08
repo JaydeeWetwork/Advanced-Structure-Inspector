@@ -201,7 +201,7 @@
 						"minLength": 1
 					},
 					"copy_entity_model": {
-						"description": "Copies an entity's model.",
+						"description": "Copies an entity's model (models/entity, geometry.* ids).",
 						"type": "object",
 						"properties": {
 							"identifier": {
@@ -213,6 +213,26 @@
 								"description": "A file path to the geometry file which contains the identifier.",
 								"type": "string",
 								"pattern": "^models/.*[^/]$"
+							},
+							"texture": {
+								"$ref": "#/definitions/textureFilePath"
+							}
+						},
+						"required": ["identifier", "geo_file", "texture"]
+					},
+					"copy_geometry": {
+						"description": "Copies an official block geo.json (models/blocks, minecraft:geometry.* ids). Flattened in block space.",
+						"type": "object",
+						"properties": {
+							"identifier": {
+								"description": "The geometry identifier of the model.",
+								"type": "string",
+								"pattern": "^minecraft:geometry\\.[\\w.]+$"
+							},
+							"geo_file": {
+								"description": "A file path to the geometry file which contains the identifier.",
+								"type": "string",
+								"pattern": "^models/blocks/.*[^/]$"
 							},
 							"texture": {
 								"$ref": "#/definitions/textureFilePath"
@@ -310,6 +330,9 @@
 					},
 					{
 						"required": ["copy_entity_model"]
+					},
+					{
+						"required": ["copy_geometry"]
 					}
 				],
 				"default": {
@@ -318,7 +341,7 @@
 				},
 				"additionalProperties": false
 			},
-			"minItems": 1
+			"minItems": 0
 		}
 	},
 	"additionalProperties": false,

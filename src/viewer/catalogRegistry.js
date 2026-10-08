@@ -1,13 +1,13 @@
 /**
  * Named catalog registry (localStorage) + which IndexedDB is active.
- * Default catalog IndexedDB is `asi-db-viewer`; boot remaps the legacy name.
+ * Default catalog IndexedDB is `bedrockLayers-db-viewer`.
  */
 
-import { DEFAULT_DB_NAME, LEGACY_DEFAULT_DB_NAME } from "./db.js";
+import { CATALOG_DB_PREFIX, DEFAULT_DB_NAME } from "./db.js";
 
 export { DEFAULT_DB_NAME };
 export const DEFAULT_CATALOG_ID = "default";
-export const REGISTRY_KEY = "basi.catalogRegistry.v1";
+export const REGISTRY_KEY = "bLayers.catalogRegistry.v1";
 
 /** @type {Storage|null} */
 let registryStorage = typeof localStorage !== "undefined" ? localStorage : null;
@@ -83,20 +83,6 @@ export function saveRegistry(reg) {
 	return reg;
 }
 
-/** Point registry rows still using the old default IDB name at `asi-db-viewer`. */
-export function remapLegacyDefaultDbNames() {
-	const r = loadRegistry();
-	let changed = false;
-	for (const item of r.items) {
-		if (item.dbName === LEGACY_DEFAULT_DB_NAME) {
-			item.dbName = DEFAULT_DB_NAME;
-			changed = true;
-		}
-	}
-	if (changed) saveRegistry(r);
-	return r;
-}
-
 export function getActiveCatalog() {
 	const r = loadRegistry();
 	return r.items.find(i => i.id === r.activeId) ?? r.items[0];
@@ -143,7 +129,7 @@ export function addCatalogRecord(name, opts = {}) {
 	const item = {
 		id,
 		name: String(name || "").trim() || "Untitled",
-		dbName: opts.dbName || `basi-catalog-${id}`,
+		dbName: opts.dbName || `${CATALOG_DB_PREFIX}${id}`,
 		updatedAt: Date.now()
 	};
 	r.items.push(item);

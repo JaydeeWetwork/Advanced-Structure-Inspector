@@ -15,8 +15,14 @@ export default class PreviewResourcePool {
 	/** DoubleSide clone for N/S double chests (instance scale.x = -1). */
 	/** @type {import("three").MeshLambertMaterial|null} */
 	chestMirrorMat = null;
+	/** DoubleSide material for card-face geos only (0-thickness cubes). */
+	/** @type {import("three").MeshLambertMaterial|null} */
+	cardDoubleMat = null;
+	/** DoubleSide blend material for 0-thickness translucent cards. Volume glass stays FrontSide. */
+	/** @type {import("three").MeshLambertMaterial|null} */
+	transparentCardMat = null;
 
-	/** @type {Map<number, import("three").BufferGeometry>} */
+	/** @type {Map<number, { volume: import("three").BufferGeometry|null, cards: import("three").BufferGeometry|null }>} */
 	geoByPalette = new Map();
 	/** @type {import("three").Texture|null} */
 	minecartTexture = null;
@@ -57,17 +63,27 @@ export default class PreviewResourcePool {
 
 		if (this.transparentMat) {
 			this.transparentMat.map = atlasTexture;
-			this.transparentMat.side = THREE.DoubleSide;
+			this.transparentMat.side = side;
 			this.transparentMat.alphaTest = alphaTest;
+			this.transparentMat.transparent = true;
+			this.transparentMat.depthWrite = true;
 			this.transparentMat.needsUpdate = true;
 		} else {
 			this.transparentMat = new THREE.MeshLambertMaterial({
 				map: atlasTexture,
-				side: THREE.DoubleSide,
+				side,
 				alphaTest,
 				transparent: true,
 				depthWrite: true
 			});
+		}
+		if (this.transparentCardMat) {
+			this.transparentCardMat.map = atlasTexture;
+			this.transparentCardMat.side = THREE.DoubleSide;
+			this.transparentCardMat.alphaTest = alphaTest;
+			this.transparentCardMat.transparent = true;
+			this.transparentCardMat.depthWrite = true;
+			this.transparentCardMat.needsUpdate = true;
 		}
 
 		if (this.chestMirrorMat) {
@@ -75,6 +91,12 @@ export default class PreviewResourcePool {
 			this.chestMirrorMat.side = THREE.DoubleSide;
 			this.chestMirrorMat.alphaTest = alphaTest;
 			this.chestMirrorMat.needsUpdate = true;
+		}
+		if (this.cardDoubleMat) {
+			this.cardDoubleMat.map = atlasTexture;
+			this.cardDoubleMat.side = THREE.DoubleSide;
+			this.cardDoubleMat.alphaTest = alphaTest;
+			this.cardDoubleMat.needsUpdate = true;
 		}
 
 		if (this.solidFloorMat) {
@@ -111,10 +133,35 @@ export default class PreviewResourcePool {
 		return this.chestMirrorMat;
 	}
 
+	/**
+	 * @param {typeof import("three")} THREE
+	 */
+	ensureCardDoubleMat(THREE) {
+		if (this.cardDoubleMat) return this.cardDoubleMat;
+		if (!this.regularMat || !THREE) return null;
+		this.cardDoubleMat = this.regularMat.clone();
+		this.cardDoubleMat.side = THREE.DoubleSide;
+		return this.cardDoubleMat;
+	}
+
+	/**
+	 * 0-thickness translucent faces (panes that collapsed to a card).
+	 * Glass cubes use transparentMat, which culls faces pointing away.
+	 * @param {typeof import("three")} THREE
+	 */
+	ensureTransparentCardMat(THREE) {
+		if (this.transparentCardMat) return this.transparentCardMat;
+		if (!this.transparentMat || !THREE) return null;
+		this.transparentCardMat = this.transparentMat.clone();
+		this.transparentCardMat.side = THREE.DoubleSide;
+		this.transparentCardMat.depthWrite = true;
+		return this.transparentCardMat;
+	}
+
 	/** @param {import("three").BufferGeometry} geo */
 	isSharedGeometry(geo) {
-		for (const g of this.geoByPalette.values()) {
-			if (g === geo) return true;
+		for (const entry of this.geoByPalette.values()) {
+			if (entry?.volume === geo || entry?.cards === geo) return true;
 		}
 		if (this.entityModelKit) {
 			for (const entry of this.entityModelKit.values()) {
@@ -139,6 +186,8 @@ export default class PreviewResourcePool {
 			|| mat === this.transparentMat
 			|| mat === this.solidFloorMat
 			|| mat === this.chestMirrorMat
+			|| mat === this.cardDoubleMat
+			|| mat === this.transparentCardMat
 			|| mat === this.cargoMat) return true;
 		if (this.entityModelKit) {
 			for (const entry of this.entityModelKit.values()) {
@@ -146,6 +195,9 @@ export default class PreviewResourcePool {
 				entry?.template?.traverse?.(o => {
 					if (o.isMesh && o.material === mat) hit = true;
 				});
+				if (!hit && Array.isArray(entry?.variantMaterials)) {
+					hit = entry.variantMaterials.some(m => m === mat);
+				}
 				if (hit) return true;
 			}
 		}
@@ -160,6 +212,7 @@ export default class PreviewResourcePool {
 		if (this.entityModelKit) {
 			for (const entry of this.entityModelKit.values()) {
 				if (entry?.texture === map) return true;
+				if (Array.isArray(entry?.textures) && entry.textures.some(t => t === map)) return true;
 			}
 		}
 		for (const t of this.itemFrameTexCache.values()) {
@@ -179,24 +232,29 @@ export default class PreviewResourcePool {
 
 	/**
 	 * @param {number} paletteI
-	 * @param {() => import("three").BufferGeometry} factory
+	 * @param {() => { volume: import("three").BufferGeometry|null, cards: import("three").BufferGeometry|null }} factory
 	 */
-	getOrCreateGeo(paletteI, factory) {
-		let geo = this.geoByPalette.get(paletteI);
-		if (!geo) {
-			geo = factory();
-			this.geoByPalette.set(paletteI, geo);
+	getOrCreateGeos(paletteI, factory) {
+		let geos = this.geoByPalette.get(paletteI);
+		if (!geos) {
+			geos = factory();
+			this.geoByPalette.set(paletteI, geos);
 		}
-		return geo;
+		return geos;
 	}
 
 	/**
 	 * Full teardown — disposes everything this pool owns.
 	 */
 	disposeAll() {
-		for (const geo of this.geoByPalette.values()) {
+		for (const entry of this.geoByPalette.values()) {
 			try {
-				geo.dispose?.();
+				entry?.volume?.dispose?.();
+			} catch {
+				/* ignore */
+			}
+			try {
+				entry?.cards?.dispose?.();
 			} catch {
 				/* ignore */
 			}
@@ -229,6 +287,16 @@ export default class PreviewResourcePool {
 		}
 		try {
 			this.chestMirrorMat?.dispose?.();
+		} catch {
+			/* ignore */
+		}
+		try {
+			this.cardDoubleMat?.dispose?.();
+		} catch {
+			/* ignore */
+		}
+		try {
+			this.transparentCardMat?.dispose?.();
 		} catch {
 			/* ignore */
 		}
@@ -266,10 +334,23 @@ export default class PreviewResourcePool {
 						}
 					}
 				});
-				if (entry?.texture && !seenTex.has(entry.texture)) {
-					seenTex.add(entry.texture);
+				if (Array.isArray(entry?.variantMaterials)) {
+					for (const m of entry.variantMaterials) {
+						if (!m || seenMat.has(m)) continue;
+						seenMat.add(m);
+						try {
+							m.dispose?.();
+						} catch {
+							/* ignore */
+						}
+					}
+				}
+				const texList = Array.isArray(entry?.textures) ? entry.textures : [entry?.texture];
+				for (const t of texList) {
+					if (!t || seenTex.has(t)) continue;
+					seenTex.add(t);
 					try {
-						entry.texture.dispose?.();
+						t.dispose?.();
 					} catch {
 						/* ignore */
 					}
@@ -300,6 +381,8 @@ export default class PreviewResourcePool {
 		this.transparentMat = null;
 		this.solidFloorMat = null;
 		this.chestMirrorMat = null;
+		this.cardDoubleMat = null;
+		this.transparentCardMat = null;
 		this.atlasTexture = null;
 		this.minecartTexture = null;
 		this.entityModelKit = null;

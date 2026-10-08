@@ -16,14 +16,14 @@ function hex6(color) {
 
 function textField(label, value, field, onCommit) {
 	const wrap = document.createElement("label");
-	wrap.className = "basi-ed-field";
+	wrap.className = "bLayers-ed-field";
 	const span = document.createElement("span");
-	span.className = "basi-ed-label";
+	span.className = "bLayers-ed-label";
 	span.textContent = label;
 	const input = document.createElement(field === "textarea" ? "textarea" : "input");
 	if (field !== "textarea") input.type = "text";
 	else input.rows = 3;
-	input.className = "basi-ed-input";
+	input.className = "bLayers-ed-input";
 	input.value = value || "";
 	input.addEventListener("blur", () => onCommit(input.value));
 	input.addEventListener("keydown", e => {
@@ -38,13 +38,13 @@ function textField(label, value, field, onCommit) {
 
 function colorField(label, value, onCommit) {
 	const wrap = document.createElement("label");
-	wrap.className = "basi-ed-field basi-ed-color-field";
+	wrap.className = "bLayers-ed-field bLayers-ed-color-field";
 	const span = document.createElement("span");
-	span.className = "basi-ed-label";
+	span.className = "bLayers-ed-label";
 	span.textContent = label;
 	const input = document.createElement("input");
 	input.type = "color";
-	input.className = "basi-ed-color";
+	input.className = "bLayers-ed-color";
 	input.value = hex6(value);
 	input.addEventListener("change", () => onCommit(input.value));
 	wrap.append(span, input);
@@ -54,7 +54,7 @@ function colorField(label, value, onCommit) {
 function dangerBtn(label, title, onClick) {
 	const btn = document.createElement("button");
 	btn.type = "button";
-	btn.className = "basi-btn secondary basi-ed-danger";
+	btn.className = "bLayers-btn secondary bLayers-ed-danger";
 	btn.textContent = label;
 	btn.title = title;
 	btn.addEventListener("click", onClick);
@@ -64,7 +64,7 @@ function dangerBtn(label, title, onClick) {
 function iconBtn(label, title, onClick) {
 	const btn = document.createElement("button");
 	btn.type = "button";
-	btn.className = "basi-ed-icon-btn";
+	btn.className = "bLayers-ed-icon-btn";
 	btn.textContent = label;
 	btn.title = title;
 	btn.addEventListener("click", onClick);
@@ -73,18 +73,18 @@ function iconBtn(label, title, onClick) {
 
 function confirmRow(message, onYes) {
 	const wrap = document.createElement("div");
-	wrap.className = "basi-ed-actions";
+	wrap.className = "bLayers-ed-actions";
 	const ask = document.createElement("span");
-	ask.className = "basi-ed-hint";
+	ask.className = "bLayers-ed-hint";
 	ask.textContent = message;
 	const yes = document.createElement("button");
 	yes.type = "button";
-	yes.className = "basi-btn secondary basi-ed-danger";
+	yes.className = "bLayers-btn secondary bLayers-ed-danger";
 	yes.textContent = "Delete";
 	yes.addEventListener("click", onYes);
 	const no = document.createElement("button");
 	no.type = "button";
-	no.className = "basi-btn secondary";
+	no.className = "bLayers-btn secondary";
 	no.textContent = "Cancel";
 	no.addEventListener("click", () => {
 		editorUi.inspectConfirm = null;
@@ -101,7 +101,7 @@ export function renderEditorInspector() {
 	const sel = editorUi.selected;
 	if (!sel || sel.kind === "uncategorized") {
 		const hint = document.createElement("p");
-		hint.className = "basi-ed-hint";
+		hint.className = "bLayers-ed-hint";
 		hint.textContent = sel?.kind === "uncategorized"
 			? "Uncategorized structures have not been assigned to an entry yet. Select one, then pick an entry."
 			: "Select a category, entry, or structure to edit it.";
@@ -113,7 +113,7 @@ export function renderEditorInspector() {
 		const cat = catalog.getCategory(sel.id);
 		if (!cat) return;
 		const h = document.createElement("h3");
-		h.className = "basi-ed-inspect-title";
+		h.className = "bLayers-ed-inspect-title";
 		h.textContent = "Category";
 		host.appendChild(h);
 		host.appendChild(textField("Name", cat.name, "text", v => {
@@ -136,7 +136,7 @@ export function renderEditorInspector() {
 			return;
 		}
 		const actions = document.createElement("div");
-		actions.className = "basi-ed-actions";
+		actions.className = "bLayers-ed-actions";
 		actions.append(
 			iconBtn("↑", "Move up", () => {
 				void catalog.reorderCategory(cat.id, -1);
@@ -157,7 +157,7 @@ export function renderEditorInspector() {
 		const ent = catalog.getCatalogEntry(sel.id);
 		if (!ent) return;
 		const h = document.createElement("h3");
-		h.className = "basi-ed-inspect-title";
+		h.className = "bLayers-ed-inspect-title";
 		h.textContent = "Entry";
 		host.appendChild(h);
 		host.appendChild(textField("Name", ent.name, "text", v => {
@@ -167,12 +167,12 @@ export function renderEditorInspector() {
 			void catalog.patchCatalogEntry(ent.id, { description: v });
 		}));
 		const parent = document.createElement("label");
-		parent.className = "basi-ed-field";
+		parent.className = "bLayers-ed-field";
 		const pLabel = document.createElement("span");
-		pLabel.className = "basi-ed-label";
+		pLabel.className = "bLayers-ed-label";
 		pLabel.textContent = "Category";
 		const pSel = document.createElement("select");
-		pSel.className = "basi-ed-input";
+		pSel.className = "bLayers-ed-input";
 		for (const c of catalog.listCategories()) {
 			const opt = document.createElement("option");
 			opt.value = c.id;
@@ -186,12 +186,12 @@ export function renderEditorInspector() {
 		parent.append(pLabel, pSel);
 		host.appendChild(parent);
 		const assign = document.createElement("label");
-		assign.className = "basi-ed-field";
+		assign.className = "bLayers-ed-field";
 		const aLabel = document.createElement("span");
-		aLabel.className = "basi-ed-label";
+		aLabel.className = "bLayers-ed-label";
 		aLabel.textContent = "Assign structure";
 		const aSel = document.createElement("select");
-		aSel.className = "basi-ed-input";
+		aSel.className = "bLayers-ed-input";
 		const placeholder = document.createElement("option");
 		placeholder.value = "";
 		placeholder.textContent = "Choose a structure…";
@@ -223,7 +223,7 @@ export function renderEditorInspector() {
 			return;
 		}
 		const actions = document.createElement("div");
-		actions.className = "basi-ed-actions";
+		actions.className = "bLayers-ed-actions";
 		actions.append(
 			iconBtn("↑", "Move up", () => {
 				void catalog.reorderCatalogEntry(ent.id, -1);
@@ -244,19 +244,19 @@ export function renderEditorInspector() {
 		const s = catalog.get(sel.id);
 		if (!s) return;
 		const h = document.createElement("h3");
-		h.className = "basi-ed-inspect-title";
+		h.className = "bLayers-ed-inspect-title";
 		h.textContent = "Structure";
 		host.appendChild(h);
 		host.appendChild(textField("Name", s.name, "text", v => {
 			void catalog.patch(s.id, { name: v });
 		}));
 		const parent = document.createElement("label");
-		parent.className = "basi-ed-field";
+		parent.className = "bLayers-ed-field";
 		const pLabel = document.createElement("span");
-		pLabel.className = "basi-ed-label";
+		pLabel.className = "bLayers-ed-label";
 		pLabel.textContent = "Entry";
 		const pSel = document.createElement("select");
-		pSel.className = "basi-ed-input";
+		pSel.className = "bLayers-ed-input";
 		const none = document.createElement("option");
 		none.value = "";
 		none.textContent = "Uncategorized";
@@ -288,11 +288,11 @@ export function renderEditorInspector() {
 			void catalog.patch(s.id, { sourceLink: v });
 		}));
 		const featLabel = document.createElement("div");
-		featLabel.className = "basi-ed-label";
+		featLabel.className = "bLayers-ed-label";
 		featLabel.textContent = "Features";
 		host.appendChild(featLabel);
 		const chips = document.createElement("div");
-		chips.className = "basi-feature-chips";
+		chips.className = "bLayers-feature-chips";
 		const assigned = catalog.listFeaturesForStructure(s.id);
 		renderFeatureChips(chips, assigned, {
 			onClick: feature => {
@@ -306,7 +306,7 @@ export function renderEditorInspector() {
 		host.appendChild(chips);
 		const manage = document.createElement("button");
 		manage.type = "button";
-		manage.className = "basi-btn secondary";
+		manage.className = "bLayers-btn secondary";
 		manage.textContent = editorUi.featuresOpen ? "Hide feature library" : "Add / edit features";
 		manage.addEventListener("click", () => {
 			editorUi.featuresOpen = !editorUi.featuresOpen;

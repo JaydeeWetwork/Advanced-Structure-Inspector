@@ -1,16 +1,16 @@
 /**
  * Paper (Notion-style) tokens. Light default; dark via data-theme or prefers-color-scheme.
- * Remaps leftover HoloPrint --dark-bg / --border-col so ASI chrome is blue, not magenta.
+ * Remaps --dark-bg / --border-col so Bedrock Layers chrome is blue, not magenta.
  */
 
 :root {
 	color-scheme: light;
-	--basi-font: "Segoe UI", system-ui, "Catamaran", sans-serif;
-	--basi-font-brand: "Space Grotesk", "Segoe UI", system-ui, sans-serif;
-	--basi-radius: 8px;
-	--basi-radius-lg: 12px;
-	--basi-sidebar-width: 272px;
-	--basi-material-width: 280px;
+	--bLayers-font: "Segoe UI", system-ui, "Catamaran", sans-serif;
+	--bLayers-font-brand: "Space Grotesk", "Segoe UI", system-ui, sans-serif;
+	--bLayers-radius: 8px;
+	--bLayers-radius-lg: 12px;
+	--bLayers-sidebar-width: 272px;
+	--bLayers-material-width: 280px;
 	--success-green: #0f7b3a;
 	--error-red: #d14d41;
 }
@@ -18,66 +18,66 @@
 :root,
 :root[data-theme="light"] {
 	color-scheme: light;
-	--basi-page: #f7f6f3;
-	--basi-panel: #ffffff;
-	--basi-panel-bg: #ffffff;
-	--basi-panel-solid: #ffffff;
-	--basi-float-bg: #ffffff;
-	--basi-well: #191919;
-	--basi-stage-bg: #191919;
-	--basi-muted: #787774;
-	--basi-row: #ffffff;
-	--basi-row-hover: #efeee9;
-	--basi-selected: #e7f0f8;
-	--basi-border: #e3e2de;
-	--basi-input: #f7f6f3;
-	--basi-input-active: #efece4;
-	--basi-chip: #f1efe8;
-	--basi-accent: #2383e2;
-	--basi-accent-hover: #1a73cc;
-	--basi-accent-text: #ffffff;
-	--basi-shadow: 0 1px 2px rgba(15, 15, 15, 0.06), 0 0 0 1px var(--basi-border);
+	--bLayers-page: #f7f6f3;
+	--bLayers-panel: #ffffff;
+	--bLayers-panel-bg: #ffffff;
+	--bLayers-panel-solid: #ffffff;
+	--bLayers-float-bg: #ffffff;
+	--bLayers-well: #191919;
+	--bLayers-stage-bg: #191919;
+	--bLayers-muted: #787774;
+	--bLayers-row: #ffffff;
+	--bLayers-row-hover: #efeee9;
+	--bLayers-selected: #e7f0f8;
+	--bLayers-border: #e3e2de;
+	--bLayers-input: #f7f6f3;
+	--bLayers-input-active: #efece4;
+	--bLayers-chip: #f1efe8;
+	--bLayers-accent: #2383e2;
+	--bLayers-accent-hover: #1a73cc;
+	--bLayers-accent-text: #ffffff;
+	--bLayers-shadow: 0 1px 2px rgba(15, 15, 15, 0.06), 0 0 0 1px var(--bLayers-border);
 	--text-col: #37352f;
-	--border-col: var(--basi-border);
-	--input-bg: var(--basi-input);
+	--border-col: var(--bLayers-border);
+	--input-bg: var(--bLayers-input);
 	--input-bg-checked: #d6e8f7;
-	--input-bg-active: var(--basi-input-active);
-	--dark-bg: var(--basi-accent);
-	--dark-bg-hover: var(--basi-accent-hover);
+	--input-bg-active: var(--bLayers-input-active);
+	--dark-bg: var(--bLayers-accent);
+	--dark-bg-hover: var(--bLayers-accent-hover);
 	--dark-bg-active: #155fa8;
-	--dark-border: var(--basi-accent);
+	--dark-border: var(--bLayers-accent);
 }
 
 :root[data-theme="dark"] {
 	color-scheme: dark;
-	--basi-page: #191919;
-	--basi-panel: #202020;
-	--basi-panel-bg: #202020;
-	--basi-panel-solid: #202020;
-	--basi-float-bg: #202020;
-	--basi-well: #0f0f0f;
-	--basi-stage-bg: #0f0f0f;
-	--basi-muted: #9b9b97;
-	--basi-row: #202020;
-	--basi-row-hover: #2a2a2a;
-	--basi-selected: #243140;
-	--basi-border: rgba(255, 255, 255, 0.09);
-	--basi-input: #2a2a2a;
-	--basi-input-active: #323232;
-	--basi-chip: #2d2d2d;
-	--basi-accent: #529cca;
-	--basi-accent-hover: #6aadd4;
-	--basi-accent-text: #0f0f0f;
-	--basi-shadow: 0 1px 2px rgba(0, 0, 0, 0.45), 0 0 0 1px var(--basi-border);
+	--bLayers-page: #191919;
+	--bLayers-panel: #202020;
+	--bLayers-panel-bg: #202020;
+	--bLayers-panel-solid: #202020;
+	--bLayers-float-bg: #202020;
+	--bLayers-well: #0f0f0f;
+	--bLayers-stage-bg: #0f0f0f;
+	--bLayers-muted: #9b9b97;
+	--bLayers-row: #202020;
+	--bLayers-row-hover: #2a2a2a;
+	--bLayers-selected: #243140;
+	--bLayers-border: rgba(255, 255, 255, 0.09);
+	--bLayers-input: #2a2a2a;
+	--bLayers-input-active: #323232;
+	--bLayers-chip: #2d2d2d;
+	--bLayers-accent: #529cca;
+	--bLayers-accent-hover: #6aadd4;
+	--bLayers-accent-text: #0f0f0f;
+	--bLayers-shadow: 0 1px 2px rgba(0, 0, 0, 0.45), 0 0 0 1px var(--bLayers-border);
 	--text-col: rgba(255, 255, 255, 0.86);
-	--border-col: var(--basi-border);
-	--input-bg: var(--basi-input);
+	--border-col: var(--bLayers-border);
+	--input-bg: var(--bLayers-input);
 	--input-bg-checked: #2a3d4d;
-	--input-bg-active: var(--basi-input-active);
-	--dark-bg: var(--basi-accent);
-	--dark-bg-hover: var(--basi-accent-hover);
+	--input-bg-active: var(--bLayers-input-active);
+	--dark-bg: var(--bLayers-accent);
+	--dark-bg-hover: var(--bLayers-accent-hover);
 	--dark-bg-active: #3d87b5;
-	--dark-border: var(--basi-accent);
+	--dark-border: var(--bLayers-accent);
 	--success-green: #4caf6a;
 	--error-red: #e07068;
 }
@@ -85,34 +85,34 @@
 @media (prefers-color-scheme: dark) {
 	:root:not([data-theme]) {
 		color-scheme: dark;
-		--basi-page: #191919;
-		--basi-panel: #202020;
-		--basi-panel-bg: #202020;
-		--basi-panel-solid: #202020;
-		--basi-float-bg: #202020;
-		--basi-well: #0f0f0f;
-		--basi-stage-bg: #0f0f0f;
-		--basi-muted: #9b9b97;
-		--basi-row: #202020;
-		--basi-row-hover: #2a2a2a;
-		--basi-selected: #243140;
-		--basi-border: rgba(255, 255, 255, 0.09);
-		--basi-input: #2a2a2a;
-		--basi-input-active: #323232;
-		--basi-chip: #2d2d2d;
-		--basi-accent: #529cca;
-		--basi-accent-hover: #6aadd4;
-		--basi-accent-text: #0f0f0f;
-		--basi-shadow: 0 1px 2px rgba(0, 0, 0, 0.45), 0 0 0 1px var(--basi-border);
+		--bLayers-page: #191919;
+		--bLayers-panel: #202020;
+		--bLayers-panel-bg: #202020;
+		--bLayers-panel-solid: #202020;
+		--bLayers-float-bg: #202020;
+		--bLayers-well: #0f0f0f;
+		--bLayers-stage-bg: #0f0f0f;
+		--bLayers-muted: #9b9b97;
+		--bLayers-row: #202020;
+		--bLayers-row-hover: #2a2a2a;
+		--bLayers-selected: #243140;
+		--bLayers-border: rgba(255, 255, 255, 0.09);
+		--bLayers-input: #2a2a2a;
+		--bLayers-input-active: #323232;
+		--bLayers-chip: #2d2d2d;
+		--bLayers-accent: #529cca;
+		--bLayers-accent-hover: #6aadd4;
+		--bLayers-accent-text: #0f0f0f;
+		--bLayers-shadow: 0 1px 2px rgba(0, 0, 0, 0.45), 0 0 0 1px var(--bLayers-border);
 		--text-col: rgba(255, 255, 255, 0.86);
-		--border-col: var(--basi-border);
-		--input-bg: var(--basi-input);
+		--border-col: var(--bLayers-border);
+		--input-bg: var(--bLayers-input);
 		--input-bg-checked: #2a3d4d;
-		--input-bg-active: var(--basi-input-active);
-		--dark-bg: var(--basi-accent);
-		--dark-bg-hover: var(--basi-accent-hover);
+		--input-bg-active: var(--bLayers-input-active);
+		--dark-bg: var(--bLayers-accent);
+		--dark-bg-hover: var(--bLayers-accent-hover);
 		--dark-bg-active: #3d87b5;
-		--dark-border: var(--basi-accent);
+		--dark-border: var(--bLayers-accent);
 		--success-green: #4caf6a;
 		--error-red: #e07068;
 	}

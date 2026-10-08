@@ -3,13 +3,100 @@
  * Atlas and item icons share this so they do not hit divergent CDN URLs.
  */
 
-import fetchers from "../../fetchers.js";
+import fetchers from "../engine/fetchers.js";
 import {
 	VANILLA_SAMPLES_TAG,
 	VANILLA_SAMPLES_FALLBACK_TAGS
 } from "../../data/packPins.js";
 import { jsonc, stringToImageData, toImage, toImageData } from "../../utils.js";
 import { defaultVersionContext, packTags } from "./VersionContext.js";
+import { preferTgaForVanillaPath } from "./vanillaTextureExt.js";
+
+/**
+ * Older pins are only for a file the current pin does not have.
+ * A 403 or 5xx is a CDN failure on this URL, not a reason to walk tags.
+ * @param {number} status
+ */
+export function walksToNextPackTag(status) {
+	return status === 404;
+}
+
+/**
+ * Remember a success or a real miss. Anything else is retried on the next call.
+ * @param {number} status
+ */
+export function shouldCachePackResult(status) {
+	return (status >= 200 && status < 300) || walksToNextPackTag(status);
+}
+
+/**
+ * Share one in-flight load. Write the settled map only when the status is cacheable.
+ * @template T
+ * @param {Map<string, Promise<T>>} settled
+ * @param {Map<string, Promise<{ value: T, status: number }>>} flight
+ * @param {string} key
+ * @param {() => Promise<{ value: T, status: number }>} load
+ * @returns {Promise<T>}
+ */
+function cachedResult(settled, flight, key, load) {
+	const hit = settled.get(key);
+	if (hit) return hit;
+	let pending = flight.get(key);
+	if (!pending) {
+		pending = load().finally(() => {
+			if (flight.get(key) === pending) flight.delete(key);
+		});
+		flight.set(key, pending);
+	}
+	return pending.then(({ value, status }) => {
+		if (shouldCachePackResult(status) && !settled.has(key)) {
+			settled.set(key, Promise.resolve(value));
+		}
+		return value;
+	});
+}
+
+/**
+ * Local color file, `.png` then `.tga`. Not stored in the vanilla decode cache.
+ * @param {string} pathNoExt
+ * @param {{ getLocalFile?: (path: string) => Blob|File|null }} [stack]
+ * @returns {{ imageRes: Response, ext: ".png"|".tga" } | null}
+ */
+export function readLocalColorFile(pathNoExt, stack) {
+	const getLocalFile = stack?.getLocalFile;
+	if (typeof getLocalFile !== "function") return null;
+	const p = normPath(pathNoExt);
+	for (const ext of [".png", ".tga"]) {
+		let file = null;
+		try {
+			file = getLocalFile.call(stack, `${p}${ext}`);
+		} catch {
+			continue;
+		}
+		if (file) return { imageRes: new Response(file), ext };
+	}
+	return null;
+}
+
+/**
+ * @param {Response|null|undefined} imageRes
+ * @param {string|null|undefined} ext
+ * @returns {Promise<{ imageData: ImageData, imageIsTga: boolean } | null>}
+ */
+async function imageDataFromResponse(imageRes, ext) {
+	if (imageRes && ext === ".png") {
+		const image = await toImage(imageRes);
+		return { imageData: await toImageData(image), imageIsTga: false };
+	}
+	if (imageRes && ext === ".tga") {
+		const { default: TGALoader } = await import("tga-js");
+		const loader = new TGALoader();
+		loader.load(new Uint8Array(await imageRes.arrayBuffer()));
+		return { imageData: loader.getImageData(), imageIsTga: true };
+	}
+	return null;
+}
+
 
 /**
  * @param {string} p
@@ -36,18 +123,20 @@ function fetcherForTag(tag) {
 export default class PackAssetStore {
 	/** @type {Map<string, Promise<object|null>>} */
 	#json = new Map();
-	/** tag → Map<pathNoExt, ".png"|".tga"|""> */
-	#extByTag = new Map();
+	/** @type {Map<string, Promise<{ value: object|null, status: number }>>} */
+	#jsonFlight = new Map();
 	/** `${tag}:${resource_pack/...}` known missing */
 	#missing = new Set();
 	/** pathNoExt → Promise<decoded> */
 	#decoded = new Map();
+	/** @type {Map<string, Promise<{ value: object, status: number }>>} */
+	#decodedFlight = new Map();
 	/** pathNoExt → object URL (PNG) */
 	#iconUrls = new Map();
 	#prewarm = null;
 
 	/**
-	 * Load texture_list + pack JSON for every tag in ctx. Safe to call often.
+	 * Load pack JSON for the atlas (blocks, terrain, items). Safe to call often.
 	 * @param {import("./VersionContext.js").BedrockVersionContext} [ctx]
 	 */
 	prewarm(ctx) {
@@ -64,81 +153,30 @@ export default class PackAssetStore {
 	 * @param {import("./VersionContext.js").BedrockVersionContext} [ctx]
 	 */
 	async #runPrewarm(ctx) {
-		const tags = packTags(ctx);
-		const lists = await Promise.all(tags.map(tag => this.#indexTextureList(tag)));
 		await Promise.all([
 			this.getJson("resource_pack/blocks.json", ctx),
 			this.getJson("resource_pack/textures/terrain_texture.json", ctx),
 			this.getJson("resource_pack/textures/item_texture.json", ctx)
 		]);
-		const n = lists.reduce((a, m) => a + m, 0);
-		console.info(
-			`[basi] pack assets ready tags=${tags.join(",")} texture_list_entries=${n}`
-		);
+		const tag = ctx?.renderPackTag || VANILLA_SAMPLES_TAG;
+		console.info(`[bLayers] pack assets ready tag=${tag}`);
 	}
 
 	/**
-	 * @param {string} tag
-	 * @returns {Promise<number>}
-	 */
-	async #indexTextureList(tag) {
-		if (this.#extByTag.has(tag)) return this.#extByTag.get(tag).size;
-		const map = new Map();
-		this.#extByTag.set(tag, map);
-		try {
-			const fetchTag = fetcherForTag(tag);
-			const res = await fetchTag("resource_pack/textures/texture_list.json");
-			if (!res?.ok) return 0;
-			const data = await jsonc(res);
-			const arr = Array.isArray(data)
-				? data
-				: (data?.texture_list ?? data?.textures ?? []);
-			if (!Array.isArray(arr)) return 0;
-			for (const entry of arr) {
-				const s = String(entry).replace(/\\/g, "/");
-				const m = s.match(/^(.*)\.(png|tga)$/i);
-				if (m) map.set(normPath(m[1]), `.${m[2].toLowerCase()}`);
-				else map.set(normPath(s), "");
-			}
-		} catch (e) {
-			console.debug("[basi] texture_list.json", tag, e);
-		}
-		return map.size;
-	}
-
-	/**
+	 * The color extension for this stem. Samples ship one file, never both.
 	 * @param {string} pathNoExt
-	 * @param {import("./VersionContext.js").BedrockVersionContext} [ctx]
-	 * @returns {string[]}
+	 * @returns {".png"|".tga"}
 	 */
-	extensionsToTry(pathNoExt, ctx) {
+	extensionsToTry(pathNoExt) {
 		const p = normPath(pathNoExt);
-		for (const tag of packTags(ctx)) {
-			const known = this.#extByTag.get(tag)?.get(p);
-			if (known === ".png" || known === ".tga") return [known];
-		}
-		return [".png", ".tga"];
-	}
-
-	/**
-	 * @param {string} tag
-	 * @param {string} pathNoExt
-	 * @param {string} ext
-	 */
-	#rememberExt(tag, pathNoExt, ext) {
-		let map = this.#extByTag.get(tag);
-		if (!map) {
-			map = new Map();
-			this.#extByTag.set(tag, map);
-		}
-		map.set(normPath(pathNoExt), ext);
+		return preferTgaForVanillaPath(p) ? ".tga" : ".png";
 	}
 
 	/**
 	 * Vanilla file under the repo (`resource_pack/...`).
 	 * @param {string} filePath
 	 * @param {import("./VersionContext.js").BedrockVersionContext} [ctx]
-	 * @returns {Promise<{ res: Response|null, tag: string|null }>}
+	 * @returns {Promise<{ res: Response|null, tag: string|null, status: number }>}
 	 */
 	async fetchVanilla(filePath, ctx) {
 		const path = filePath.startsWith("resource_pack/")
@@ -149,13 +187,17 @@ export default class PackAssetStore {
 			if (this.#missing.has(missKey)) continue;
 			try {
 				const res = await fetcherForTag(tag)(path);
-				if (res?.ok) return { res, tag };
-				this.#missing.add(missKey);
+				if (res?.ok) return { res, tag, status: res.status };
+				if (walksToNextPackTag(res?.status)) {
+					this.#missing.add(missKey);
+					continue;
+				}
+				return { res: null, tag: null, status: res?.status ?? 0 };
 			} catch {
-				this.#missing.add(missKey);
+				return { res: null, tag: null, status: 0 };
 			}
 		}
-		return { res: null, tag: null };
+		return { res: null, tag: null, status: 404 };
 	}
 
 	/**
@@ -175,96 +217,90 @@ export default class PackAssetStore {
 	getJson(filePath, ctx) {
 		const tag = ctx?.renderPackTag || VANILLA_SAMPLES_TAG;
 		const key = `${tag}:${filePath}`;
-		if (this.#json.has(key)) return this.#json.get(key);
-		const p = this.fetchVanilla(filePath, ctx).then(async ({ res }) => {
-			if (!res?.ok) return null;
-			return jsonc(res);
-		}).catch(err => {
-			this.#json.delete(key);
-			throw err;
+		return cachedResult(this.#json, this.#jsonFlight, key, async () => {
+			const { res, status } = await this.fetchVanilla(filePath, ctx);
+			if (res?.ok) return { value: await jsonc(res), status };
+			return { value: null, status };
 		});
-		this.#json.set(key, p);
-		return p;
 	}
 
 	/**
+	 * One extension, then {@link fetchVanilla} walks pins.
 	 * @param {string} pathNoExt pack-relative, no extension
 	 * @param {import("./VersionContext.js").BedrockVersionContext} [ctx]
-	 * @param {{ tryLocal?: (pathWithExt: string) => Promise<Response|null>|Response|null }} [opts]
+	 * @returns {Promise<{ imageRes: Response|null, ext: string|null, tag: string|null, status: number }>}
 	 */
-	async fetchTexture(pathNoExt, ctx, opts = {}) {
+	async fetchTexture(pathNoExt, ctx) {
+		await this.prewarm(ctx);
 		const p = normPath(pathNoExt);
-		const exts = this.extensionsToTry(p, ctx);
-		if (opts.tryLocal) {
-			for (const ext of exts) {
-				try {
-					const local = await opts.tryLocal(`${p}${ext}`);
-					if (local?.ok) return { imageRes: local, ext, tag: "local" };
-				} catch {
-					/* next */
-				}
-			}
+		const ext = this.extensionsToTry(p);
+		const found = await this.fetchVanilla(`${p}${ext}`, ctx);
+		if (found.res?.ok) {
+			return { imageRes: found.res, ext, tag: found.tag, status: found.status };
 		}
-		for (const tag of packTags(ctx)) {
-			const tryExts = this.extensionsToTry(p, { renderPackTag: tag, fallbackPackTags: [] });
-			for (const ext of tryExts) {
-				const missKey = `${tag}:resource_pack/${p}${ext}`;
-				if (this.#missing.has(missKey)) continue;
-				const { res } = await this.fetchVanilla(`${p}${ext}`, {
-					renderPackTag: tag,
-					fallbackPackTags: [],
-					label: tag,
-					mode: "upgrade"
-				});
-				if (res?.ok) {
-					this.#rememberExt(tag, p, ext);
-					return { imageRes: res, ext, tag };
-				}
-			}
-		}
-		return { imageRes: null, ext: null, tag: null };
+		return { imageRes: null, ext: null, tag: null, status: found.status };
 	}
 
 	/**
-	 * Decode PNG/TGA to ImageData. Atlas may use a placeholder on miss.
+	 * Decode a vanilla PNG/TGA to ImageData. Atlas may use a placeholder on miss.
+	 * Local packs are not part of this cache. Use {@link decodeTexturePreferLocal}.
 	 * @param {string} pathNoExt
 	 * @param {object} [opts]
 	 * @param {boolean} [opts.placeholder]
-	 * @param {(pathWithExt: string) => Promise<Response|null>|Response|null} [opts.tryLocal]
 	 * @param {import("./VersionContext.js").BedrockVersionContext} [opts.ctx]
 	 */
 	decodeTexture(pathNoExt, opts = {}) {
 		const p = normPath(pathNoExt);
 		const placeholder = opts.placeholder !== false;
-		const tag = (opts.ctx ?? defaultVersionContext()).renderPackTag || VANILLA_SAMPLES_TAG;
+		const ctx = opts.ctx ?? defaultVersionContext();
+		const tag = ctx.renderPackTag || VANILLA_SAMPLES_TAG;
 		const cacheKey = `${tag}|${p}|${placeholder ? "ph" : "noph"}`;
-		if (this.#decoded.has(cacheKey)) return this.#decoded.get(cacheKey);
-		const promise = (async () => {
-			const { imageRes, ext } = await this.fetchTexture(p, opts.ctx ?? defaultVersionContext(), {
-				tryLocal: opts.tryLocal
-			});
-			let imageData;
-			let imageIsTga = ext === ".tga";
-			let imageNotFound = false;
-			if (imageRes && ext === ".png") {
-				const image = await toImage(imageRes);
-				imageData = await toImageData(image);
-			} else if (imageRes && imageIsTga) {
-				const { default: TGALoader } = await import("tga-js");
-				const loader = new TGALoader();
-				loader.load(new Uint8Array(await imageRes.arrayBuffer()));
-				imageData = loader.getImageData();
-			} else {
-				imageNotFound = true;
-				imageData = placeholder ? stringToImageData(p) : null;
+		return cachedResult(this.#decoded, this.#decodedFlight, cacheKey, async () => {
+			const { imageRes, ext, status } = await this.fetchTexture(p, ctx);
+			const decoded = await imageDataFromResponse(imageRes, ext);
+			if (decoded) {
+				return { value: { ...decoded, imageNotFound: false }, status };
 			}
-			return { imageData, imageIsTga, imageNotFound };
-		})().catch(err => {
-			this.#decoded.delete(cacheKey);
-			throw err;
+			return {
+				value: {
+					imageData: placeholder ? stringToImageData(p) : null,
+					imageIsTga: false,
+					imageNotFound: true
+				},
+				status
+			};
 		});
-		this.#decoded.set(cacheKey, promise);
-		return promise;
+	}
+
+	/**
+	 * Local `.png` then `.tga`, then the vanilla pin. A local hit is not written into the pin cache.
+	 * @param {string} pathNoExt
+	 * @param {{ getLocalFile?: (path: string) => Blob|File|null }} [stack]
+	 * @param {object} [opts]
+	 * @param {boolean} [opts.placeholder]
+	 * @param {import("./VersionContext.js").BedrockVersionContext} [opts.ctx]
+	 */
+	async decodeTexturePreferLocal(pathNoExt, stack, opts = {}) {
+		const local = readLocalColorFile(pathNoExt, stack);
+		if (local) {
+			const decoded = await imageDataFromResponse(local.imageRes, local.ext);
+			if (decoded) return { ...decoded, imageNotFound: false };
+		}
+		return this.decodeTexture(pathNoExt, opts);
+	}
+
+	/**
+	 * Color texture as an image. Local pack first, then the pin.
+	 * @param {string} pathNoExt
+	 * @param {{ getLocalFile?: (path: string) => Blob|File|null }} [resourcePackStack]
+	 * @returns {Promise<HTMLImageElement|null>}
+	 */
+	async loadColorImage(pathNoExt, resourcePackStack) {
+		const { imageData, imageNotFound } = await this.decodeTexturePreferLocal(pathNoExt, resourcePackStack, {
+			placeholder: false
+		});
+		if (imageNotFound || !imageData) return null;
+		return toImage(imageData);
 	}
 
 	/**
@@ -280,10 +316,7 @@ export default class PackAssetStore {
 			placeholder: false,
 			ctx: ctx ?? defaultVersionContext()
 		});
-		if (imageNotFound || !imageData) {
-			this.#iconUrls.set(p, null);
-			return null;
-		}
+		if (imageNotFound || !imageData) return null;
 		const can = document.createElement("canvas");
 		can.width = imageData.width;
 		can.height = imageData.height;

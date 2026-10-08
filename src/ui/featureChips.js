@@ -16,7 +16,7 @@ import { contrastText } from "../viewer/catalog.js";
 export function createFeatureChip(feature, opts = {}) {
 	const el = document.createElement(opts.interactive ? "button" : "span");
 	if (opts.interactive) el.type = "button";
-	el.className = "basi-feature-chip" + (opts.assigned ? " is-assigned" : "");
+	el.className = "bLayers-feature-chip" + (opts.assigned ? " is-assigned" : "");
 	el.dataset.featureId = feature.id;
 	el.style.setProperty("--feat-color", feature.color || "#64748b");
 	el.style.color = contrastText(feature.color || "#64748b");

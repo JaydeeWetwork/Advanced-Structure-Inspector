@@ -5,15 +5,15 @@ testOnSourceCode(async page => {
 		// TODO: Fix this test since Chrome can't import text files and Puppeteer doesn't support the latest Firefox version yet
 		return;
 		
-		/** @type {typeof import("../../src/ResourcePackStack.js").default} */
+		/** @type {typeof import("../../src/viewer/engine/ResourcePackStack.js").default} */
 		const ResourcePackStack = (await import("../ResourcePackStack.js")).default;
 		/** @type {typeof import("../../src/MaterialList.js").default} */
 		const MaterialList = (await import("../MaterialList.js")).default;
-		/** @type {import("../../src/holoprint/HoloPrint.js")} */
-		const HoloPrint = await import("../../src/holoprint/HoloPrint.js");
+		/** @type {import("../../src/pack/HoloPrint.js")} */
+		const HoloPrint = await import("../../src/pack/HoloPrint.js");
 		/** @type {import("../../src/utils.js").jsonc} */
 		const jsonc = (await import("../utils.js")).jsonc;
-		/** @type {typeof import("../../src/fetchers.js").default} */
+		/** @type {typeof import("../../src/viewer/engine/fetchers.js").default} */
 		const fetchers = (await import("../fetchers.js")).default;
 		
 		let rps = new ResourcePackStack();

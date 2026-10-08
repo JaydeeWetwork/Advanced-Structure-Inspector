@@ -232,10 +232,50 @@
 			]
 		}
 	],
-	"fence": [ // fences don't have block states, we'll have to read blocks next to each other :((
+	"fence": [
 		{
 			"pos": [6, 0, 6],
 			"size": [4, 16, 4]
+		},
+		{
+			"if": "minecraft:connection_north == 1",
+			"pos": [7, 6, 0],
+			"size": [2, 3, 6]
+		},
+		{
+			"if": "minecraft:connection_north == 1",
+			"pos": [7, 12, 0],
+			"size": [2, 3, 6]
+		},
+		{
+			"if": "minecraft:connection_south == 1",
+			"pos": [7, 6, 10],
+			"size": [2, 3, 6]
+		},
+		{
+			"if": "minecraft:connection_south == 1",
+			"pos": [7, 12, 10],
+			"size": [2, 3, 6]
+		},
+		{
+			"if": "minecraft:connection_east == 1",
+			"pos": [0, 6, 7],
+			"size": [6, 3, 2]
+		},
+		{
+			"if": "minecraft:connection_east == 1",
+			"pos": [0, 12, 7],
+			"size": [6, 3, 2]
+		},
+		{
+			"if": "minecraft:connection_west == 1",
+			"pos": [10, 6, 7],
+			"size": [6, 3, 2]
+		},
+		{
+			"if": "minecraft:connection_west == 1",
+			"pos": [10, 12, 7],
+			"size": [6, 3, 2]
 		}
 	],
 	"bamboo_fence": [
@@ -247,6 +287,46 @@
 				"up": [4, 0],
 				"down": [4, 0]
 			}
+		},
+		{
+			"if": "minecraft:connection_north == 1",
+			"pos": [7, 6, 0],
+			"size": [2, 3, 6]
+		},
+		{
+			"if": "minecraft:connection_north == 1",
+			"pos": [7, 12, 0],
+			"size": [2, 3, 6]
+		},
+		{
+			"if": "minecraft:connection_south == 1",
+			"pos": [7, 6, 10],
+			"size": [2, 3, 6]
+		},
+		{
+			"if": "minecraft:connection_south == 1",
+			"pos": [7, 12, 10],
+			"size": [2, 3, 6]
+		},
+		{
+			"if": "minecraft:connection_east == 1",
+			"pos": [0, 6, 7],
+			"size": [6, 3, 2]
+		},
+		{
+			"if": "minecraft:connection_east == 1",
+			"pos": [0, 12, 7],
+			"size": [6, 3, 2]
+		},
+		{
+			"if": "minecraft:connection_west == 1",
+			"pos": [10, 6, 7],
+			"size": [6, 3, 2]
+		},
+		{
+			"if": "minecraft:connection_west == 1",
+			"pos": [10, 12, 7],
+			"size": [6, 3, 2]
 		}
 	],
 	"template_fence_gate": [
@@ -710,7 +790,7 @@
 			"pivot": [11, 0, 8]
 		}
 	],
-	"redstone_dust": [ // power tint only — neighbour arms not stored in Bedrock structures
+	"redstone_dust": [ // bundled saves store redstone_signal only, so this stays one square
 		{
 			"pos": [0, 0.125, 0],
 			"size": [16, 0, 16],
@@ -2512,7 +2592,7 @@
 	],
 	"piston": [
 		{
-			"if": "entity.State == 0 || entity.State == 3", // unextended or pulling
+			"if": "entity.State??0 == 0 || entity.State??0 == 3", // unextended or pulling; missing BE = retracted
 			"pos": [0, 0, 0],
 			"size": [16, 16, 16],
 			"textures": {
@@ -2522,12 +2602,17 @@
 			"flip_textures_vertically": ["up"]
 		},
 		{
-			"if": "entity.State == 1 || entity.State == 2", // pushing or extended
+			"if": "entity.State??0 == 1 || entity.State??0 == 2", // pushing or extended
 			"pos": [0, 0, 0],
-			"size": [16, 12, 16]
+			"size": [16, 12, 16],
+			"textures": {
+				"up": "up",
+				"down": "down",
+				"*": "side"
+			}
 		},
 		{
-			"if": "entity.State == 1 || entity.State == 2", // pushing or extended
+			"if": "entity.State??0 == 1 || entity.State??0 == 2",
 			"pos": [5, 12, 5],
 			"size": [6, 8, 6],
 			"textures": {
@@ -2537,11 +2622,11 @@
 			"uv": {
 				"side": [64, 24],
 				"up": [70, 18],
-				"down": [70, 18] // todo: cull this face
+				"down": [70, 18]
 			}
 		},
 		{
-			"if": "entity.State == 1 || entity.State == 2", // pushing or extended
+			"if": "entity.State??0 == 1 || entity.State??0 == 2",
 			"pos": [6, 20, 6],
 			"size": [4, 8, 4],
 			"textures": {
@@ -2553,17 +2638,13 @@
 			}
 		},
 		{
-			"if": "entity.State == 1 || entity.State == 2", // pushing or extended
+			"if": "entity.State??0 == 1 || entity.State??0 == 2",
 			"pos": [0, 28, 0],
 			"size": [16, 4, 16],
 			"textures": {
-				"*": "#tex"
-			},
-			"texture_size": [128, 32],
-			"uv": {
-				"side": [0, 16],
-				"down": [32, 0],
-				"up": [16, 0]
+				"up": "carried.up",
+				"down": "up",
+				"*": "side"
 			},
 			"flip_textures_horizontally": ["up"],
 			"flip_textures_vertically": ["up"]
@@ -2621,10 +2702,50 @@
 			}
 		}
 	],
-	"glass_pane": [ // todo: add connections to other blocks correctly
+	"glass_pane": [
 		{
+			"pos": [7, 0, 7],
+			"size": [2, 16, 2],
+			"textures": {
+				"east": "up",
+				"up": "east",
+				"down": "east"
+			}
+		},
+		{
+			"if": "minecraft:connection_north == 1",
 			"pos": [7, 0, 0],
-			"size": [2, 16, 16],
+			"size": [2, 16, 7],
+			"textures": {
+				"east": "up",
+				"up": "east",
+				"down": "east"
+			}
+		},
+		{
+			"if": "minecraft:connection_south == 1",
+			"pos": [7, 0, 9],
+			"size": [2, 16, 7],
+			"textures": {
+				"east": "up",
+				"up": "east",
+				"down": "east"
+			}
+		},
+		{
+			"if": "minecraft:connection_east == 1",
+			"pos": [0, 0, 7],
+			"size": [7, 16, 2],
+			"textures": {
+				"east": "up",
+				"up": "east",
+				"down": "east"
+			}
+		},
+		{
+			"if": "minecraft:connection_west == 1",
+			"pos": [9, 0, 7],
+			"size": [7, 16, 2],
 			"textures": {
 				"east": "up",
 				"up": "east",
@@ -3439,50 +3560,65 @@
 			"terrain_texture": "powder_snow"
 		}
 	],
-	"coral_fan": [
+	"coral_fan": [ // four low blades, each 16 long so the tips pass the cell, tilted 22.5° up from the center
 		{
-			"pos": [0, 1, 8],
+			"pos": [8, 0, 0],
+			"size": [16, 0, 16],
+			"rot": [0, 0, -22.5],
+			"pivot": [8, 0, 0],
+			"textures": { "*": "up" },
+			"uv": { "*": [0, 0] },
+			"uv_sizes": { "*": [16, 16] },
+			"uv_rot": { "up": 270 }
+		},
+		{
+			"pos": [-8, 0, 0],
+			"size": [16, 0, 16],
+			"rot": [0, 0, 22.5],
+			"pivot": [8, 0, 0],
+			"textures": { "*": "up" },
+			"uv": { "*": [0, 0] },
+			"uv_sizes": { "*": [16, 16] },
+			"uv_rot": { "up": 90 }
+		},
+		{
+			"pos": [0, 0, 8],
 			"size": [16, 0, 16],
 			"rot": [22.5, 0, 0],
-			"pivot": [8, 0, 8],
-			"uv": {
-				"*": [0, 0]
-			}
+			"pivot": [0, 0, 8],
+			"textures": { "*": "up" },
+			"uv": { "*": [0, 0] },
+			"uv_sizes": { "*": [16, 16] },
+			"uv_rot": { "up": 180 }
 		},
 		{
-			"pos": [0, 1, 8],
+			"pos": [0, 0, -8],
 			"size": [16, 0, 16],
-			"rot": [22.5, 90, 0],
-			"pivot": [8, 0, 8],
-			"uv": {
-				"*": [0, 0]
-			}
-		},
-		{
-			"pos": [0, 1, 8],
-			"size": [16, 0, 16],
-			"rot": [22.5, 180, 0],
-			"pivot": [8, 0, 8],
-			"uv": {
-				"*": [0, 0]
-			}
-		},
-		{
-			"pos": [0, 1, 8],
-			"size": [16, 0, 16],
-			"rot": [22.5, -90, 0],
-			"pivot": [8, 0, 8],
-			"uv": {
-				"*": [0, 0]
-			}
+			"rot": [-22.5, 0, 0],
+			"pivot": [0, 0, 8],
+			"textures": { "*": "up" },
+			"uv": { "*": [0, 0] },
+			"uv_sizes": { "*": [16, 16] }
 		}
 	],
-	"coral_wall_fan": [
+	"coral_wall_fan": [ // two horizontal sheets hinged near the south face, opening north. coral_direction turns that
 		{
-			"pos": [0, 8, 0],
-			"size": [16, 0, 16],
-			"rot": [11.25, 0, 0],
-			"pivot": [8, 8, 0]
+			"pos": [0, 8, -1.1535],
+			"size": [16, 0, 17.3183],
+			"rot": [-22.5, 0, 0],
+			"pivot": [8, 8, 14],
+			"textures": { "*": "up" },
+			"uv": { "*": [0, 0] },
+			"uv_sizes": { "*": [16, 16] }
+		},
+		{
+			"pos": [0, 8, -1.1535],
+			"size": [16, 0, 17.3183],
+			"rot": [22.5, 0, 0],
+			"pivot": [8, 8, 14],
+			"textures": { "*": "up" },
+			"uv": { "*": [0, 0] },
+			"uv_sizes": { "*": [16, 16] }
 		}
 	],
 	"lightning_rod": [
@@ -5581,6 +5717,49 @@
 				"geo_file": "models/entity/copper_golem_star.geo.json",
 				"texture": "textures/entity/copper_golem/${#tex}"
 			}
+		}
+	],
+	"straw_bed": [
+		{
+			"if": "head_piece_bit == 1",
+			"copy_geometry": {
+				"identifier": "minecraft:geometry.straw_bed_head",
+				"geo_file": "models/blocks/straw_bed_head.geo.json",
+				"texture": "textures/blocks/straw_bed"
+			}
+		},
+		{
+			"if": "head_piece_bit == 0",
+			"copy_geometry": {
+				"identifier": "minecraft:geometry.straw_bed_foot",
+				"geo_file": "models/blocks/straw_bed_foot.geo.json",
+				"texture": "textures/blocks/straw_bed"
+			}
+		}
+	],
+	"shelf_mushroom": [
+		{
+			"if": "growth ?? 0 == 0",
+			"copy_geometry": {
+				"identifier": "minecraft:geometry.shelf_mushroom_small",
+				"geo_file": "models/blocks/shelf_mushroom_small.geo.json",
+				"texture": "textures/blocks/shelf_mushroom_small"
+			}
+		},
+		{
+			"if": "growth ?? 0 == 1",
+			"copy_geometry": {
+				"identifier": "minecraft:geometry.shelf_mushroom_large",
+				"geo_file": "models/blocks/shelf_mushroom_large.geo.json",
+				"texture": "textures/blocks/shelf_mushroom_large"
+			}
+		}
+	],
+	"structure_void": [],
+	"camera": [
+		{
+			"pos": [4, 0, 5],
+			"size": [8, 8, 6]
 		}
 	],
 	//"debug_auto_uv_4": [{"pos":[0,0,0],"size":[4,4,4]},{"pos":[0,0,4],"size":[4,4,4]},{"pos":[0,0,8],"size":[4,4,4]},{"pos":[0,0,12],"size":[4,4,4]},{"pos":[0,4,0],"size":[4,4,4]},{"pos":[0,4,4],"size":[4,4,4]},{"pos":[0,4,8],"size":[4,4,4]},{"pos":[0,4,12],"size":[4,4,4]},{"pos":[0,8,0],"size":[4,4,4]},{"pos":[0,8,4],"size":[4,4,4]},{"pos":[0,8,8],"size":[4,4,4]},{"pos":[0,8,12],"size":[4,4,4]},{"pos":[0,12,0],"size":[4,4,4]},{"pos":[0,12,4],"size":[4,4,4]},{"pos":[0,12,8],"size":[4,4,4]},{"pos":[0,12,12],"size":[4,4,4]},{"pos":[4,0,0],"size":[4,4,4]},{"pos":[4,0,4],"size":[4,4,4]},{"pos":[4,0,8],"size":[4,4,4]},{"pos":[4,0,12],"size":[4,4,4]},{"pos":[4,4,0],"size":[4,4,4]},{"pos":[4,4,12],"size":[4,4,4]},{"pos":[4,8,0],"size":[4,4,4]},{"pos":[4,8,12],"size":[4,4,4]},{"pos":[4,12,0],"size":[4,4,4]},{"pos":[4,12,4],"size":[4,4,4]},{"pos":[4,12,8],"size":[4,4,4]},{"pos":[4,12,12],"size":[4,4,4]},{"pos":[8,0,0],"size":[4,4,4]},{"pos":[8,0,4],"size":[4,4,4]},{"pos":[8,0,8],"size":[4,4,4]},{"pos":[8,0,12],"size":[4,4,4]},{"pos":[8,4,0],"size":[4,4,4]},{"pos":[8,4,12],"size":[4,4,4]},{"pos":[8,8,0],"size":[4,4,4]},{"pos":[8,8,12],"size":[4,4,4]},{"pos":[8,12,0],"size":[4,4,4]},{"pos":[8,12,4],"size":[4,4,4]},{"pos":[8,12,8],"size":[4,4,4]},{"pos":[8,12,12],"size":[4,4,4]},{"pos":[12,0,0],"size":[4,4,4]},{"pos":[12,0,4],"size":[4,4,4]},{"pos":[12,0,8],"size":[4,4,4]},{"pos":[12,0,12],"size":[4,4,4]},{"pos":[12,4,0],"size":[4,4,4]},{"pos":[12,4,4],"size":[4,4,4]},{"pos":[12,4,8],"size":[4,4,4]},{"pos":[12,4,12],"size":[4,4,4]},{"pos":[12,8,0],"size":[4,4,4]},{"pos":[12,8,4],"size":[4,4,4]},{"pos":[12,8,8],"size":[4,4,4]},{"pos":[12,8,12],"size":[4,4,4]},{"pos":[12,12,0],"size":[4,4,4]},{"pos":[12,12,4],"size":[4,4,4]},{"pos":[12,12,8],"size":[4,4,4]},{"pos":[12,12,12],"size":[4,4,4]}] // function genDebugGeo(step) {let boneCubes = [];for(let x = 0; x < 16; x += step) {for(let y = 0; y < 16; y += step) {for(let z = 0; z < 16; z += step) {if(!x || !y || !z || x == 16 - step || y == 16 - step || z == 16 - step) {boneCubes.push({ pos: [x, y, z], size: [step, step, step] });}}}}return JSON.stringify(boneCubes);}

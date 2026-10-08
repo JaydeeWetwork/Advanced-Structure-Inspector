@@ -53,7 +53,7 @@ export function renderEditorFeatures() {
 	wrap.replaceChildren();
 	if (!list.length) {
 		const empty = document.createElement("p");
-		empty.className = "basi-ed-hint";
+		empty.className = "bLayers-ed-hint";
 		empty.textContent = q ? "No matching features" : "No features yet";
 		wrap.appendChild(empty);
 		return;
@@ -65,12 +65,12 @@ export function renderEditorFeatures() {
 
 function renderFeatureCard(feat, assigned, structureId) {
 	const card = document.createElement("article");
-	card.className = "basi-ed-feat-card" + (assigned ? " is-assigned" : "");
+	card.className = "bLayers-ed-feat-card" + (assigned ? " is-assigned" : "");
 	card.style.setProperty("--feat-color", feat.color || "#64748b");
 
 	const bar = document.createElement("button");
 	bar.type = "button";
-	bar.className = "basi-ed-feat-main";
+	bar.className = "bLayers-ed-feat-main";
 	bar.title = structureId ? "Toggle on selected structure" : feat.description;
 	bar.addEventListener("click", () => {
 		if (structureId) {
@@ -82,29 +82,29 @@ function renderFeatureCard(feat, assigned, structureId) {
 	});
 
 	const name = document.createElement("div");
-	name.className = "basi-ed-feat-name";
+	name.className = "bLayers-ed-feat-name";
 	name.style.color = contrastText(feat.color || "#64748b");
 	name.style.background = feat.color || "#64748b";
 	name.textContent = feat.name;
 
 	const desc = document.createElement("p");
-	desc.className = "basi-ed-feat-desc";
+	desc.className = "bLayers-ed-feat-desc";
 	desc.textContent = feat.description || "No description";
 
 	const tags = document.createElement("div");
-	tags.className = "basi-ed-feat-tags";
+	tags.className = "bLayers-ed-feat-tags";
 	for (const cid of feat.categoryIds) {
 		const cat = catalog.getCategory(cid);
 		if (!cat) continue;
 		const pill = document.createElement("span");
-		pill.className = "basi-ed-cat-pill";
+		pill.className = "bLayers-ed-cat-pill";
 		pill.style.setProperty("--cat-color", cat.color);
 		pill.textContent = cat.name;
 		tags.appendChild(pill);
 	}
 	if (assigned) {
 		const on = document.createElement("span");
-		on.className = "basi-ed-assigned-flag";
+		on.className = "bLayers-ed-assigned-flag";
 		on.textContent = "On structure";
 		tags.appendChild(on);
 	}
@@ -116,10 +116,10 @@ function renderFeatureCard(feat, assigned, structureId) {
 	card.appendChild(bar);
 
 	const tools = document.createElement("div");
-	tools.className = "basi-ed-feat-tools";
+	tools.className = "bLayers-ed-feat-tools";
 	const edit = document.createElement("button");
 	edit.type = "button";
-	edit.className = "basi-ed-icon-btn";
+	edit.className = "bLayers-ed-icon-btn";
 	edit.textContent = "Edit";
 	edit.addEventListener("click", e => {
 		e.stopPropagation();
@@ -128,7 +128,7 @@ function renderFeatureCard(feat, assigned, structureId) {
 	});
 	const up = document.createElement("button");
 	up.type = "button";
-	up.className = "basi-ed-icon-btn";
+	up.className = "bLayers-ed-icon-btn";
 	up.textContent = "↑";
 	up.title = "Move up";
 	up.addEventListener("click", e => {
@@ -137,7 +137,7 @@ function renderFeatureCard(feat, assigned, structureId) {
 	});
 	const down = document.createElement("button");
 	down.type = "button";
-	down.className = "basi-ed-icon-btn";
+	down.className = "bLayers-ed-icon-btn";
 	down.textContent = "↓";
 	down.title = "Move down";
 	down.addEventListener("click", e => {
@@ -155,9 +155,9 @@ function renderFeatureCard(feat, assigned, structureId) {
 
 function field(label, el) {
 	const wrap = document.createElement("label");
-	wrap.className = "basi-ed-field";
+	wrap.className = "bLayers-ed-field";
 	const span = document.createElement("span");
-	span.className = "basi-ed-label";
+	span.className = "bLayers-ed-label";
 	span.textContent = label;
 	wrap.append(span, el);
 	return wrap;
@@ -165,17 +165,17 @@ function field(label, el) {
 
 function featureForm(feat) {
 	const form = document.createElement("div");
-	form.className = "basi-ed-feat-form";
+	form.className = "bLayers-ed-feat-form";
 
 	const name = document.createElement("input");
-	name.className = "basi-ed-input";
+	name.className = "bLayers-ed-input";
 	name.value = feat.name;
 	name.addEventListener("blur", () => {
 		void catalog.patchFeature(feat.id, { name: name.value }).then(() => renderEditor());
 	});
 
 	const desc = document.createElement("textarea");
-	desc.className = "basi-ed-input";
+	desc.className = "bLayers-ed-input";
 	desc.rows = 4;
 	desc.value = feat.description || "";
 	desc.addEventListener("blur", () => {
@@ -183,7 +183,7 @@ function featureForm(feat) {
 	});
 
 	const uses = document.createElement("textarea");
-	uses.className = "basi-ed-input";
+	uses.className = "bLayers-ed-input";
 	uses.rows = 3;
 	uses.placeholder = "When this feature matters…";
 	uses.value = feat.useCases || "";
@@ -193,18 +193,18 @@ function featureForm(feat) {
 
 	const color = document.createElement("input");
 	color.type = "color";
-	color.className = "basi-ed-color";
+	color.className = "bLayers-ed-color";
 	color.value = hex6(feat.color);
 	color.addEventListener("change", () => {
 		void catalog.patchFeature(feat.id, { color: color.value }).then(() => renderEditor());
 	});
 
 	const cats = document.createElement("div");
-	cats.className = "basi-ed-cat-checks";
+	cats.className = "bLayers-ed-cat-checks";
 	const current = new Set(feat.categoryIds);
 	for (const c of catalog.listCategories()) {
 		const lab = document.createElement("label");
-		lab.className = "basi-ed-check";
+		lab.className = "bLayers-ed-check";
 		const cb = document.createElement("input");
 		cb.type = "checkbox";
 		cb.checked = current.has(c.id);
@@ -214,7 +214,7 @@ function featureForm(feat) {
 			void catalog.patchFeature(feat.id, { categoryIds: [...current] }).then(() => renderEditor());
 		});
 		const swatch = document.createElement("span");
-		swatch.className = "basi-ed-swatch";
+		swatch.className = "bLayers-ed-swatch";
 		swatch.style.background = c.color;
 		lab.append(cb, swatch, document.createTextNode(c.name));
 		cats.appendChild(lab);
@@ -222,7 +222,7 @@ function featureForm(feat) {
 
 	const del = document.createElement("button");
 	del.type = "button";
-	del.className = "basi-btn secondary basi-ed-danger";
+	del.className = "bLayers-btn secondary bLayers-ed-danger";
 	del.textContent = "Delete feature";
 	del.addEventListener("click", async () => {
 		if (!confirm(`Delete feature “${feat.name}”? It will be removed from all structures.`)) return;

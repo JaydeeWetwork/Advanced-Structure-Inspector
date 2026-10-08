@@ -4,7 +4,7 @@
  */
 
 export const TAXONOMY_SEED_VERSION = 1;
-export const TAXONOMY_SEED_STATE_KEY = "basi.taxonomySeed.v1";
+export const TAXONOMY_SEED_STATE_KEY = "bLayers.taxonomySeed.v1";
 
 export function categoryIdForSlug(slug) {
 	return `cat:${slug}`;

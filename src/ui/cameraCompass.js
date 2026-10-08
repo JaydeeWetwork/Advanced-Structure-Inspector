@@ -59,7 +59,7 @@ function flushCompass() {
  * Listen for look-dir events from the preview.
  */
 export function initCameraCompass() {
-	document.addEventListener("basi-camera-facing", e => {
+	document.addEventListener("bLayers-camera-facing", e => {
 		const d = /** @type {CustomEvent} */ (e).detail;
 		if (d && Number.isFinite(d.x)) updateCameraCompass(d);
 	});

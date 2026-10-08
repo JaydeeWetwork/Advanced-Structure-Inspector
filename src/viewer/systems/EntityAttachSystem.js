@@ -44,7 +44,7 @@ function railDirectionUnder(ctx, pos) {
 
 export default class EntityAttachSystem {
 	#attachGen = 0;
-	/** @type {import("./entityExtract.js").PreviewEntity[]} */
+	/** @type {import("../entityExtract.js").PreviewEntity[]} */
 	allPreviewEntities = [];
 
 	/**
@@ -93,8 +93,8 @@ export default class EntityAttachSystem {
 	}
 
 	/**
-	 * @param {import("./entityExtract.js").PreviewEntity[]} [entityList]
-	 * @param {import("../../ResourcePackStack.js").default} [resourcePackStack]
+	 * @param {import("../entityExtract.js").PreviewEntity[]} [entityList]
+	 * @param {import("../engine/ResourcePackStack.js").default} [resourcePackStack]
 	 * @param {{ keepFullList?: boolean }} [opts]
 	 * @returns {Promise<number>}
 	 */
@@ -105,7 +105,7 @@ export default class EntityAttachSystem {
 		const pool = this.ctx.pool;
 
 		if (this.ctx.isDisposed() || !scene || !THREE) {
-			console.warn("[basi] EntityAttachSystem: renderer not ready", {
+			console.warn("[bLayers] EntityAttachSystem: renderer not ready", {
 				disposed: this.ctx.isDisposed(),
 				hasScene: !!scene,
 				hasTHREE: !!THREE
@@ -132,7 +132,7 @@ export default class EntityAttachSystem {
 		const options = this.ctx.options;
 		if (options.showEntities !== false && ents.length) {
 			console.info(
-				`[basi] EntityAttachSystem: meshing ${ents.length}`,
+				`[bLayers] EntityAttachSystem: meshing ${ents.length}`,
 				ents.slice(0, 5).map(e =>
 					`${e.identifier}@${(e.pos || []).map(n => Number(n).toFixed(2)).join(",")}`
 				)
@@ -146,7 +146,7 @@ export default class EntityAttachSystem {
 					"../entityMeshes.js"
 				));
 			} catch (e) {
-				console.error("[basi] failed to load entityMeshes module:", e);
+				console.error("[bLayers] failed to load entityMeshes module:", e);
 			}
 			if (gen !== this.#attachGen || this.ctx.isDisposed()) return 0;
 
@@ -156,9 +156,9 @@ export default class EntityAttachSystem {
 					const kit = await loadEntityModelKit(THREE, rps);
 					if (gen !== this.#attachGen || this.ctx.isDisposed()) return 0;
 					if (kit?.size) pool.entityModelKit = kit;
-					console.info(`[basi] vanilla entity kit: ${kit?.size ?? 0} kind(s)`);
+					console.info(`[bLayers] vanilla entity kit: ${kit?.size ?? 0} kind(s)`);
 				} catch (e) {
-					console.warn("[basi] vanilla entity kit load failed:", e);
+					console.warn("[bLayers] vanilla entity kit load failed:", e);
 				}
 			}
 			if (gen !== this.#attachGen || this.ctx.isDisposed()) return 0;
@@ -166,9 +166,9 @@ export default class EntityAttachSystem {
 			if (buildCargoKit && options.cargoTemplates && !pool.cargoKit) {
 				try {
 					pool.cargoKit = buildCargoKit(THREE, options.cargoTemplates, pool);
-					console.info(`[basi] cargo kit: ${pool.cargoKit?.size ?? 0} kind(s)`);
+					console.info(`[bLayers] cargo kit: ${pool.cargoKit?.size ?? 0} kind(s)`);
 				} catch (e) {
-					console.warn("[basi] cargo kit failed:", e);
+					console.warn("[bLayers] cargo kit failed:", e);
 				}
 			}
 			if (gen !== this.#attachGen || this.ctx.isDisposed()) return 0;
@@ -186,12 +186,12 @@ export default class EntityAttachSystem {
 							railDirection
 						});
 						obj.userData.previewEntity = true;
-						obj.userData.basiEntity = ent;
+						obj.userData.bLayersEntity = ent;
 						obj.userData.layerY = ly;
 						this.ctx.getLayerGroup(ly).add(obj);
 						added++;
 					} catch (e) {
-						console.error("[basi] failed to mesh entity", ent, e);
+						console.error("[bLayers] failed to mesh entity", ent, e);
 					}
 				}
 			}
@@ -202,10 +202,10 @@ export default class EntityAttachSystem {
 			const frameAdded = await this.#attachItemFrameItems(gen, layerFilter);
 			added += frameAdded;
 		} catch (e) {
-			console.warn("[basi] item frame items failed:", e);
+			console.warn("[bLayers] item frame items failed:", e);
 		}
 
-		console.info(`[basi] EntityAttachSystem: added ${added} group(s)`);
+		console.info(`[bLayers] EntityAttachSystem: added ${added} group(s)`);
 		this.ctx.requestRender();
 		return added;
 	}
@@ -231,7 +231,7 @@ export default class EntityAttachSystem {
 				loadItemTexture
 			} = await import("../itemFrameItems.js"));
 		} catch (e) {
-			console.error("[basi] itemFrameItems module failed:", e);
+			console.error("[bLayers] itemFrameItems module failed:", e);
 			return 0;
 		}
 		if (gen !== this.#attachGen || this.ctx.isDisposed()) return 0;
@@ -257,7 +257,7 @@ export default class EntityAttachSystem {
 					}
 					pool.itemFrameTexCache.set(name, tex);
 				} catch (e) {
-					console.warn("[basi] item frame texture failed:", name, e);
+					console.warn("[bLayers] item frame texture failed:", name, e);
 					pool.itemFrameTexCache.set(name, null);
 				}
 			})
@@ -274,11 +274,11 @@ export default class EntityAttachSystem {
 				this.ctx.getLayerGroup(pl.y).add(obj);
 				added++;
 			} catch (e) {
-				console.warn("[basi] failed item frame item", pl, e);
+				console.warn("[bLayers] failed item frame item", pl, e);
 			}
 		}
 		if (added) {
-			console.info(`[basi] EntityAttachSystem: placed ${added} item icon(s)`);
+			console.info(`[bLayers] EntityAttachSystem: placed ${added} item icon(s)`);
 		}
 		return added;
 	}

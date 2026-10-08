@@ -13,7 +13,7 @@
  * @param {import("three").Object3D[]} args.debugHelpers
  * @param {() => void} args.requestRender
  * @param {() => void} args.setSize
- * @param {import("../PreviewResourcePool.js").default} args.pool
+ * @param {import("./PreviewResourcePool.js").default} args.pool
  * @param {boolean} [args.inProduction]
  * @param {() => void} [args.rebuildOverlays]
  */

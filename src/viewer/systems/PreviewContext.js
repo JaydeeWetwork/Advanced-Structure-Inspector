@@ -8,9 +8,9 @@ export default class PreviewContext {
 	THREE = null;
 	/** @type {import("three").Scene|null} */
 	scene = null;
-	/** @type {import("three").PerspectiveCamera|null} */
+	/** @type {import("three").PerspectiveCamera|import("three").OrthographicCamera|null} */
 	camera = null;
-	/** @type {import("three").OrbitControls|null} */
+	/** @type {import("three/examples/jsm/controls/OrbitControls.js").OrbitControls|null} */
 	controls = null;
 	/** @type {import("three").WebGLRenderer|null} */
 	renderer = null;
@@ -32,10 +32,10 @@ export default class PreviewContext {
 	inspectIndex = null;
 	/** @type {any[]|null} */
 	blockPalette = null;
+	/** @type {string[]|null} */
+	shapeByPalette = null;
 	/** @type {any[]|null} */
-	polyMeshTemplatePalette = null;
-	/** @type {any} */
-	polyMeshMaker = null;
+	blockFaceTemplates = null;
 	/** @type {ImageData|null} */
 	imageBlobData = null;
 	/** @type {Element|null} */

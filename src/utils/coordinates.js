@@ -9,6 +9,22 @@ export function getStructureIndexFromCoordinates([x, y, z], structureSize) {
 	return (x * structureSize[1] + y) * structureSize[2] + z;
 }
 /**
+ * Inverse of {@link getStructureIndexFromCoordinates}.
+ * `structureSize[0]` is not used; the index is `(x * sizeY + y) * sizeZ + z`.
+ * @param {number} index
+ * @param {I32Vec3} structureSize
+ * @returns {Vec3}
+ */
+export function getCoordinatesFromStructureIndex(index, structureSize) {
+	const sy = structureSize[1];
+	const sz = structureSize[2];
+	const z = index % sz;
+	const t = Math.floor(index / sz);
+	const y = t % sy;
+	const x = Math.floor(t / sy);
+	return [x, y, z];
+}
+/**
  * Transforms structure coordinates to Minecraft geometry coordinates.
  * @param {Vec3} coords
  * @returns {Vec3}

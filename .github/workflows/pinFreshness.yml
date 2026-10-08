@@ -1,0 +1,45 @@
+name: Pin freshness
+on:
+  schedule:
+    - cron: "0 15 1 * *"
+  workflow_dispatch:
+permissions:
+  contents: read
+  issues: write
+jobs:
+  compare-pins:
+    name: Compare pins with upstream
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4.1.1
+      - name: Setup Node
+        uses: actions/setup-node@v5
+      - name: Compare pins
+        id: pins
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          node scripts/check-pin-freshness.mjs > "$RUNNER_TEMP/pin-issue.txt"
+          code=$?
+          set -e
+          if [ "$code" -eq 2 ]; then
+            echo "behind=true" >> "$GITHUB_OUTPUT"
+          elif [ "$code" -ne 0 ]; then
+            exit "$code"
+          else
+            echo "behind=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Open issue
+        if: steps.pins.outputs.behind == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          title="Pins are behind upstream"
+          existing=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --limit 50 --json number,title --jq '.[] | select(.title == "Pins are behind upstream") | .number' | head -n 1)
+          if [ -n "$existing" ]; then
+            gh issue edit "$existing" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/pin-issue.txt"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body-file "$RUNNER_TEMP/pin-issue.txt"
+          fi

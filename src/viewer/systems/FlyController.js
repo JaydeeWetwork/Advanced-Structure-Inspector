@@ -94,7 +94,7 @@ export default class FlyController {
 		const moving = k.w || k.a || k.s || k.d || k.space || k.shift;
 		if (!moving) return false;
 
-		const base = Math.max(48, this.ctx.maxDimPixels * 0.55);
+		const base = Math.max(24, this.ctx.maxDimPixels * 0.275);
 		const speed = base * Math.min(dtSec, 0.05);
 		const forward = new THREE.Vector3();
 		camera.getWorldDirection(forward);

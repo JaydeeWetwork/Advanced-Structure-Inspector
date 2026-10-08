@@ -9,5 +9,6 @@
 		"module": "esnext",
 		"moduleResolution": "bundler"
 	},
-	"include": ["src/**/*.js", "globalPatches.d.ts"]
+	"include": ["src/**/*.js", "globalPatches.d.ts"],
+	"exclude": ["src/vendor/**"]
 }

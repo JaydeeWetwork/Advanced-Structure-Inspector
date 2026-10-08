@@ -1,7 +1,9 @@
 /**
  * Fill FrontText + BackText on every sign in sample structure files.
  *
- * Uses nbtify (writable) + little-endian Bedrock .mcstructure format.
+ * Uses readMcstructureTyped (product gates + typed nbtify) and writeMcstructure,
+ * so existing Byte / Short / Float / Long fields keep their tag types and new
+ * sign fields are written as Int (color) and Byte (flags).
  * Labels encode face / wood / facing so orientation bugs are obvious in the viewer.
  *
  * Usage (from repo root):
@@ -12,8 +14,11 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import * as NBT from "nbtify";
+import { Int8, Int32 } from "nbtify";
+import { readMcstructure, writeMcstructure } from "../src/viewer/core/nbt/mcstructureCodec.js";
+import { readMcstructureTyped } from "../src/viewer/core/nbt/mcstructureTyped.js";
 import { facingLabel, kindOfSign, woodKind } from "../src/viewer/signPlacement.js";
+import { getCoordinatesFromStructureIndex } from "../src/utils/coordinates.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
@@ -83,6 +88,19 @@ function buildLines({ side, index, wood, kind, facing, x, y, z, glow, colorName 
 	return [line1, line2, line3, line4].join("\n");
 }
 
+/** Empty sign face with Bedrock tag types. */
+function newFace() {
+	return {
+		FilteredText: "",
+		HideGlowOutline: new Int8(0),
+		IgnoreLighting: new Int8(0),
+		PersistFormatting: new Int8(1),
+		SignTextColor: new Int32(COLORS.black),
+		Text: "",
+		TextOwner: ""
+	};
+}
+
 /**
  * Ensure a face compound has expected keys; mutate in place.
  * @param {Record<string, unknown>} face
@@ -93,14 +111,14 @@ function buildLines({ side, index, wood, kind, facing, x, y, z, glow, colorName 
 function applyFace(face, text, color, glow) {
 	face.Text = text;
 	face.FilteredText = "";
-	face.SignTextColor = color | 0;
+	face.SignTextColor = new Int32(color | 0);
 	// Bedrock: IgnoreLighting = glowing text
-	face.IgnoreLighting = glow ? 1 : 0;
-	if ("HideGlowOutline" in face) face.HideGlowOutline = 0;
-	if ("PersistFormatting" in face) face.PersistFormatting = 1;
+	face.IgnoreLighting = new Int8(glow ? 1 : 0);
+	if ("HideGlowOutline" in face) face.HideGlowOutline = new Int8(0);
+	if ("PersistFormatting" in face) face.PersistFormatting = new Int8(1);
 	if ("TextOwner" in face) face.TextOwner = "";
 	// Also set GlowingText if present on some formats
-	if ("GlowingText" in face) face.GlowingText = glow ? 1 : 0;
+	if ("GlowingText" in face) face.GlowingText = new Int8(glow ? 1 : 0);
 }
 
 /**
@@ -113,11 +131,11 @@ async function fillFile(filePath) {
 	}
 	const raw = fs.readFileSync(abs);
 	const ab = raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength);
-	const root = await NBT.read(ab, { endian: "little", strict: false });
-	const data = root.data;
+	// `data` (typeless) is used for lookups; `typed` keeps tag types and is what gets written.
+	const { nbt: typed, typeless: data } = await readMcstructureTyped(ab);
 	const palette = data?.structure?.palette?.default?.block_palette ?? [];
 	const indices = data?.structure?.block_indices?.[0] ?? [];
-	const beMap = data?.structure?.palette?.default?.block_position_data;
+	const beMap = typed?.structure?.palette?.default?.block_position_data;
 	if (!beMap || typeof beMap !== "object") {
 		throw new Error(`${path.basename(abs)}: no block_position_data`);
 	}
@@ -127,12 +145,9 @@ async function fillFile(filePath) {
 	const sy = Number(size[1]);
 	const sz = Number(size[2]);
 
-	/** linear index → local xyz (Bedrock: x + z*sx + y*sx*sz) */
+	/** linear index → local xyz. Order is (x * sy + y) * sz + z. */
 	function idxToLocal(i) {
-		const y = Math.floor(i / (sx * sz));
-		const rem = i % (sx * sz);
-		const z = Math.floor(rem / sx);
-		const x = rem % sx;
+		const [x, y, z] = getCoordinatesFromStructureIndex(i, [sx, sy, sz]);
 		return { x, y, z };
 	}
 
@@ -183,26 +198,10 @@ async function fillFile(filePath) {
 		const colorBackName = Object.entries(COLORS).find(([, v]) => v === colorBack)?.[0] ?? "c";
 
 		if (!bed.FrontText || typeof bed.FrontText !== "object") {
-			bed.FrontText = {
-				FilteredText: "",
-				HideGlowOutline: 0,
-				IgnoreLighting: 0,
-				PersistFormatting: 1,
-				SignTextColor: COLORS.black,
-				Text: "",
-				TextOwner: ""
-			};
+			bed.FrontText = newFace();
 		}
 		if (!bed.BackText || typeof bed.BackText !== "object") {
-			bed.BackText = {
-				FilteredText: "",
-				HideGlowOutline: 0,
-				IgnoreLighting: 0,
-				PersistFormatting: 1,
-				SignTextColor: COLORS.black,
-				Text: "",
-				TextOwner: ""
-			};
+			bed.BackText = newFace();
 		}
 
 		const frontText = buildLines({
@@ -247,12 +246,11 @@ async function fillFile(filePath) {
 		});
 	}
 
-	const outBuf = await NBT.write(root);
+	const outBuf = await writeMcstructure(typed);
 	fs.writeFileSync(abs, Buffer.from(outBuf));
 
-	// Verify round-trip
-	const verify = await NBT.read(outBuf, { endian: "little", strict: false });
-	const vBe = verify.data?.structure?.palette?.default?.block_position_data;
+	const { nbt: verify } = await readMcstructure(outBuf);
+	const vBe = verify?.structure?.palette?.default?.block_position_data;
 	let withText = 0;
 	for (const k of Object.keys(vBe || {})) {
 		const bed = vBe[k]?.block_entity_data ?? vBe[k];

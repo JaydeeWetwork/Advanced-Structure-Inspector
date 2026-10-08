@@ -1,0 +1,7 @@
+{
+	"name": "check_block_shape_coverage",
+	"type": "module",
+	"scripts": {
+		"test": "node index.js"
+	}
+}

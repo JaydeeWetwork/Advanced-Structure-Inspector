@@ -1,79 +1,36 @@
 import { readMcstructure } from "./api/structure.js";
+import { stripJsonc } from "../utils/conversions.js";
+import { compileMaterialTables, materialIdentity } from "../material/compileMaterial.js";
 
 /**
  * Build a grouped material list (item counts) from structure NBT.
  * Groups variants; sorts most → least; partitions into shulkers / stacks / loose
  * using correct max stack sizes (1 / 16 / 64).
+ *
+ * Block names and count multipliers come from data/materialListMappings.json,
+ * the same table the pack material list uses. Stack sizes stay here.
  */
 
-/** Block id → material (item) id for listing. */
-const BLOCK_TO_MATERIAL = {
-	unpowered_repeater: "repeater",
-	powered_repeater: "repeater",
-	unpowered_comparator: "comparator",
-	powered_comparator: "comparator",
-	redstone_wire: "redstone",
-	unlit_redstone_torch: "redstone_torch",
-	lit_redstone_torch: "redstone_torch",
-	redstone_torch: "redstone_torch",
-	water: "water_bucket",
-	lava: "lava_bucket",
-	powder_snow: "powder_snow_bucket",
-	lit_furnace: "furnace",
-	lit_blast_furnace: "blast_furnace",
-	lit_smoker: "smoker",
-	lit_redstone_ore: "redstone_ore",
-	lit_deepslate_redstone_ore: "deepslate_redstone_ore",
-	lit_redstone_lamp: "redstone_lamp",
-	daylight_detector_inverted: "daylight_detector",
-	reeds: "sugar_cane",
-	melon_stem: "melon_seeds",
-	pumpkin_stem: "pumpkin_seeds",
-	pitcher_crop: "pitcher_pod",
-	torchflower_crop: "torchflower_seeds",
-	wheat: "wheat_seeds",
-	potatoes: "potato",
-	carrots: "carrot",
-	wall_sign: "oak_sign",
-	standing_sign: "oak_sign",
-	darkoak_wall_sign: "dark_oak_sign",
-	darkoak_standing_sign: "dark_oak_sign",
-	bamboo_sapling: "bamboo",
-	trip_wire: "string",
-	cocoa: "cocoa_beans",
-	wall_banner: "standing_banner",
-	cave_vines: "glow_berries",
-	cave_vines_body_with_berries: "glow_berries",
-	cave_vines_head_with_berries: "glow_berries",
-	torch: "torch",
-	piston_arm_collision: null,
-	sticky_piston_arm_collision: null,
-	air: null,
-	flowing_water: null,
-	flowing_lava: null,
-	bubble_column: null
-};
+/** @type {ReturnType<typeof compileMaterialTables>} */
+let materialTables = compileMaterialTables({});
 
-const REGEX_RULES = [
-	[/^(\w+)_wall_sign$/, "$1_sign", 1],
-	[/^(\w+)_standing_sign$/, "$1_sign", 1],
-	[/^(\w+)_coral_wall_fan$/, "$1_coral_fan", 1],
-	[/^double_(.+_slab)$/, "$1", 2],
-	[/^(\w+_door)$/, "$1", 0.5]
-];
+async function readMaterialMappingsText() {
+	const url = new URL("../data/materialListMappings.json", import.meta.url);
+	if (url.protocol === "file:") {
+		const specifier = "node:fs/promises";
+		const { readFile } = await import(specifier);
+		return readFile(url, "utf8");
+	}
+	const res = await fetch(url);
+	if (!res.ok) throw new Error(`materialListMappings HTTP ${res.status}`);
+	return res.text();
+}
 
-const HALF_COUNT_EXACT = new Set([
-	"peony", "rose_bush", "sunflower", "lilac", "large_fern", "tall_grass", "pitcher_plant", "bed"
-]);
+function installMaterialMappings(mappings) {
+	materialTables = compileMaterialTables(mappings);
+}
 
-const IGNORED = new Set([
-	"air", "piston_arm_collision", "sticky_piston_arm_collision",
-	"light_block", "flowing_water", "flowing_lava", "bubble_column",
-	"light_block_0", "light_block_1", "light_block_2", "light_block_3",
-	"light_block_4", "light_block_5", "light_block_6", "light_block_7",
-	"light_block_8", "light_block_9", "light_block_10", "light_block_11",
-	"light_block_12", "light_block_13", "light_block_14", "light_block_15"
-]);
+await readMaterialMappingsText().then(text => installMaterialMappings(JSON.parse(stripJsonc(text))));
 
 /** Max stack size 1 (unstackable / unique items). */
 const STACK_SIZE_1 = new Set([
@@ -171,17 +128,18 @@ const STACK_16_REGEX = [
  */
 export function getStackSize(materialId) {
 	if (!materialId) return 64;
+	const id = String(materialId).replace(/\+\d+$/, "");
 	// empty bucket is 16 — check before generic _bucket → 1
-	if (materialId === "bucket") return 16;
-	if (STACK_SIZE_1.has(materialId)) return 1;
-	if (STACK_SIZE_16.has(materialId)) return 16;
+	if (id === "bucket") return 16;
+	if (STACK_SIZE_1.has(id)) return 1;
+	if (STACK_SIZE_16.has(id)) return 16;
 	for (const re of STACK_1_REGEX) {
-		if (re.test(materialId) && materialId !== "bucket") return 1;
+		if (re.test(id) && id !== "bucket") return 1;
 	}
-	// filled buckets already in STACK_SIZE_1 or _bucket$ 
-	if (/_bucket$/.test(materialId)) return 1;
+	// filled buckets already in STACK_SIZE_1 or _bucket$
+	if (/_bucket$/.test(id)) return 1;
 	for (const re of STACK_16_REGEX) {
-		if (re.test(materialId)) return 16;
+		if (re.test(id)) return 16;
 	}
 	return 64;
 }
@@ -286,24 +244,15 @@ export function isCountableLiquid(blockName, block, layerI = 0) {
  * @returns {{ material: string, mult: number }|null}
  */
 export function blockToMaterial(blockName, block = null, layerI = 0) {
-	if (!blockName || IGNORED.has(blockName)) return null;
+	if (!blockName || materialTables.ignored.has(blockName)) return null;
 	if (!isCountableLiquid(blockName, block, layerI)) return null;
 
-	if (Object.prototype.hasOwnProperty.call(BLOCK_TO_MATERIAL, blockName)) {
-		const m = BLOCK_TO_MATERIAL[blockName];
-		if (m == null) return null;
-		return { material: m, mult: 1 };
-	}
-	for (const [re, rep, mult] of REGEX_RULES) {
-		if (re.test(blockName)) {
-			return { material: blockName.replace(re, rep), mult: mult ?? 1 };
-		}
-	}
-	let mult = 1;
-	if (HALF_COUNT_EXACT.has(blockName) || /_door$/.test(blockName)) {
-		mult = 0.5;
-	}
-	return { material: blockName, mult };
+	const subject = block && typeof block === "object"
+		? { name: blockName, block_entity_data: block.block_entity_data ?? block["block_entity_data"] }
+		: blockName;
+	const mapped = materialIdentity(materialTables, subject, 1);
+	if (!mapped) return null;
+	return { material: mapped.itemName, mult: mapped.count };
 }
 
 /**
@@ -354,26 +303,23 @@ export function buildMaterialListFromNbt(data) {
 	/** @type {Map<string, number>} */
 	const counts = new Map();
 
-	/**
-	 * @param {number|bigint} paletteI
-	 * @param {number} layerI
-	 */
-	const addPaletteIndex = (paletteI, layerI) => {
-		const n = Number(paletteI);
-		if (!Number.isFinite(n) || n < 0) return;
-		const block = paletteList[n];
-		if (!block) return;
-		const name = stripName(block?.name);
-		const mapped = blockToMaterial(name, block, layerI);
-		if (!mapped) return;
-		const { material, mult } = mapped;
-		counts.set(material, (counts.get(material) ?? 0) + mult);
-	};
-
 	layers.forEach((layer, layerI) => {
 		if (!layer || !(Array.isArray(layer) || ArrayBuffer.isView(layer))) return;
-		for (const idx of layer) {
-			addPaletteIndex(idx, layerI);
+		const hist = new Float64Array(paletteList.length);
+		for (let i = 0; i < layer.length; i++) {
+			const n = Number(layer[i]);
+			if (!Number.isFinite(n) || n < 0 || n >= hist.length) continue;
+			hist[n]++;
+		}
+		for (let pi = 0; pi < hist.length; pi++) {
+			const n = hist[pi];
+			if (!n) continue;
+			const block = paletteList[pi];
+			if (!block) continue;
+			const name = stripName(block?.name);
+			const mapped = blockToMaterial(name, block, layerI);
+			if (!mapped) continue;
+			counts.set(mapped.material, (counts.get(mapped.material) ?? 0) + mapped.mult * n);
 		}
 	});
 

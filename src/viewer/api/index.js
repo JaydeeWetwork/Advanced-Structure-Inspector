@@ -1,5 +1,5 @@
 /**
- * Stable ASI viewer APIs for app shell and future plugins.
+ * Stable Bedrock Layers viewer APIs for app shell and future plugins.
  * App + UI should import from here (or a subpath), not deep into systems/.
  */
 

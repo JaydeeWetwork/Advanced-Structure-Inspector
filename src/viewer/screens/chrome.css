@@ -1,0 +1,877 @@
+/* Structure Inspector
+ * Full-stage 3D preview with auto-hiding floating docks:
+ *  - Left: structure catalog (peek / expand near edge)
+ *  - Right: stats + material list (when a structure is selected)
+ * Catalog + material lists scroll inside panels only.
+ */
+:root {
+	--bLayers-sidebar-width: 300px;
+	--bLayers-material-width: 280px;
+	--bLayers-float-peek: 10px;
+	--bLayers-float-hit: 28px;
+	--bLayers-cam-peek: 4px;
+	--bLayers-panel-bg: #fff9ffee;
+	--bLayers-panel-solid: #f7f0f7;
+	--bLayers-float-bg: #f7f0f7;
+	--bLayers-muted: #5a4a5a;
+	--bLayers-row: #ffffff;
+	--bLayers-row-hover: #f3e6f3;
+	--bLayers-selected: #e8c8e8;
+	--bLayers-border: var(--border-col, #D899D8);
+	--bLayers-radius: 8px;
+	--text-col: #202526;
+	--border-col: #D899D8;
+	--input-bg: #EEDEEE;
+	--input-bg-checked: #E8C8E8;
+	--input-bg-active: #DABADA;
+	--dark-bg: #D38AD3;
+	--dark-bg-hover: #C57CC5;
+	--dark-border: #9B4F9B;
+	--success-green: #3AB336;
+	--error-red: #E24436;
+	--bLayers-stage-bg: #0e0e10;
+}
+* {
+	box-sizing: border-box;
+}
+html {
+	height: 100%;
+	overflow: hidden;
+}
+body.bLayers-app {
+	margin: 0;
+	height: 100%;
+	max-height: 100dvh;
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
+	font-family: "Catamaran", "Trebuchet MS", sans-serif;
+	color: var(--text-col);
+	background: #f3eaf3;
+	line-height: 1.35;
+	/* Kill page scroll even if a child tries to expand */
+	overscroll-behavior: none;
+}
+.bLayers-header {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px 12px;
+	padding: 6px 12px;
+	background: var(--bLayers-panel-bg);
+	border-bottom: 1px solid var(--bLayers-border);
+	flex-shrink: 0;
+	z-index: 40;
+	backdrop-filter: blur(8px);
+}
+.bLayers-header-brand {
+	flex-shrink: 0;
+	min-width: 0;
+}
+.bLayers-header h1 {
+	margin: 0;
+	font-size: 1.2rem;
+	font-family: "Space Grotesk", "Catamaran", sans-serif;
+}
+.bLayers-header .tagline {
+	margin: 2px 0 0;
+	color: var(--bLayers-muted);
+	font-size: 0.82rem;
+}
+.bLayers-header-actions,
+.bLayers-sel-actions,
+.bLayers-detail-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	align-items: center;
+	flex-shrink: 0;
+}
+.bLayers-detail-actions {
+	padding: 8px 4px 0;
+	flex-shrink: 0;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+/* Selected structure strip in top header */
+.bLayers-selection-bar {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 10px 14px;
+	flex: 1 1 280px;
+	min-width: 0;
+	padding: 4px 10px;
+	background: #fff;
+	border: 1px solid var(--bLayers-border);
+	border-radius: 10px;
+}
+.bLayers-sel-meta {
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+	min-width: 0;
+	flex: 1 1 140px;
+}
+.bLayers-sel-name {
+	font-size: 1rem;
+	font-weight: 700;
+	word-break: break-word;
+	line-height: 1.2;
+}
+.bLayers-sel-source {
+	font-size: 0.75rem;
+	color: var(--bLayers-muted);
+	word-break: break-word;
+}
+.bLayers-hopper-chip {
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+	padding: 7px 9px;
+	border-radius: 8px;
+	background: var(--input-bg);
+	border: 1px solid var(--bLayers-border);
+	flex-shrink: 0;
+	min-width: 0;
+	width: 100%;
+	box-sizing: border-box;
+	/* --hopper-lock-color set in JS from 0% green → 100% red */
+	border-left: 4px solid var(--hopper-lock-color, var(--bLayers-border));
+}
+.bLayers-hopper-chip.has-pct {
+	background: color-mix(in srgb, var(--hopper-lock-color, #ccc) 18%, #fff);
+}
+.bLayers-hopper-chip.has-locked .bLayers-hopper-label {
+	color: color-mix(in srgb, var(--hopper-lock-color, #333) 85%, #000);
+}
+.bLayers-hopper-label {
+	font-weight: 700;
+	font-size: 0.88rem;
+	font-variant-numeric: tabular-nums;
+}
+.bLayers-hopper-detail {
+	font-size: 0.72rem;
+	color: var(--bLayers-muted);
+	font-variant-numeric: tabular-nums;
+}
+/* Layer toolbar inside right float */
+.bLayers-layer-toolbar {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+	flex-shrink: 0;
+	min-height: 1.25rem;
+	margin-bottom: 2px;
+}
+.bLayers-layer-badge {
+	display: inline-flex;
+	align-items: center;
+	font-weight: 700;
+	font-size: 0.78rem;
+	font-variant-numeric: tabular-nums;
+	padding: 3px 10px;
+	border-radius: 999px;
+	background: var(--dark-bg);
+	color: #fff;
+	border: 1px solid var(--dark-border);
+}
+.bLayers-boot {
+	font-size: 0.8rem;
+	padding: 4px 10px;
+	border-radius: 999px;
+	background: #eee;
+	color: var(--bLayers-muted);
+	border: 1px solid #ddd;
+}
+.bLayers-boot.ok {
+	background: #e8f8e7;
+	border-color: var(--success-green);
+	color: #1d6b1a;
+}
+.bLayers-boot.error {
+	background: #fde8e6;
+	border-color: var(--error-red);
+	color: #7a1f18;
+}
+.bLayers-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	padding: 8px 14px;
+	border-radius: 8px;
+	border: 1px solid var(--dark-border);
+	background: var(--dark-bg);
+	color: #fff;
+	font: inherit;
+	font-weight: 600;
+	cursor: pointer;
+	text-decoration: none;
+}
+.bLayers-btn:hover {
+	background: var(--dark-bg-hover);
+}
+.bLayers-btn.secondary {
+	background: var(--input-bg);
+	color: var(--text-col);
+	border-color: var(--bLayers-border);
+}
+.bLayers-btn.secondary:hover {
+	background: var(--input-bg-active);
+}
+.bLayers-btn:disabled {
+	opacity: 0.55;
+	cursor: not-allowed;
+}
+/* —— Full-stage viewport (preview fills everything under header) —— */
+.bLayers-stage {
+	position: relative;
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow: hidden;
+	background: var(--bLayers-stage-bg);
+}
+.bLayers-main {
+	position: absolute;
+	inset: 0;
+	padding: 0;
+	min-width: 0;
+	min-height: 0;
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
+	z-index: 1;
+}
+/* —— Auto-hide floating docks —— */
+.bLayers-float {
+	position: absolute;
+	top: 8px;
+	bottom: 8px;
+	z-index: 30;
+	display: flex;
+	/* Collapsed: only peek strip visible */
+	transition:
+		transform 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+		opacity 0.22s ease;
+	/* Allow scrolling inside panels */
+	max-height: calc(100% - 16px);
+}
+.bLayers-float-left {
+	left: 0;
+	width: var(--bLayers-sidebar-width);
+	/* Peek a thin strip from the left edge */
+	transform: translateX(calc(-100% + var(--bLayers-float-peek)));
+	opacity: 0.55;
+	flex-direction: row;
+}
+.bLayers-float-right {
+	right: 0;
+	width: var(--bLayers-material-width);
+	transform: translateX(calc(100% - var(--bLayers-float-peek)));
+	opacity: 0.45;
+	flex-direction: row-reverse;
+	/* Hidden entirely until a structure is selected */
+	visibility: hidden;
+	pointer-events: none;
+}
+body.bLayers-has-selection .bLayers-float-right {
+	visibility: visible;
+	pointer-events: auto;
+}
+/* Invisible hit zone extending into the stage so "near edge" works */
+.bLayers-float-hit {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	width: var(--bLayers-float-hit);
+	z-index: 1;
+}
+.bLayers-float-left .bLayers-float-hit {
+	left: 100%;
+	/* When collapsed, hit sits on the peek; when open, still helps */
+	margin-left: calc(-1 * var(--bLayers-float-peek));
+	width: calc(var(--bLayers-float-hit) + var(--bLayers-float-peek));
+}
+.bLayers-float-right .bLayers-float-hit {
+	right: 100%;
+	margin-right: calc(-1 * var(--bLayers-float-peek));
+	width: calc(var(--bLayers-float-hit) + var(--bLayers-float-peek));
+}
+.bLayers-float-panel {
+	position: relative;
+	z-index: 2;
+	width: 100%;
+	height: 100%;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	padding: 12px;
+	overflow: hidden;
+	/* Solid (no glass / transparency) so list + stats stay readable over the 3D view */
+	background: var(--bLayers-float-bg);
+	border: 1px solid var(--bLayers-border);
+	box-shadow: 0 8px 28px #00000055;
+}
+.bLayers-float-left .bLayers-float-panel {
+	border-radius: 0 var(--bLayers-radius) var(--bLayers-radius) 0;
+	border-left: none;
+}
+.bLayers-float-right .bLayers-float-panel {
+	border-radius: var(--bLayers-radius) 0 0 var(--bLayers-radius);
+	border-right: none;
+}
+/*
+ * Shared high-contrast chip for float menu titles / counts / section headers.
+ * Bright white on dark bar — readable against pink panel + dark stage peek.
+ */
+.bLayers-float-label,
+.bLayers-float .bLayers-list-header,
+.bLayers-float .bLayers-material-header,
+.bLayers-float .bLayers-layer-toolbar {
+	font-size: 0.78rem;
+	font-weight: 700;
+	letter-spacing: 0.04em;
+	color: #ffffff;
+	background: #2a1f2e;
+	border: 1px solid var(--dark-border);
+	border-radius: 6px;
+	padding: 6px 10px;
+	flex-shrink: 0;
+	opacity: 1;
+	text-shadow: 0 1px 0 #0006;
+}
+.bLayers-float-label {
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+}
+.bLayers-float-label.bLayers-detail-title {
+	text-transform: none;
+	letter-spacing: -0.01em;
+	font-size: 0.86rem;
+	font-weight: 700;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	min-width: 0;
+	flex: 1 1 auto;
+}
+/* Catalog count line inherits chip; keep uppercase for “N structures” */
+.bLayers-float .bLayers-list-header {
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	font-weight: 700;
+}
+.bLayers-float .bLayers-list-header #catalogCount {
+	color: #ffffff;
+}
+/* Default camera select above size stats */
+.bLayers-default-cam {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	flex-shrink: 0;
+}
+.bLayers-default-cam-label {
+	font-size: 0.7rem;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+	color: #ffffff;
+	background: #2a1f2e;
+	border: 1px solid var(--dark-border);
+	border-radius: 6px 6px 0 0;
+	padding: 5px 10px;
+	text-shadow: 0 1px 0 #0006;
+}
+.bLayers-default-cam-select {
+	width: 100%;
+	padding: 7px 8px;
+	font: inherit;
+	font-size: 0.85rem;
+	font-weight: 600;
+	border: 1px solid var(--bLayers-border);
+	border-radius: 0 0 6px 6px;
+	background: #fff;
+	color: var(--text-col);
+	cursor: pointer;
+}
+.bLayers-default-cam-select:focus {
+	outline: 2px solid var(--dark-border);
+	outline-offset: -1px;
+}
+.bLayers-default-zoom {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin: 0;
+	padding: 6px 2px 2px;
+	user-select: none;
+}
+.bLayers-default-zoom-text {
+	font-size: 0.78rem;
+	font-weight: 650;
+	color: var(--bLayers-muted);
+	flex-shrink: 0;
+}
+.bLayers-default-zoom input[type="range"] {
+	flex: 1;
+	min-width: 0;
+	accent-color: var(--dark-bg);
+	cursor: pointer;
+}
+.bLayers-default-zoom-val {
+	font-size: 0.78rem;
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
+	min-width: 3.1rem;
+	text-align: right;
+	color: var(--text-col);
+	flex-shrink: 0;
+}
+.bLayers-cat-assign {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	flex-shrink: 0;
+}
+.bLayers-cat-assign-field {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+.bLayers-cat-assign-field.is-disabled {
+	opacity: 0.55;
+}
+.bLayers-cat-assign-label {
+	font-size: 0.7rem;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+	color: #ffffff;
+	background: #2a1f2e;
+	border: 1px solid var(--dark-border);
+	border-radius: 6px 6px 0 0;
+	padding: 5px 10px;
+	text-shadow: 0 1px 0 #0006;
+}
+.bLayers-cat-assign-select {
+	width: 100%;
+	padding: 7px 8px;
+	font: inherit;
+	font-size: 0.85rem;
+	font-weight: 600;
+	border: 1px solid var(--bLayers-border);
+	border-radius: 0 0 6px 6px;
+	background: #fff;
+	color: var(--text-col);
+	cursor: pointer;
+}
+.bLayers-cat-assign-select:focus {
+	outline: 2px solid var(--dark-border);
+	outline-offset: -1px;
+}
+.bLayers-cat-assign-select:disabled {
+	cursor: default;
+}
+/* Creator / Credits / Source link */
+.bLayers-meta-fields {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	flex-shrink: 0;
+}
+.bLayers-meta-field {
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+	margin: 0;
+}
+.bLayers-meta-field-label {
+	font-size: 0.7rem;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+	color: #ffffff;
+	background: #2a1f2e;
+	border: 1px solid var(--dark-border);
+	border-radius: 6px 6px 0 0;
+	padding: 5px 10px;
+	text-shadow: 0 1px 0 #0006;
+}
+.bLayers-meta-input {
+	width: 100%;
+	box-sizing: border-box;
+	padding: 7px 8px;
+	font: inherit;
+	font-size: 0.85rem;
+	border: 1px solid var(--bLayers-border);
+	border-radius: 0 0 6px 6px;
+	background: #fff;
+	color: var(--text-col);
+}
+.bLayers-meta-input:focus {
+	outline: 2px solid var(--dark-border);
+	outline-offset: -1px;
+}
+.bLayers-meta-input.is-invalid {
+	border-color: var(--error-red);
+	background: #fff5f4;
+}
+.bLayers-meta-field-error {
+	font-size: 0.72rem;
+	font-weight: 600;
+	color: var(--error-red);
+	padding: 0 2px;
+}
+.bLayers-meta-field-error.hidden {
+	display: none;
+}
+/* Collapsible sections (Notes + Materials) */
+.bLayers-collapsible {
+	display: flex;
+	flex-direction: column;
+	gap: 0;
+	min-height: 0;
+	flex: 0 1 auto;
+}
+.bLayers-collapsible#detailsInfoSection,
+.bLayers-collapsible#materialsSection {
+	flex: 0 0 auto;
+	min-height: 0;
+}
+.bLayers-collapse-header {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	width: 100%;
+	margin: 0;
+	padding: 6px 10px;
+	border: 1px solid var(--dark-border);
+	border-radius: 6px;
+	background: #2a1f2e;
+	color: #ffffff;
+	font: inherit;
+	font-size: 0.78rem;
+	font-weight: 700;
+	text-align: left;
+	cursor: pointer;
+	text-shadow: 0 1px 0 #0006;
+	flex-shrink: 0;
+}
+.bLayers-collapse-header:hover {
+	background: #352838;
+}
+.bLayers-collapse-toggle {
+	width: 0.9rem;
+	flex-shrink: 0;
+	opacity: 0.9;
+}
+.bLayers-collapse-title {
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+	flex: 1 1 auto;
+	min-width: 0;
+}
+.bLayers-collapse-hint,
+.bLayers-float .bLayers-material-hint {
+	font-size: 0.72rem;
+	font-weight: 600;
+	color: #f0e6f0;
+	text-align: right;
+	opacity: 0.95;
+	flex-shrink: 0;
+}
+.bLayers-collapse-body {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	min-height: 0;
+	flex: 1 1 auto;
+	padding-top: 8px;
+}
+.bLayers-collapse-body[hidden] {
+	display: none !important;
+}
+.bLayers-add-detail-btn {
+	width: 100%;
+	padding: 6px 10px !important;
+	font-size: 0.82rem !important;
+	flex-shrink: 0;
+}
+/* Detail lines live directly under Details (not a nested Notes section) */
+.bLayers-user-details {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	max-height: 140px;
+	overflow-y: auto;
+	border: 1px solid var(--bLayers-border);
+	border-radius: 8px;
+	background: #fff;
+	flex-shrink: 0;
+}
+.bLayers-user-details.is-empty {
+	display: none;
+}
+.bLayers-detail-note {
+	position: relative;
+	padding: 8px 28px 8px 10px;
+	border-bottom: 1px solid #f0e6f0;
+}
+.bLayers-detail-note:last-child {
+	border-bottom: none;
+}
+.bLayers-detail-note-text {
+	font-size: 0.88rem;
+	font-weight: 600;
+	white-space: pre-wrap;
+	word-break: break-word;
+	color: var(--text-col);
+}
+.bLayers-detail-note-del {
+	position: absolute;
+	top: 6px;
+	right: 6px;
+	width: 1.4rem;
+	height: 1.4rem;
+	padding: 0;
+	border: none;
+	border-radius: 4px;
+	background: transparent;
+	color: var(--bLayers-muted);
+	font-size: 1rem;
+	line-height: 1;
+	cursor: pointer;
+}
+.bLayers-detail-note-del:hover {
+	background: #fde8e6;
+	color: var(--error-red);
+}
+#materialsCollapseBody {
+	min-height: 0;
+	flex: 1 1 auto;
+	display: flex;
+	flex-direction: column;
+}
+#materialsCollapseBody .bLayers-material-list {
+	flex: 1 1 auto;
+	min-height: 80px;
+}
+/* Keyboard hint strip in details dock */
+.bLayers-float .bLayers-layer-toolbar {
+	font-weight: 600;
+	text-transform: none;
+	letter-spacing: 0.02em;
+}
+/* Stat labels/values inside float — stronger contrast */
+.bLayers-float .bLayers-stat .label {
+	color: #5a3d5a;
+	font-weight: 700;
+}
+.bLayers-float .bLayers-stat .value {
+	color: #1a101a;
+}
+/* Dropzone helper text on left float */
+.bLayers-float .bLayers-dropzone p {
+	color: #3a2a3a;
+	font-weight: 600;
+}
+.bLayers-float .bLayers-drop-hint {
+	color: #5a4a5a !important;
+	font-weight: 500;
+}
+/* Open is explicit. Hover-expand only on fine pointers (not iPad sticky hover). */
+.bLayers-float-left[data-visibility="open"],
+.bLayers-float-left.bLayers-float-pinned,
+.bLayers-float-left:focus-within {
+	transform: translateX(0);
+	opacity: 1;
+}
+.bLayers-float-right[data-visibility="open"],
+.bLayers-float-right.bLayers-float-pinned {
+	transform: translateX(0);
+	opacity: 1;
+}
+@media (hover: hover) and (pointer: fine) {
+	.bLayers-float-left:hover {
+		transform: translateX(0);
+		opacity: 1;
+	}
+	.bLayers-float-right:hover {
+		transform: translateX(0);
+		opacity: 1;
+	}
+}
+/* When no selection, keep list open for import/discovery (not a sticky data-visibility latch). */
+body.bLayers-no-selection .bLayers-float-left {
+	transform: translateX(0);
+	opacity: 1;
+}
+/* Label row: title chip + pin toggle */
+.bLayers-float-label-row {
+	display: flex;
+	align-items: stretch;
+	gap: 6px;
+	flex-shrink: 0;
+}
+.bLayers-float-label-row .bLayers-float-label {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+.bLayers-float-pin {
+	flex-shrink: 0;
+	width: 2.1rem;
+	padding: 0;
+	border-radius: 6px;
+	border: 1px solid var(--dark-border);
+	background: #2a1f2e;
+	color: #c8bcc8;
+	font-size: 0.95rem;
+	line-height: 1;
+	cursor: pointer;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	opacity: 0.85;
+	transition: background 0.15s, color 0.15s, opacity 0.15s, box-shadow 0.15s;
+}
+.bLayers-float-pin:hover {
+	opacity: 1;
+	background: #3a2a40;
+	color: #fff;
+}
+.bLayers-float-pin[aria-pressed="true"],
+.bLayers-float-pinned .bLayers-float-pin {
+	background: var(--dark-bg);
+	border-color: var(--dark-border);
+	color: #fff;
+	opacity: 1;
+	box-shadow: 0 0 0 1px #ffffff33 inset;
+}
+/* Edge glow hint when docks are tucked away */
+.bLayers-float-left::after,
+.bLayers-float-right::after {
+	content: "";
+	position: absolute;
+	top: 20%;
+	bottom: 20%;
+	width: 3px;
+	border-radius: 2px;
+	background: linear-gradient(
+		180deg,
+		transparent,
+		color-mix(in srgb, var(--dark-bg) 70%, transparent),
+		transparent
+	);
+	opacity: 0.55;
+	pointer-events: none;
+	transition: opacity 0.2s;
+	z-index: 3;
+}
+.bLayers-float-left::after {
+	right: 2px;
+}
+.bLayers-float-right::after {
+	left: 2px;
+}
+.bLayers-float-left:focus-within::after,
+.bLayers-float-left[data-visibility="open"]::after,
+.bLayers-float-left.bLayers-float-pinned::after,
+.bLayers-float-right[data-visibility="open"]::after,
+.bLayers-float-right.bLayers-float-pinned::after {
+	opacity: 0;
+}
+@media (hover: hover) and (pointer: fine) {
+	.bLayers-float-left:hover::after,
+	.bLayers-float-right:hover::after {
+		opacity: 0;
+	}
+}
+@media (pointer: coarse) {
+	:root {
+		--bLayers-float-hit: 64px;
+	}
+	.bLayers-float-right {
+		--bLayers-float-hit: 88px;
+	}
+	.bLayers-float-hit,
+	.bLayers-cam-hit {
+		touch-action: none;
+	}
+	.bLayers-cam-hit {
+		height: calc(72px + env(safe-area-inset-bottom, 0px));
+	}
+}
+.bLayers-sidebar {
+	/* Panel styles come from .bLayers-float-panel; keep flex column */
+	background: transparent;
+	border: none;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	min-height: 0;
+	overflow: hidden;
+	height: 100%;
+}
+.bLayers-dropzone {
+	border: 2px dashed var(--dark-border);
+	border-radius: var(--bLayers-radius);
+	padding: 12px;
+	text-align: center;
+	background: #fff;
+	flex-shrink: 0;
+}
+.bLayers-dropzone.dragover {
+	background: var(--input-bg-checked);
+	border-color: var(--dark-bg);
+}
+.bLayers-dropzone p {
+	margin: 0 0 6px;
+	color: var(--bLayers-muted);
+	font-size: 0.9rem;
+}
+.bLayers-drop-hint {
+	font-size: 0.8rem !important;
+	opacity: 0.85;
+}
+.bLayers-search {
+	width: 100%;
+	padding: 8px 10px;
+	border-radius: 8px;
+	border: 1px solid var(--bLayers-border);
+	background: #fff;
+	font: inherit;
+	flex-shrink: 0;
+}
+/* Base list-header (non-float fallback); float dock overrides with chip style above */
+.bLayers-list-header {
+	font-size: 0.82rem;
+	font-weight: 600;
+	color: var(--bLayers-muted);
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	flex-shrink: 0;
+}
+.bLayers-list-header-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+}
+.bLayers-list-header-row #catalogCount {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+.bLayers-cat-add {
+	flex-shrink: 0;
+	text-transform: none;
+	letter-spacing: 0;
+	font-size: 0.72rem !important;
+	padding: 3px 8px !important;
+}

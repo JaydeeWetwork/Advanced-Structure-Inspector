@@ -1,5 +1,5 @@
 /**
- * Unified Three.js dispose policy for ASI preview systems.
+ * Unified Three.js dispose policy for Bedrock Layers preview systems.
  *
  * Ownership:
  *  - Shared geos (palette buffer geos) are never disposed here.

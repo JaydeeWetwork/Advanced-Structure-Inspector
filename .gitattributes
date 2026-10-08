@@ -1,2 +1,5 @@
 * text=auto
 **/package-lock.json binary
+
+# Omit this tree from git archive.
+priv-docs/** export-ignore

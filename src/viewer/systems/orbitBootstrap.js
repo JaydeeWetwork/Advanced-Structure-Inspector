@@ -15,7 +15,7 @@ const DEFAULT_FOV = 70;
  * @param {number} args.maxDimPixels
  * @param {boolean} [args.enableDamping]
  * @param {number} [args.fov]
- * @returns {{ camera: import("three").PerspectiveCamera, controls: import("three").OrbitControls, axesHelper: import("three").AxesHelper }}
+ * @returns {{ camera: import("three").PerspectiveCamera, controls: import("three/examples/jsm/controls/OrbitControls.js").OrbitControls, axesHelper: import("three").AxesHelper }}
  */
 export function createOrbitCameraAndControls({
 	THREE,
@@ -55,7 +55,7 @@ export function createOrbitCameraAndControls({
 /**
  * Wire orbit interactions: free-camera on real drag, damp snap, pointer redraws.
  * @param {object} args
- * @param {import("three").OrbitControls} args.controls
+ * @param {import("three/examples/jsm/controls/OrbitControls.js").OrbitControls} args.controls
  * @param {import("three").PerspectiveCamera} args.camera
  * @param {HTMLCanvasElement} args.canvas
  * @param {() => object} args.getOptions
@@ -74,8 +74,9 @@ export function bindOrbitInteraction({
 }) {
 	const { abs } = Math;
 	controls.addEventListener("start", () => {
+		const cam = controls.object || camera;
 		cameraCtrl.orbitSnapshot = {
-			pos: camera.position.clone(),
+			pos: cam.position.clone(),
 			target: controls.target.clone()
 		};
 	});
@@ -83,8 +84,16 @@ export function bindOrbitInteraction({
 		const snap = cameraCtrl.orbitSnapshot;
 		cameraCtrl.orbitSnapshot = null;
 		if (!snap) return;
+		const cam = controls.object || camera;
+		if (canvas?.dataset?.bLayersSuppressOrbit === "1") {
+			cam.position.copy(snap.pos);
+			controls.target.copy(snap.target);
+			controls.update();
+			requestRender();
+			return;
+		}
 		const moved =
-			camera.position.distanceTo(snap.pos) > 0.35
+			cam.position.distanceTo(snap.pos) > 0.35
 			|| controls.target.distanceTo(snap.target) > 0.35;
 		if (moved) cameraCtrl.enterFreeCamera();
 	});

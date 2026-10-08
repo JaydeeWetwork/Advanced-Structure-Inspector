@@ -137,6 +137,7 @@ export function fillHydratedMaps({ rows, cats, ents, feats, entries, categories,
 				? [...row.acquiredMaterials]
 				: [],
 			defaultCameraPreset: row.defaultCameraPreset || "iso-north",
+			defaultCameraZoom: Number.isFinite(row.defaultCameraZoom) ? row.defaultCameraZoom : 1,
 			userDetails: Array.isArray(row.userDetails)
 				? row.userDetails.map(d => ({ ...d }))
 				: [],
@@ -145,7 +146,61 @@ export function fillHydratedMaps({ rows, cats, ents, feats, entries, categories,
 			sourceLink: typeof row.sourceLink === "string" ? row.sourceLink : "",
 			addedAt: row.addedAt,
 			file: row.file,
+			contentCrc32: typeof row.contentCrc32 === "string" ? row.contentCrc32 : "",
 			parseError: row.parseError
 		});
 	}
 }
+
+export function newCatalogId(prefix = "bLayers") {
+	if (typeof crypto !== "undefined" && crypto.randomUUID) {
+		return crypto.randomUUID();
+	}
+	return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+export function slugFromName(name) {
+	const slug = String(name || "")
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, "-")
+		.replace(/^-+|-+$/g, "");
+	return slug || "item";
+}
+
+export function uniqueSlug(base, taken) {
+	if (!taken.has(base)) return base;
+	for (let i = 2; i < 1000; i++) {
+		const next = `${base}-${i}`;
+		if (!taken.has(next)) return next;
+	}
+	return `${base}-${newCatalogId("s")}`;
+}
+
+/**
+ * Lowercase search text for one structure row.
+ * @param {object} entry
+ * @param {{ catalogEntries: Map<string, object>, categories: Map<string, object>, features: Map<string, object> }} maps
+ */
+export function structureSearchText(entry, maps) {
+	const fn = entry.entryId ? maps.catalogEntries.get(entry.entryId) : null;
+	const cat = fn ? maps.categories.get(fn.categoryId) : null;
+	const featureNames = (entry.featureIds || [])
+		.map(id => maps.features.get(id)?.name ?? "")
+		.join(" ");
+	return [
+		entry.name,
+		entry.sourceName,
+		entry.sourceKind,
+		fn?.name ?? "",
+		cat?.name ?? "uncategorized",
+		entry.creator ?? "",
+		entry.credits ?? "",
+		featureNames,
+		entry.size.join("x"),
+		String(entry.entityCount ?? 0),
+		...entry.blockNames
+	]
+		.join(" ")
+		.toLowerCase();
+}
+

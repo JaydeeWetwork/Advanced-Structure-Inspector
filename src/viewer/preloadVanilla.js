@@ -3,9 +3,9 @@
  * Overlaps with IndexedDB hydrate so the first preview hits memory instead of CDN.
  */
 
-import ResourcePackStack from "../ResourcePackStack.js";
-import BlockUpdater from "../BlockUpdater.js";
-import fetchers from "../fetchers.js";
+import ResourcePackStack from "./engine/ResourcePackStack.js";
+import BlockUpdater from "./engine/BlockUpdater.js";
+import fetchers from "./engine/fetchers.js";
 import { VANILLA_ENTITY_MODELS } from "./entityModels.js";
 import { loadItemUpgradeSchemas } from "./itemUpgrade.js";
 import { packAssetStore } from "./appearance/PackAssetStore.js";
@@ -17,14 +17,25 @@ let preloadPromise = null;
 /**
  * @returns {string[]}
  */
-function entityKitPaths() {
-	const paths = new Set();
+function entityKitFiles() {
+	const json = [];
+	const textures = [];
+	const seenJson = new Set();
+	const seenTex = new Set();
 	for (const def of Object.values(VANILLA_ENTITY_MODELS)) {
-		paths.add(def.entityFile);
-		paths.add(def.geoFile);
-		paths.add(`${def.texture}.png`);
+		for (const p of [def.entityFile, def.geoFile]) {
+			if (seenJson.has(p)) continue;
+			seenJson.add(p);
+			json.push(p);
+		}
+		const texs = def.variantTextures?.length ? def.variantTextures : [def.texture];
+		for (const t of texs) {
+			if (seenTex.has(t)) continue;
+			seenTex.add(t);
+			textures.push(t);
+		}
 	}
-	return [...paths];
+	return { json, textures };
 }
 
 /**
@@ -35,7 +46,7 @@ function entityKitPaths() {
 export function preloadVanillaAssets() {
 	if (!preloadPromise) {
 		preloadPromise = runPreload().catch(err => {
-			console.warn("[basi] vanilla preload failed", err);
+			console.warn("[bLayers] vanilla preload failed", err);
 			preloadPromise = null;
 		});
 	}
@@ -44,23 +55,27 @@ export function preloadVanillaAssets() {
 
 async function runPreload() {
 	const rps = new ResourcePackStack();
-	const kitPaths = entityKitPaths();
-	await packAssetStore.prewarm();
+	const { json: kitJson, textures: kitTextures } = entityKitFiles();
 	const hotTextures = [
 		"textures/entity/chest/normal",
 		"textures/entity/chest/double_normal",
 		"textures/entity/chest/trapped",
 		"textures/entity/chest/trapped_double"
 	];
+	// Pack JSON first, then color images. Both share the CDN slots with an open structure.
+	await packAssetStore.prewarm();
 	await Promise.all([
-		ensureItemIconLoader().catch(e => console.warn("[basi] icon prewarm", e)),
+		ensureItemIconLoader().catch(e => console.warn("[bLayers] icon prewarm", e)),
 		...ResourcePackStack.JSON_FILES_TO_MERGE.map(path => rps.fetchResource(path).catch(() => null)),
-		...kitPaths.map(path => rps.fetchResource(path).catch(() => null)),
-		...hotTextures.map(path => packAssetStore.decodeTexture(path).catch(() => null)),
+		...kitJson.map(path => rps.fetchResource(path).catch(() => null)),
 		loadItemUpgradeSchemas(fetchers).catch(() => []),
 		new BlockUpdater().ensureSchemaIndex().catch(() => {})
 	]);
+	await Promise.all([
+		...kitTextures.map(path => packAssetStore.decodeTexture(path, { placeholder: false }).catch(() => null)),
+		...hotTextures.map(path => packAssetStore.decodeTexture(path).catch(() => null))
+	]);
 	console.info(
-		`[basi] vanilla preload ready (${ResourcePackStack.JSON_FILES_TO_MERGE.length} pack json, ${kitPaths.length} entity kit paths)`
+		`[bLayers] vanilla preload ready (${ResourcePackStack.JSON_FILES_TO_MERGE.length} pack json, ${kitJson.length} entity json, ${kitTextures.length} entity textures)`
 	);
 }

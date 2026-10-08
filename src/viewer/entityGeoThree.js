@@ -56,15 +56,36 @@ export function resolveCubeUvFaces(cubeUv, size) {
 
 /**
  * Pixel rect → 0–1 UVs. Three.js flipY: Minecraft v=0 is top of PNG.
+ *
+ * Box faces share exact texel borders on the entity sheet, and the unused
+ * texels beside a cushion are empty. Nearest filtering flips between the face
+ * and that padding as the edge crosses a pixel, which reads as white specks
+ * along the seam. Inset matches BlockGeoMaker.resolveTemplateFaceUvs.
+ *
  * @returns {[[number, number], [number, number], [number, number], [number, number]]}
  */
 export function pixelUvQuad(u, v, uw, vh, texW, texH) {
 	const tw = texW || 64;
 	const th = texH || 32;
-	const u0 = u / tw;
-	const u1 = (u + uw) / tw;
-	const v0 = 1 - (v + vh) / th;
-	const v1 = 1 - v / th;
+	const au = Math.abs(uw);
+	const av = Math.abs(vh);
+	let iu = u;
+	let iv = v;
+	let iuw = uw;
+	let ivh = vh;
+	if (au > 0 && av > 0) {
+		const inset = Math.min(0.5, 0.25 * Math.min(au, av, 16));
+		const su = Math.sign(uw) || 1;
+		const sv = Math.sign(vh) || 1;
+		iu = u + su * inset;
+		iv = v + sv * inset;
+		iuw = su * Math.max(au - inset * 2, 0.01);
+		ivh = sv * Math.max(av - inset * 2, 0.01);
+	}
+	const u0 = iu / tw;
+	const u1 = (iu + iuw) / tw;
+	const v0 = 1 - (iv + ivh) / th;
+	const v1 = 1 - iv / th;
 	return [
 		[u0, v0],
 		[u1, v0],
@@ -163,19 +184,15 @@ export function createGeometryMesh(THREE, geoBlock, texture) {
 }
 
 /**
- * @param {import("../ResourcePackStack.js").default} rps
+ * @param {import("./engine/ResourcePackStack.js").default} rps
  * @param {string} pathNoExt
  * @returns {Promise<Blob|null>}
  */
 export async function fetchVanillaTextureBlob(rps, pathNoExt) {
 	if (!rps?.fetchResource) return null;
-	const { packAssetStore } = await import("./appearance/PackAssetStore.js");
-	const { imageRes } = await packAssetStore.fetchTexture(pathNoExt, undefined, {
-		tryLocal: pathWithExt => {
-			const file = rps.getLocalFile?.(pathWithExt);
-			return file ? new Response(file) : null;
-		}
-	});
+	const { packAssetStore, readLocalColorFile } = await import("./appearance/PackAssetStore.js");
+	const local = readLocalColorFile(pathNoExt, rps);
+	const { imageRes } = local ?? await packAssetStore.fetchTexture(pathNoExt);
 	if (!imageRes?.ok) return null;
 	const blob = await imageRes.blob();
 	return blob && blob.size > 8 ? blob : null;
@@ -185,6 +202,28 @@ export async function fetchVanillaTextureBlob(rps, pathNoExt) {
  * @param {typeof import("three")} THREE
  * @param {Blob} blob
  */
+/**
+ * ImageData from PackAssetStore (PNG or TGA) → nearest DataTexture.
+ * flipY matches TextureLoader. pixelUvQuad assumes that upload flip.
+ * @param {typeof import("three")} THREE
+ * @param {ImageData} imageData
+ */
+export function imageDataToThreeTexture(THREE, imageData) {
+	const texture = new THREE.DataTexture(
+		imageData.data,
+		imageData.width,
+		imageData.height,
+		THREE.RGBAFormat
+	);
+	texture.colorSpace = THREE.SRGBColorSpace;
+	texture.magFilter = THREE.NearestFilter;
+	texture.minFilter = THREE.NearestFilter;
+	texture.generateMipmaps = false;
+	texture.flipY = true;
+	texture.needsUpdate = true;
+	return texture;
+}
+
 export async function blobToThreeTexture(THREE, blob) {
 	const url = URL.createObjectURL(blob);
 	try {
@@ -206,7 +245,7 @@ export async function blobToThreeTexture(THREE, blob) {
  * Shared geo/texture: cargo kinds clone the same hull.
  *
  * @param {typeof import("three")} THREE
- * @param {import("../ResourcePackStack.js").default} rps
+ * @param {import("./engine/ResourcePackStack.js").default} rps
  * @returns {Promise<Map<string, { template: import("three").Object3D, texture: import("three").Texture, cargo: string }>>}
  */
 export async function loadVanillaEntityKit(THREE, rps) {
@@ -242,9 +281,12 @@ export async function loadVanillaEntityKit(THREE, rps) {
 	const loadTex = (path) => {
 		if (!texCache.has(path)) {
 			texCache.set(path, (async () => {
-				const blob = await fetchVanillaTextureBlob(rps, path);
-				if (!blob) return null;
-				return blobToThreeTexture(THREE, blob);
+				const { packAssetStore } = await import("./appearance/PackAssetStore.js");
+				const decoded = await packAssetStore.decodeTexturePreferLocal(path, rps, {
+					placeholder: false
+				});
+				if (decoded?.imageNotFound || !decoded?.imageData) return null;
+				return imageDataToThreeTexture(THREE, decoded.imageData);
 			})());
 		}
 		return texCache.get(path);
@@ -268,13 +310,15 @@ export async function loadVanillaEntityKit(THREE, rps) {
 				const geoFile = await loadGeo(def.geoFile);
 				const geoBlock = pickGeometry(geoFile, wantedIds);
 				if (!geoBlock) return null;
-				const texture = await loadTex(def.texture);
-				if (!texture) {
-					console.warn("[basi] minecart PNG missing for", kind, "— still meshing untextured hull");
+				const texPaths = def.variantTextures?.length ? def.variantTextures : [def.texture];
+				const textures = await Promise.all(texPaths.map(p => loadTex(p)));
+				const primary = textures.find(Boolean) ?? null;
+				if (!primary) {
+					console.warn("[bLayers] entity texture missing for", kind, "— still meshing untextured hull");
 				}
-				return { kind, def, geoBlock, texture };
+				return { kind, def, geoBlock, textures, primary };
 			} catch (e) {
-				console.warn("[basi] vanilla entity kit failed:", kind, e);
+				console.warn("[bLayers] vanilla entity kit failed:", kind, e);
 				return null;
 			}
 		})
@@ -284,12 +328,26 @@ export async function loadVanillaEntityKit(THREE, rps) {
 	const hullByKey = new Map();
 	for (const item of loaded) {
 		if (!item) continue;
-		const { kind, def, geoBlock, texture } = item;
+		const { kind, def, geoBlock, textures, primary } = item;
 		const hullKey = `${def.geoFile}|${geoBlock.description?.identifier}|${def.texture}`;
 		let hull = hullByKey.get(hullKey);
 		if (!hull) {
-			hull = createGeometryMesh(THREE, geoBlock, texture);
+			hull = createGeometryMesh(THREE, geoBlock, primary);
 			hullByKey.set(hullKey, hull);
+		}
+		/** @type {import("three").Material[]|null} */
+		let variantMaterials = null;
+		if (def.variantTextures?.length) {
+			variantMaterials = textures.map(tex => {
+				if (!tex || tex === primary) return hull.material;
+				const m = hull.material.clone();
+				m.map = tex;
+				m.color.set(0xffffff);
+				m.transparent = true;
+				m.alphaTest = 0.1;
+				m.needsUpdate = true;
+				return m;
+			});
 		}
 
 		const template = new THREE.Group();
@@ -298,7 +356,14 @@ export async function loadVanillaEntityKit(THREE, rps) {
 		hullInst.name = hull.name;
 		hullInst.frustumCulled = false;
 		template.add(hullInst);
-		kit.set(kind, { template, texture, cargo: def.cargo });
+		kit.set(kind, {
+			template,
+			texture: primary,
+			textures,
+			variantMaterials,
+			cargo: def.cargo,
+			pose: def.pose === "floor" ? "floor" : "rail"
+		});
 	}
 	return kit;
 }

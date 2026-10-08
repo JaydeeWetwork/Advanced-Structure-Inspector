@@ -1,13 +1,13 @@
 /**
- * Shared JSDoc types for Bedrock ASI preview/geo.
- * Pack-only types live in src/holoprint/packTypes.js.
+ * Shared JSDoc types for Bedrock Layers preview/geo.
+ * Pack-only types live in src/pack/packTypes.js.
  */
 
 /** @import * as Data from "./data/schemas" */
 
 /**
  * Config BlockGeoMaker / TextureAtlas actually read for inspector preview.
- * @typedef {object} AsiPreviewConfig
+ * @typedef {object} bedrockLayersPreviewConfig
  * @property {string[]} IGNORED_BLOCKS
  * @property {number} SCALE
  * @property {number} OPACITY
@@ -33,7 +33,7 @@
  * @property {number} version
  */
 /**
- * @typedef {object} Block A block palette entry, similar to how it appears in the NBT, as used in HoloPrint.
+ * @typedef {object} Block A block palette entry, similar to how it appears in the NBT.
  * @property {string} name The block's ID
  * @property {Record<string, number | string>} [states] Block states
  * @property {object} [block_entity_data] Block entity data
@@ -56,6 +56,7 @@
  * @typedef {object} PolyMeshTemplateFace
  * @property {Vec3} normal
  * @property {number} textureRefI
+ * @property {boolean} [doubleSide] 0-thickness cube face; preview compiles a separate card geo
  * @property {[PolyMeshTemplateVertex, PolyMeshTemplateVertex, PolyMeshTemplateVertex, PolyMeshTemplateVertex]} vertices
  */
 /**
@@ -67,6 +68,7 @@
  * @typedef {object} PolyMeshTemplateFaceWithUvs
  * @property {Vec3} normal
  * @property {number} transparency Average transparency per texture pixel. 255 = fully transparent, 0 = fully opaque
+ * @property {boolean} [doubleSide] 0-thickness cube face; preview compiles a separate card geo
  * @property {[PolyMeshTemplateVertexWithUv, PolyMeshTemplateVertexWithUv, PolyMeshTemplateVertexWithUv, PolyMeshTemplateVertexWithUv]} vertices
  */
 /**
@@ -118,10 +120,10 @@
  */
 /**
  * @typedef {object} MCStructure The parsed NBT of a `.mcstructure` file.
- * @property {number} format_version Format version, should be always set to 1.
+ * @property {number} format_version Format version, 1 or 2 (TAG_Int). Version 1 always stores two block layers. Version 2 (Minecraft 26.50+) stores the second (waterlog) layer only when it is not empty. Other values are rejected with STRUCTURE_UNSUPPORTED_VERSION.
  * @property {I32Vec3} size Size of the structure in blocks.
  * @property {object} structure
- * @property {[Int32Array, Int32Array]} structure.block_indices Block indices for the structure.
+ * @property {[Int32Array, Int32Array]} structure.block_indices Block indices for the structure: layer 0 = blocks, layer 1 = waterlog/extra layer, -1 = empty. After readMcstructure there are always two layers, because a one-layer version 2 file is padded with an all -1 second layer. On disk, v1 stores List<List<Int>> and v2 stores List<Int_Array>.
  * @property {EntityNBTCompound[]} structure.entities List of entities stored as NBT.
  * @property {object} structure.palette
  * @property {object} structure.palette.default
@@ -229,3 +231,5 @@
 /**
  * @typedef {Float32Array & { length: 8 }} F32Vec8
  */
+
+export {};
