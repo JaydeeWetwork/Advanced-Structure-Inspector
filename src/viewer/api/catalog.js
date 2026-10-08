@@ -1,29 +1,14 @@
 /**
- * Public Structure Catalog API (IndexedDB-backed).
+ * Public catalog API. Persistence stays inside StructureCatalog / db.js.
  */
 
 export { default as StructureCatalog } from "../catalog.js";
+export { DEFAULT_DB_NAME } from "../db.js";
 export {
-	dbPutStructure,
-	dbDeleteStructure,
-	dbClearAll,
-	dbClearStructures,
-	dbLoadAll,
-	dbPutCategory,
-	dbPutCategories,
-	dbDeleteCategory,
-	dbLoadCategories,
-	dbPutEntry,
-	dbPutEntries,
-	dbDeleteEntry,
-	dbLoadEntries,
-	dbPutFeature,
-	dbPutFeatures,
-	dbDeleteFeature,
-	dbLoadFeatures,
-	dbCloneCatalog,
-	dbDeleteCatalog,
-	dbGetMeta,
-	dbPutMeta,
-	DEFAULT_DB_NAME
-} from "../db.js";
+	activateCatalog,
+	createEmptyCatalog,
+	deleteActiveCatalog,
+	renameActiveCatalog,
+	saveCatalogAs
+} from "../catalogSwitch.js";
+export { getActiveCatalog, listCatalogs } from "../catalogRegistry.js";

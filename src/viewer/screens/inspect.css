@@ -1,0 +1,432 @@
+/* Sign / lectern / redstone text panels inside inspect mockup */
+.mc-inv-text-panel {
+	padding: 8px 10px 10px;
+	min-width: min(280px, 70vw);
+	max-width: min(420px, 90vw);
+}
+.mc-inv-sign.mc-inv-text-panel {
+	min-width: min(360px, 88vw);
+	max-width: min(520px, 94vw);
+}
+.mc-text-face {
+	margin-bottom: 8px;
+}
+.mc-text-face-label,
+.mc-text-meta {
+	font-size: 0.72rem;
+	font-weight: 700;
+	color: #3f3f3f;
+	margin-bottom: 4px;
+}
+.mc-text-lines {
+	margin: 0;
+	padding: 8px 10px;
+	background: #1a151c;
+	color: #f0e8f0;
+	border: 2px solid #373737;
+	border-radius: 2px;
+	font-family: "Minecraft", "Segoe UI", system-ui, sans-serif;
+	font-size: 0.85rem;
+	line-height: 1.35;
+	white-space: pre-wrap;
+	word-break: break-word;
+	min-height: 3.2em;
+}
+.mc-book-page {
+	min-height: 6em;
+	max-height: 14em;
+	overflow: auto;
+}
+.mc-book-all {
+	margin-top: 8px;
+	font-size: 0.75rem;
+}
+.mc-rs-bar {
+	display: flex;
+	gap: 2px;
+	height: 18px;
+	margin-top: 6px;
+}
+.mc-rs-cell {
+	flex: 1;
+	background: #2a2028;
+	border: 1px solid #111;
+	border-radius: 1px;
+}
+.mc-rs-cell.on {
+	background: var(--rs, #c00);
+	box-shadow: 0 0 4px var(--rs, #c00);
+}
+/* —— Minecraft-style inventory mockup —— */
+.mc-inv {
+	--mc-bg: #c6c6c6;
+	--mc-slot: #8b8b8b;
+	--mc-slot-in: #373737;
+	--mc-border: #373737;
+	--mc-light: #ffffff;
+	--mc-text: #3f3f3f;
+	background: var(--mc-bg);
+	border: 2px solid var(--mc-border);
+	border-radius: 4px;
+	box-shadow:
+		inset 2px 2px 0 var(--mc-light),
+		inset -2px -2px 0 #555;
+	padding: 8px 10px 10px;
+	color: var(--mc-text);
+	font-family: "Catamaran", "Trebuchet MS", sans-serif;
+	max-width: 100%;
+}
+.mc-inv-simple {
+	min-width: 12rem;
+}
+.mc-inv-header {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-bottom: 8px;
+}
+.mc-inv-title {
+	font-weight: 700;
+	font-size: 0.95rem;
+	flex: 1;
+	text-shadow: 1px 1px 0 #eee;
+}
+.mc-inv-location {
+	font-family: ui-monospace, Consolas, monospace;
+	font-size: 0.72rem;
+	font-weight: 600;
+	color: #5a5348;
+	margin: -4px 0 8px;
+	letter-spacing: 0.02em;
+}
+.mc-inv-badge {
+	font-size: 0.72rem;
+	font-weight: 700;
+	padding: 2px 8px;
+	border-radius: 4px;
+	background: #8bc34a;
+	color: #1b3a0a;
+}
+.mc-inv-badge.locked {
+	background: #e57373;
+	color: #4a1010;
+}
+.mc-inv-close {
+	border: none;
+	background: #999;
+	color: #222;
+	width: 22px;
+	height: 22px;
+	border-radius: 3px;
+	cursor: pointer;
+	font-size: 1rem;
+	line-height: 1;
+	padding: 0;
+	box-shadow: inset 1px 1px 0 #ccc, inset -1px -1px 0 #555;
+}
+.mc-inv-close:hover {
+	background: #bbb;
+}
+.mc-inv-body {
+	display: flex;
+	justify-content: center;
+}
+.mc-inv-row-wrap {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	flex-wrap: wrap;
+	justify-content: center;
+}
+.mc-inv-grid {
+	display: grid;
+	grid-template-columns: repeat(var(--mc-cols, 9), 40px);
+	gap: 2px;
+	padding: 4px;
+	background: #8b8b8b;
+	box-shadow: inset 1px 1px 0 #555, inset -1px -1px 0 #ddd;
+}
+.mc-inv-grid.cols-5 {
+	grid-template-columns: repeat(5, 40px);
+}
+.mc-inv-grid.cols-3 {
+	grid-template-columns: repeat(3, 40px);
+}
+.mc-inv.double-chest {
+	min-width: 392px;
+}
+.mc-inv-double {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+.mc-inv-double .double-bot {
+	margin-top: 2px;
+}
+.mc-slot {
+	width: 40px;
+	height: 40px;
+	background: var(--mc-slot);
+	box-shadow: inset 1px 1px 0 var(--mc-slot-in), inset -1px -1px 0 #b0b0b0;
+	position: relative;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	overflow: hidden;
+}
+.mc-slot.filled {
+	background: #8b8b8b;
+}
+.mc-slot.blocked {
+	background: #555;
+	box-shadow: inset 1px 1px 0 #333, inset -1px -1px 0 #777;
+}
+.mc-slot-block-mark {
+	color: #c44;
+	font-weight: 900;
+	font-size: 1.1rem;
+	line-height: 1;
+	text-shadow: 0 0 1px #000;
+}
+/*
+ * Item icon centered in the 40×40 slot.
+ * Do NOT use `inset` shorthand — it overrides left/top and parks icons in a corner.
+ * Also override base.css img { width: 400px }.
+ */
+.mc-slot-icon,
+.bLayers-app .mc-inv img.mc-slot-icon,
+.bLayers-app img.mc-slot-icon {
+	position: absolute !important;
+	left: 50% !important;
+	top: 50% !important;
+	right: auto !important;
+	bottom: auto !important;
+	transform: translate(-50%, -50%) !important;
+	width: 32px !important;
+	height: 32px !important;
+	max-width: 32px !important;
+	max-height: 32px !important;
+	min-width: 0 !important;
+	min-height: 0 !important;
+	object-fit: contain !important;
+	object-position: center center !important;
+	image-rendering: pixelated;
+	image-rendering: crisp-edges;
+	pointer-events: none;
+	opacity: 0;
+	z-index: 1;
+	border: none !important;
+	display: block !important;
+	margin: 0 !important;
+	padding: 0 !important;
+	vertical-align: middle;
+	box-sizing: border-box !important;
+}
+.mc-slot-icon.loaded,
+.bLayers-app .mc-inv img.mc-slot-icon.loaded,
+.bLayers-app img.mc-slot-icon.loaded {
+	opacity: 1;
+}
+.mc-slot-name {
+	font-size: 0.55rem;
+	line-height: 1.05;
+	text-align: center;
+	padding: 2px;
+	color: #f5f5f5;
+	text-shadow: 1px 1px 0 #000;
+	word-break: break-word;
+	max-width: 100%;
+	pointer-events: none;
+	z-index: 0;
+}
+/* Hide short text once the real icon is in place */
+.mc-slot-name.icon-loaded {
+	display: none;
+}
+.mc-slot-count {
+	position: absolute;
+	right: 2px;
+	bottom: 1px;
+	font-size: 0.7rem;
+	font-weight: 800;
+	color: #fff;
+	text-shadow: 1px 1px 0 #000, -1px 0 0 #000;
+	font-variant-numeric: tabular-nums;
+	pointer-events: none;
+	z-index: 2;
+}
+.mc-inv-arrow {
+	font-size: 1.4rem;
+	font-weight: 700;
+	color: #444;
+	padding: 0 4px;
+}
+.mc-inv-furnace {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+.mc-inv-furnace-col {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 4px;
+}
+.mc-inv-flame {
+	color: #e67e22;
+	font-size: 0.85rem;
+	line-height: 1;
+}
+/* Brewing stand — matches MC: fuel left, ingredient top, 3 bottles bottom */
+.mc-inv-brewing {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 6px;
+	padding: 4px 8px 2px;
+	min-width: 11rem;
+}
+.mc-inv-brewing-top {
+	display: flex;
+	align-items: flex-end;
+	justify-content: center;
+	gap: 10px;
+	width: 100%;
+}
+.mc-inv-brewing-top-spacer {
+	width: 8px;
+	flex-shrink: 0;
+}
+.mc-inv-brewing-col {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 3px;
+}
+.mc-inv-slot-label {
+	font-size: 0.58rem;
+	font-weight: 700;
+	color: #555;
+	text-align: center;
+	line-height: 1.1;
+	max-width: 3.2rem;
+}
+.mc-inv-brewing-mid {
+	font-size: 1.1rem;
+	font-weight: 800;
+	color: #666;
+	line-height: 1;
+	margin: -2px 0;
+}
+.mc-inv-brewing-bottles {
+	display: flex;
+	align-items: flex-start;
+	justify-content: center;
+	gap: 4px;
+}
+.mc-inv-badge.ready {
+	background: #8bc34a;
+	color: #1b3a0a;
+}
+/* Composter fill 0–8 */
+.mc-inv-composter {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 10px;
+	padding: 6px 12px 4px;
+	min-width: 9rem;
+}
+.mc-composter-barrel {
+	position: relative;
+	width: 72px;
+	height: 80px;
+	background: linear-gradient(180deg, #8b6914 0%, #6b4f10 40%, #5a4010 100%);
+	border: 3px solid #3d2a08;
+	border-radius: 4px 4px 6px 6px;
+	box-shadow:
+		inset 2px 2px 0 #c4a35a,
+		inset -2px -2px 0 #3a2808;
+	overflow: hidden;
+}
+.mc-composter-layers {
+	position: absolute;
+	left: 6px;
+	right: 6px;
+	bottom: 8px;
+	top: 10px;
+	display: flex;
+	flex-direction: column-reverse;
+	gap: 1px;
+}
+.mc-composter-layer {
+	flex: 1 1 0;
+	min-height: 0;
+	background: #2a2210;
+	border-radius: 1px;
+	opacity: 0.35;
+}
+.mc-composter-layer.is-filled {
+	background: linear-gradient(90deg, #3d6b1e, #5a9a2e 50%, #3d6b1e);
+	opacity: 1;
+	box-shadow: inset 0 1px 0 #8fd45a55;
+}
+.mc-composter-layer.is-ready {
+	background: linear-gradient(90deg, #c9a227, #e8d48b 50%, #c9a227);
+}
+.mc-composter-rim {
+	position: absolute;
+	left: 0;
+	right: 0;
+	top: 0;
+	height: 8px;
+	background: #6b4f10;
+	border-bottom: 2px solid #3d2a08;
+	box-shadow: inset 0 2px 0 #a8843a;
+}
+.mc-composter-readout {
+	font-size: 0.82rem;
+	font-weight: 700;
+	color: #3f3f3f;
+	text-align: center;
+	text-shadow: 1px 1px 0 #eee;
+}
+/* Footer text under inventory mockups is unused — keep rule for legacy nodes */
+.mc-inv-footer {
+	display: none;
+}
+.mc-inv-empty {
+	padding: 12px;
+	text-align: center;
+	color: #666;
+}
+.bLayers-preview-host {
+	/* Fill entire stage — max viewport for 3D */
+	flex: 1 1 auto;
+	width: 100%;
+	max-width: 100%;
+	min-height: 0;
+	height: 100%;
+	max-height: 100%;
+	background: var(--bLayers-stage-bg);
+	border-radius: 0;
+	border: none;
+	overflow: hidden;
+	display: flex;
+	align-items: stretch;
+	justify-content: stretch;
+	padding: 0;
+	box-sizing: border-box;
+	position: absolute;
+	inset: 0;
+	/* Stay under cam bar / inspect panel */
+	z-index: 1;
+	touch-action: none;
+	-webkit-touch-callout: none;
+	user-select: none;
+}
+.bLayers-preview-host canvas {
+	touch-action: none;
+	-webkit-touch-callout: none;
+	user-select: none;
+}

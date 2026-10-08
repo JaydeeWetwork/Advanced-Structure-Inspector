@@ -238,7 +238,7 @@ export default class LightingSystem {
 
 	/**
 	 * Skybox cubemap or solid clear color.
-	 * @param {import("../PreviewResourcePool.js").default} pool
+	 * @param {import("./PreviewResourcePool.js").default} pool
 	 */
 	async initBackground(pool) {
 		const THREE = this.ctx.THREE;

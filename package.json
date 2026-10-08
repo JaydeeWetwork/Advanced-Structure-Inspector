@@ -1,18 +1,35 @@
 {
-	"name": "bedrock-asi",
-	"version": "0.1.0",
+	"name": "bedrockLayers",
+	"version": "0.1.158",
 	"private": true,
-	"description": "Bedrock ASI — Minecraft Bedrock .mcstructure browser and 3D inspector (local or static host). Setup: see README.md and docs/SETUP.md. HoloPrint pack generator is isolated under src/holoprint/.",
+	"description": "Bedrock Layers — Minecraft Bedrock .mcstructure browser and 3D inspector (local or static host). Setup: see README.md and docs/SETUP.md. The hologram pack generator lives under src/pack/.",
+	"author": "Jaydee Wetwork",
+	"contributors": [
+		"Jaydee Wetwork",
+		"Grok Build (xAI)"
+	],
 	"type": "module",
 	"scripts": {
-		"lint": "tsc 2>&1 | grep -Ev 'TS2307|TS2694'",
-		"test": "npm run test --workspaces --if-present",
+		"typecheck": "tsc --noEmit",
+		"test": "npm run test:viewer",
 		"test:viewer": "npm run test -w viewer_unit",
+		"test:pack": "npm run test -w test_sample_structures",
+		"test:shape-coverage": "npm run test -w check_block_shape_coverage",
+		"bump:pins": "node scripts/bump-pins.mjs",
+		"test:all": "npm run test --workspaces --if-present",
 		"build": "npm run build -w pipeline",
+		"build:pack": "npm run build -w pipeline -- -- --pack",
 		"serve": "npx --yes serve src -p 5173",
 		"serve:dist": "npx --yes serve dist -p 5173",
 		"fill:sign-text": "node scripts/fill-sign-test-text.mjs",
-		"make:minecarts": "node scripts/make-minecart-test-structure.mjs"
+		"make:minecarts": "node scripts/make-minecart-test-structure.mjs",
+		"make:cushions": "node scripts/make-cushion-test-structure.mjs",
+		"make:copper-states": "node scripts/make-copper-state-samples.mjs",
+		"make:straw-shelf-poplar": "node scripts/make-straw-shelf-poplar-samples.mjs",
+		"make:flower-crop": "node scripts/make-flower-crop-samples.mjs",
+		"make:leaves": "node scripts/make-leaf-samples.mjs",
+		"make:water": "node scripts/make-water-flow-sample.mjs",
+		"seal:water": "node scripts/seal-water-sources.mjs"
 	},
 	"workspaces": [
 		"pipeline",
@@ -21,10 +38,23 @@
 	"license": "CC-BY-NC-SA-4.0",
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/YOUR_USER/bedrock-asi.git"
+		"url": "https://github.com/JaydeeWetwork/bedrockLayers.git"
 	},
 	"devDependencies": {
+		"@zip.js/zip.js": "^2.7.62",
+		"deepmerge": "^4.3.1",
+		"lil-gui": "^0.20.0",
+		"mcbe-leveldb-reader": "^2.0.1",
 		"nbtify": "^2.2.0",
-		"nbtify-readonly-typeless": "^1.1.2"
+		"nbtify-readonly-typeless": "^1.1.2",
+		"potpack": "^2.1.0",
+		"stats.js": "^0.17.0",
+		"tga-js": "^1.1.1",
+		"three": "^0.177.0",
+		"typescript": "^5.9.3"
+	},
+	"allowScripts": {
+		"esbuild@0.28.1": true,
+		"puppeteer@25.10.0": true
 	}
 }

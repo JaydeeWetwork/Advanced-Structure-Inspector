@@ -82,7 +82,7 @@
 				"growth": [0, 0, 1, 1, 2, 2, 2, 3]
 			},
 			"torchflower_crop": {
-				"growth": [0, 1]
+				"growth": [0, 1, 1]
 			},
 			"nether_wart": {
 				"age": [0, 1, 2, 3]
@@ -221,9 +221,12 @@
 				"down_south": [90, 180, 0],
 				"down_west": [90, -90, 0]
 			},
-			"coral_direction": [[0, 90, 0], [0, -90, 0], [0, 180, 0], [0, 0, 0]]
+			"coral_direction": [[0, -90, 0], [0, 90, 0], [0, 0, 0], [0, 180, 0]]
 		},
 		"block_shapes": {
+			"coral_fan": {
+				"coral_fan_direction": [[0, 0, 0], [0, 90, 0]]
+			},
 			"button,lightning_rod,command_block": {
 				"facing_direction": { // button/lightning rod/command block orientation for north/south/east/west is mirrored to that of pistons, which also use facing_direction
 					"0": [180, 0, 0], // down
@@ -287,6 +290,12 @@
 				}
 			},
 			"door": {
+				"direction": { // 0 east, 1 south, 2 west, 3 north — not the generic direction table
+					"0": [0, 180, 0],
+					"1": [0, -90, 0],
+					"2": [0, 0, 0],
+					"3": [0, 90, 0]
+				},
 				"minecraft:cardinal_direction": {
 					"south": [0, -90, 0],
 					"west": [0, 0, 0],
@@ -310,10 +319,26 @@
 			},
 			"bed": {
 				"direction": {
-					"0": [0, 180, 0], // south
-					"1": [0, -90, 0], // west
-					"2": [0, 0, 0], // north
-					"3": [0, 90, 0] // east
+					"0": [0, 180, 0],
+					"1": [0, -90, 0],
+					"2": [0, 0, 0],
+					"3": [0, 90, 0]
+				}
+			},
+			"straw_bed": {
+				"minecraft:cardinal_direction": {
+					"south": [0, 0, 0],
+					"west": [0, 90, 0],
+					"north": [0, 180, 0],
+					"east": [0, -90, 0]
+				}
+			},
+			"shelf_mushroom": {
+				"minecraft:cardinal_direction": {
+					"south": [0, 0, 0],
+					"north": [0, 180, 0],
+					"east": [0, -90, 0],
+					"west": [0, 90, 0]
 				}
 			},
 			"skull,player_head,dragon_head,piglin_head": {
@@ -354,6 +379,14 @@
 					"3": [0, 90, 0] // east
 				}
 			}
+		}
+	},
+	"rotation_exclusions": {
+		"hanging_sign": {
+			"when_state": "attached_bit",
+			"when_values": [1, true],
+			"drop": "facing_direction",
+			"else_drop": "ground_sign_direction"
 		}
 	},
 	

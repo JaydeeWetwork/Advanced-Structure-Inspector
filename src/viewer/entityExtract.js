@@ -3,7 +3,7 @@
  * Positions are converted to structure-local space (world Pos − structure_world_origin).
  */
 
-import { extractInventoryItems } from "./inspectStructure.js";
+import { extractInventoryItems, nbtBool } from "./inspectStructure.js";
 
 /**
  * @typedef {object} PreviewEntity
@@ -14,7 +14,8 @@ import { extractInventoryItems } from "./inspectStructure.js";
  * @property {number} pitchDeg // Bedrock Rotation[1]
  * @property {{ name: string, count: number, slot: number|null, damage: number|null }[]} [items]
  * @property {string|null} [customName]
- * @property {any} [raw]
+ * @property {boolean|null} [enabled]
+ * @property {number|null} [variant]  Bedrock Variant; null if the tag is absent
  */
 
 /**
@@ -70,7 +71,8 @@ export const RENDERABLE_ENTITY_IDS = new Set([
 	"tnt_minecart",
 	"command_block_minecart",
 	"minecart_hopper", // alias if any
-	"minecart_chest"
+	"minecart_chest",
+	"cushion"
 ]);
 
 /**
@@ -85,7 +87,7 @@ export function isRenderableEntity(id) {
 /**
  * Map aliases to a mesh kind.
  * @param {string} id
- * @returns {"minecart"|"hopper_minecart"|"chest_minecart"|"tnt_minecart"|"command_block_minecart"|null}
+ * @returns {"minecart"|"hopper_minecart"|"chest_minecart"|"tnt_minecart"|"command_block_minecart"|"cushion"|null}
  */
 export function entityMeshKind(id) {
 	const n = normalizeEntityId(id);
@@ -102,9 +104,22 @@ export function entityMeshKind(id) {
 			return "tnt_minecart";
 		case "command_block_minecart":
 			return "command_block_minecart";
+		case "cushion":
+			return "cushion";
 		default:
 			return null;
 	}
+}
+
+/**
+ * @param {any} ent
+ * @returns {number|null}
+ */
+function readVariant(ent) {
+	const raw = ent?.Variant ?? ent?.variant;
+	if (raw == null || raw === "") return null;
+	const n = Number(raw?.value ?? raw);
+	return Number.isFinite(n) ? n : null;
 }
 
 /**
@@ -137,12 +152,7 @@ export function extractPreviewEntities(data) {
 		// Inventory for hopper/chest minecarts — same robust path as block containers
 		let items = [];
 		try {
-			items = extractInventoryItems(ent).map(it => ({
-				name: it.name,
-				count: it.count,
-				slot: it.slot,
-				damage: it.damage
-			}));
+			items = extractInventoryItems(ent);
 		} catch {
 			items = [];
 		}
@@ -155,17 +165,63 @@ export function extractPreviewEntities(data) {
 			pitchDeg: Number.isFinite(rotArr[1]) ? rotArr[1] : 0,
 			items,
 			customName: customName != null ? String(customName) : null,
-			raw: ent
+			enabled: nbtBool(ent.Enabled ?? ent.enabled),
+			variant: readVariant(ent)
 		});
 	}
 	return out;
 }
 
 /**
- * Only entities we know how to draw.
+ * How far past the structure box an entity may sit and still be drawn.
+ * A script-stamped file can leave Pos in world coordinates while
+ * structure_world_origin stays [0,0,0]. Those carts land tens of blocks
+ * outside the volume. Real saves keep Pos within about a block of the box
+ * after origin is subtracted.
+ */
+export const ENTITY_OUTSIDE_MARGIN = 1;
+
+/**
+ * @param {number[]|undefined|null} pos structure-local
+ * @param {number[]|undefined|null} size
+ * @param {number} [margin]
+ */
+export function isEntityInsideStructure(pos, size, margin = ENTITY_OUTSIDE_MARGIN) {
+	if (!pos || pos.length < 3 || !size || size.length < 3) return true;
+	const sx = Number(size[0]);
+	const sy = Number(size[1]);
+	const sz = Number(size[2]);
+	if (!(sx > 0 && sy > 0 && sz > 0)) return true;
+	const [x, y, z] = pos;
+	return x >= -margin && y >= -margin && z >= -margin
+		&& x < sx + margin && y < sy + margin && z < sz + margin;
+}
+
+/**
+ * Renderable entities split into those inside the structure box and those left
+ * in world coordinates outside it.
+ * @param {any} data
+ * @returns {{ kept: PreviewEntity[], outside: PreviewEntity[] }}
+ */
+export function splitRenderableEntities(data) {
+	const size = toNums(data?.size);
+	/** @type {PreviewEntity[]} */
+	const kept = [];
+	/** @type {PreviewEntity[]} */
+	const outside = [];
+	for (const e of extractPreviewEntities(data)) {
+		if (!isRenderableEntity(e.identifier)) continue;
+		if (isEntityInsideStructure(e.pos, size)) kept.push(e);
+		else outside.push(e);
+	}
+	return { kept, outside };
+}
+
+/**
+ * Only entities we know how to draw, and only those inside the structure box.
  * @param {any} data
  * @returns {PreviewEntity[]}
  */
 export function extractRenderableEntities(data) {
-	return extractPreviewEntities(data).filter(e => isRenderableEntity(e.identifier));
+	return splitRenderableEntities(data).kept;
 }

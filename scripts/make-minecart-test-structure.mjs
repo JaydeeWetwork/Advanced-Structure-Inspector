@@ -14,12 +14,17 @@
  *
  * Usage (repo root):
  *   node scripts/make-minecart-test-structure.mjs
+ *
+ * Written through writeMcstructure so the root, layers and block states get
+ * Bedrock tag types. Entity fields are typed explicitly below (Byte / Short /
+ * Float / Long) because entity NBT has no schema in the writer.
  */
 
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { write, NBTData } from "nbtify";
+import { Int8, Int16, Float32 } from "nbtify";
+import { grid, writeSampleNbt } from "./lib/sampleGrid.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
@@ -42,31 +47,17 @@ const GOLD = 9;
 const DET = 10;
 const ACT = 11;
 
-function pal(name, states = {}) {
-	return {
-		name: name.includes(":") ? name : `minecraft:${name}`,
-		states,
-		version: VER
-	};
-}
-
-const PALETTE = [
-	pal("air"),
-	pal("smooth_stone"),
-	pal("stone_bricks"),
-	pal("rail", { rail_direction: 0 }),
-	pal("rail", { rail_direction: 1 }),
-	pal("rail", { rail_direction: 2 }),
-	pal("rail", { rail_direction: 3 }),
-	pal("rail", { rail_direction: 4 }),
-	pal("rail", { rail_direction: 5 }),
-	pal("golden_rail", { rail_data_bit: 1, rail_direction: 0 }),
-	pal("detector_rail", { rail_data_bit: 0, rail_direction: 1 }),
-	pal("activator_rail", { rail_data_bit: 0, rail_direction: 0 })
-];
-
-function idx(x, y, z) {
-	return (x * SY + y) * SZ + z;
+function seedPalette(g) {
+	g.intern("stone_bricks");
+	g.intern("rail", { rail_direction: 0 });
+	g.intern("rail", { rail_direction: 1 });
+	g.intern("rail", { rail_direction: 2 });
+	g.intern("rail", { rail_direction: 3 });
+	g.intern("rail", { rail_direction: 4 });
+	g.intern("rail", { rail_direction: 5 });
+	g.intern("golden_rail", { rail_data_bit: 1, rail_direction: 0 });
+	g.intern("detector_rail", { rail_data_bit: 0, rail_direction: 1 });
+	g.intern("activator_rail", { rail_data_bit: 0, rail_direction: 0 });
 }
 
 const KINDS = [
@@ -80,7 +71,7 @@ const KINDS = [
 let nextUid = 9001n;
 
 function item(slot, name, count) {
-	return { Slot: slot, Name: `minecraft:${name}`, Count: count, Damage: 0 };
+	return { Slot: new Int8(slot), Name: `minecraft:${name}`, Count: new Int8(count), Damage: new Int16(0) };
 }
 
 function cart(kind, x, y, z, yaw, label, extras = {}) {
@@ -88,12 +79,12 @@ function cart(kind, x, y, z, yaw, label, extras = {}) {
 	const bare = id.replace(/^minecraft:/, "");
 	const ent = {
 		identifier: id,
-		UniqueID: nextUid++,
-		Pos: new Float32Array([x, y, z]),
-		Rotation: new Float32Array([yaw, 0]),
-		Motion: new Float32Array([0, 0, 0]),
-		OnGround: 1,
-		Chested: bare.includes("chest") ? 1 : 0,
+		UniqueID: nextUid++, // bigint → Long
+		Pos: [x, y, z].map(n => new Float32(n)),
+		Rotation: [yaw, 0].map(n => new Float32(n)),
+		Motion: [0, 0, 0].map(n => new Float32(n)),
+		OnGround: new Int8(1),
+		Chested: new Int8(bare.includes("chest") ? 1 : 0),
 		CustomName: label,
 		definitions: [`+${id}`],
 		...extras
@@ -101,17 +92,8 @@ function cart(kind, x, y, z, yaw, label, extras = {}) {
 	return ent;
 }
 
-function mainPalette() {
-	const n = SX * SY * SZ;
-	const layer0 = new Int32Array(n);
-	const layer1 = new Int32Array(n);
-	layer0.fill(-1);
-	layer1.fill(-1);
-
-	const set = (x, y, z, pi) => {
-		if (x < 0 || y < 0 || z < 0 || x >= SX || y >= SY || z >= SZ) return;
-		layer0[idx(x, y, z)] = pi;
-	};
+function layRails(g) {
+	const set = (x, y, z, pi) => g.set(x, y, z, pi);
 
 	for (let x = 0; x < SX; x++) {
 		for (let z = 0; z < SZ; z++) {
@@ -153,8 +135,20 @@ function mainPalette() {
 	set(5, 1, 9, ACT);
 	set(7, 1, 9, NS);
 	set(9, 1, 9, EW);
+}
 
-	return [layer0, layer1];
+export function buildMinecartGrid() {
+	const g = grid(SX, SY, SZ, { version: VER, fillFloor: false });
+	seedPalette(g);
+	layRails(g);
+	for (const entity of entities()) g.addEntity(entity);
+	return g;
+}
+
+function invokedDirectly() {
+	const self = fs.realpathSync(fileURLToPath(import.meta.url));
+	const entry = process.argv[1] ? fs.realpathSync(process.argv[1]) : "";
+	return self.toLowerCase() === entry.toLowerCase();
 }
 
 function entities() {
@@ -200,41 +194,14 @@ function entities() {
 	return out;
 }
 
-const [layer0, layer1] = mainPalette();
-const ents = entities();
-
-const data = {
-	format_version: 1,
-	size: new Int32Array([SX, SY, SZ]),
-	structure_world_origin: new Int32Array([0, 0, 0]),
-	structure: {
-		block_indices: [layer0, layer1],
-		palette: {
-			default: {
-				block_palette: PALETTE,
-				block_position_data: {}
-			}
-		},
-		entities: ents
+if (invokedDirectly()) {
+	const g = buildMinecartGrid();
+	const bytes = await writeSampleNbt(OUT, g);
+	const kinds = {};
+	for (const e of g.entities) {
+		const k = e.identifier.replace(/^minecraft:/, "");
+		kinds[k] = (kinds[k] || 0) + 1;
 	}
-};
-
-const nbt = new NBTData(data, {
-	endian: "little",
-	compression: null,
-	bedrockLevel: false,
-	rootName: ""
-});
-
-const bytes = await write(nbt);
-fs.mkdirSync(path.dirname(OUT), { recursive: true });
-fs.writeFileSync(OUT, Buffer.from(bytes));
-
-const kinds = {};
-for (const e of ents) {
-	const k = e.identifier.replace(/^minecraft:/, "");
-	kinds[k] = (kinds[k] || 0) + 1;
+	console.log(`size ${SX}×${SY}×${SZ}  entities ${g.entities.length}  ${bytes.byteLength} bytes`);
+	console.log("kinds", kinds);
 }
-console.log(`wrote ${path.relative(ROOT, OUT)}  ${bytes.byteLength} bytes`);
-console.log(`size ${SX}×${SY}×${SZ}  entities ${ents.length}`);
-console.log("kinds", kinds);

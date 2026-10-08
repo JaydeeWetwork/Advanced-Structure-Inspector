@@ -80,6 +80,24 @@
 				}
 			},
 			"additionalProperties": false
+		},
+		"rotation_exclusions": {
+			"description": "When a shape stores two rotation states, drop one of them. The kept state is the one that should turn the block.",
+			"type": "object",
+			"patternProperties": {
+				"^\\w+$": {
+					"type": "object",
+					"properties": {
+						"when_state": { "type": "string", "minLength": 1 },
+						"when_values": { "type": "array", "minItems": 1 },
+						"drop": { "type": "string", "minLength": 1 },
+						"else_drop": { "type": "string", "minLength": 1 }
+					},
+					"required": ["when_state", "when_values", "drop", "else_drop"],
+					"additionalProperties": false
+				}
+			},
+			"additionalProperties": false
 		}
 	},
 	"required": ["texture_variants", "rotations"],

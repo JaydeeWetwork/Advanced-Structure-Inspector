@@ -4,7 +4,13 @@
 
 import { clearChildren } from "./disposeObject3D.js";
 import { allowedLayerYs } from "../layerVisibility.js";
-import { doubleChestNeedsPreviewXMirror } from "../doubleChest.js";
+import {
+	doubleChestNeedsPreviewXMirror,
+	doubleChestNeedsPreviewZMirror
+} from "../doubleChest.js";
+import { facesToBufferGeometry } from "../polyMeshBufferGeo.js";
+import { insetCellShellFaces, partitionTemplateFaces } from "./BlockGeoSystem.js";
+import { csrCount, forEachYRun } from "../cellCsr.js";
 
 export default class LayerMeshSystem {
 	/** @type {import("three").Group|null} */
@@ -13,8 +19,14 @@ export default class LayerMeshSystem {
 	#layerGroups = new Map();
 	/** @type {number|null} */
 	selectedLayer = null;
-	/** @type {Vec3[][]} */
-	#blockPositions = [];
+	/** @type {{ off: Int32Array, xyz: Int32Array }|null} */
+	#blockPositions = null;
+	/** @type {{ off: Int32Array, xyz: Int32Array }|null} */
+	#positionsFull = null;
+	/** @type {{ off: Int32Array, xyz: Int32Array }|null} */
+	#waterlogPositions = null;
+	/** @type {Map<number, { volume: import("three").BufferGeometry|null, cards: import("three").BufferGeometry|null }>} */
+	#waterlogGeos = new Map();
 	/** @type {boolean[]} */
 	#translucentByPalette = [];
 
@@ -27,21 +39,25 @@ export default class LayerMeshSystem {
 
 	/**
 	 * @param {import("three").Scene} scene
-	 * @param {Vec3[][]} blockPositions
+	 * @param {{ off: Int32Array, xyz: Int32Array }} blockPositions unculled (layer isolation)
+	 * @param {{ off: Int32Array, xyz: Int32Array }} [positionsFull] occupancy-culled (full preview); defaults to unculled
+	 * @param {{ off: Int32Array, xyz: Int32Array }} [waterlogPositions] layer-1 liquids, drawn inset so they do not share stair/slab planes
 	 */
-	mount(scene, blockPositions) {
+	mount(scene, blockPositions, positionsFull, waterlogPositions) {
 		const THREE = this.ctx.THREE;
 		if (!THREE || !scene) return;
+		this.#disposeWaterlogGeos();
 		this.#blockPositions = blockPositions;
+		this.#positionsFull = positionsFull ?? blockPositions;
+		this.#waterlogPositions = waterlogPositions ?? null;
 		this.layerRoot = new THREE.Group();
-		this.layerRoot.name = "basi-layers";
+		this.layerRoot.name = "bLayers-layers";
 		scene.add(this.layerRoot);
 		this.#layerGroups = new Map();
 		this.selectedLayer = null;
-		// Precompute translucency once (avoids pixel scan every layer rebuild)
-		const palette = this.ctx.polyMeshTemplatePalette || [];
+		const palette = this.ctx.blockFaceTemplates || [];
 		this.#translucentByPalette = palette.map(t =>
-			t?.length ? !!this.ctx.geo.isPolyMeshTemplateTranslucent(t) : false
+			t?.length ? !!this.ctx.geo.isFaceTemplateTranslucent(t) : false
 		);
 	}
 
@@ -84,67 +100,104 @@ export default class LayerMeshSystem {
 		const selected = yFilter != null && Number.isFinite(yFilter) ? Math.floor(yFilter) : null;
 		const allowedYs = allowedLayerYs(selected);
 
-		const palette = this.ctx.polyMeshTemplatePalette || [];
-		for (const i in this.#blockPositions) {
-			const polyMeshTemplate = palette[i];
-			if (!polyMeshTemplate?.length) continue;
-			const paletteI = +i;
-
-			/** @type {[number, number, number][]} */
-			let structPositions = this.#blockPositions[i];
-			if (allowedYs) {
-				structPositions = structPositions.filter(([, y]) => allowedYs.has(y));
-			}
-			if (!structPositions.length) continue;
-
-			const geo = pool.getOrCreateGeo(paletteI, () =>
-				this.ctx.geo.polyMeshTemplateToBufferGeo(paletteI)
-			);
+		const palette = this.ctx.blockFaceTemplates || [];
+		const cells = selected == null ? this.#positionsFull : this.#blockPositions;
+		const waterCells = this.#waterlogPositions;
+		for (let paletteI = 0; paletteI < palette.length; paletteI++) {
+			const faceTemplate = palette[paletteI];
+			if (!faceTemplate?.length) continue;
+			if (csrCount(cells, paletteI) === 0 && csrCount(waterCells, paletteI) === 0) continue;
 
 			const isTranslucent = this.#translucentByPalette[paletteI]
-				?? this.ctx.geo.isPolyMeshTemplateTranslucent(polyMeshTemplate);
+				?? this.ctx.geo.isFaceTemplateTranslucent(faceTemplate);
 
-			/** @type {Map<number, [number, number, number][]>} */
-			const byY = new Map();
-			for (const pos of structPositions) {
-				const y = pos[1];
-				if (!byY.has(y)) byY.set(y, []);
-				byY.get(y).push(pos);
+			/** @type {{ volume: import("three").BufferGeometry|null, cards: import("three").BufferGeometry|null }|null} */
+			let geos = null;
+			const blockGeos = () => {
+				if (!geos) geos = pool.getOrCreateGeos(paletteI, () => this.ctx.geo.faceTemplateToBufferGeos(paletteI));
+				return geos;
+			};
+			/** @type {{ volume: import("three").BufferGeometry|null, cards: import("three").BufferGeometry|null }|null} */
+			let waterlogGeos = null;
+
+			if (cells?.xyz) {
+				forEachYRun(cells, paletteI, (y, from, to) => {
+					if (allowedYs && !allowedYs.has(y)) return;
+					const count = to - from;
+					const built = blockGeos();
+					const isFloor = selected != null && y === selected - 1;
+					const palBlock = this.ctx.blockPalette?.[paletteI];
+					const largeChest = String(palBlock?.bLayers_block_shape ?? "").startsWith("chest_large");
+					const mirrorX = !isFloor && doubleChestNeedsPreviewXMirror(palBlock);
+					const mirrorZ = !isFloor && doubleChestNeedsPreviewZMirror(palBlock);
+					let volumeMat = isFloor
+						? (pool.solidFloorMat ?? pool.regularMat)
+						: (isTranslucent ? pool.transparentMat : pool.regularMat);
+					if (largeChest) volumeMat = pool.ensureChestMirrorMat(THREE) ?? volumeMat;
+					const addMesh = (geo, material) => {
+						if (!geo || !material || !cells.xyz) return;
+						const mesh = this.ctx.geo.instanceBufferGeoAtXyz(geo, cells.xyz, from, to, material, {
+							mirrorX,
+							mirrorZ
+						});
+						if (isTranslucent && !isFloor) mesh.renderOrder = count;
+						if (isFloor) mesh.renderOrder = -1000;
+						mesh.castShadow = useShadows;
+						mesh.receiveShadow = useShadows;
+						mesh.frustumCulled = selected == null;
+						mesh.userData.includeInGlbExport = true;
+						mesh.userData.bLayersBlock = true;
+						mesh.userData.bLayersPaletteI = paletteI;
+						mesh.userData.bLayersBlockXyz = cells.xyz;
+						mesh.userData.bLayersBlockXyzAt = from;
+						mesh.userData.layerY = y;
+						mesh.userData.bLayersFloorLayer = isFloor;
+						mesh.userData.bLayersPickable = !isFloor;
+						this.getLayerGroup(y).add(mesh);
+					};
+					addMesh(built?.volume, volumeMat);
+					if (built?.cards) {
+						const cardMat = isTranslucent && !isFloor
+							? (pool.ensureTransparentCardMat(THREE) ?? pool.transparentMat)
+							: (pool.ensureCardDoubleMat(THREE) ?? volumeMat);
+						addMesh(built.cards, cardMat);
+					}
+				});
 			}
 
-			for (const [y, list] of byY) {
-				const isFloor = selected != null && y === selected - 1;
-				const palBlock = this.ctx.blockPalette?.[paletteI];
-				const largeChest = String(palBlock?.basi_block_shape ?? "").startsWith("chest_large");
-				const mirrorX = !isFloor && doubleChestNeedsPreviewXMirror(palBlock);
-				let material = isFloor
-					? (pool.solidFloorMat ?? pool.regularMat)
-					: (isTranslucent ? pool.transparentMat : pool.regularMat);
-				if (largeChest) material = pool.ensureChestMirrorMat(this.ctx.THREE) ?? material;
-				const threePositions = list.map(([x, yy, z]) => [-16 * x - 16, 16 * yy, -16 * z - 16]);
-				const mesh = this.ctx.geo.instanceBufferGeoAtPositions(geo, threePositions, material, {
-					mirrorX
+			if (waterCells?.xyz && csrCount(waterCells, paletteI) > 0) {
+				forEachYRun(waterCells, paletteI, (y, from, to) => {
+					if (allowedYs && !allowedYs.has(y)) return;
+					if (!waterlogGeos) waterlogGeos = this.#insetWaterlogGeos(paletteI);
+					const count = to - from;
+					const addWater = (geo) => {
+						if (!geo || !pool.transparentMat || !waterCells.xyz) return;
+						const mesh = this.ctx.geo.instanceBufferGeoAtXyz(
+							geo, waterCells.xyz, from, to, pool.transparentMat
+						);
+						mesh.renderOrder = count;
+						mesh.castShadow = useShadows;
+						mesh.receiveShadow = useShadows;
+						mesh.frustumCulled = selected == null;
+						mesh.userData.includeInGlbExport = true;
+						mesh.userData.bLayersBlock = true;
+						mesh.userData.bLayersPaletteI = paletteI;
+						mesh.userData.bLayersBlockXyz = waterCells.xyz;
+						mesh.userData.bLayersBlockXyzAt = from;
+						mesh.userData.layerY = y;
+						mesh.userData.bLayersPickable = true;
+						this.getLayerGroup(y).add(mesh);
+					};
+					addWater(waterlogGeos.volume);
+					addWater(waterlogGeos.cards);
 				});
-				if (isTranslucent && !isFloor) mesh.renderOrder = threePositions.length;
-				if (isFloor) mesh.renderOrder = -1000;
-				mesh.castShadow = useShadows;
-				mesh.receiveShadow = useShadows;
-				mesh.frustumCulled = selected == null;
-				mesh.userData.includeInGlbExport = true;
-				mesh.userData.basiBlock = true;
-				mesh.userData.basiPaletteI = paletteI;
-				mesh.userData.basiBlockPositions = list;
-				mesh.userData.layerY = y;
-				mesh.userData.basiFloorLayer = isFloor;
-				mesh.userData.basiPickable = !isFloor;
-				this.getLayerGroup(y).add(mesh);
 			}
 		}
 
 		console.info(
 			selected == null
-				? "[basi] LayerMeshSystem: rebuilt all layers"
-				: `[basi] LayerMeshSystem: rebuilt layer ${selected}`
+				? "[bLayers] LayerMeshSystem: rebuilt all layers"
+				: `[bLayers] LayerMeshSystem: rebuilt layer ${selected}`
 					+ (selected > 0 ? ` + solid floor ${selected - 1}` : "")
 		);
 	}
@@ -184,13 +237,42 @@ export default class LayerMeshSystem {
 		);
 	}
 
+	/**
+	 * Inset copy of a liquid template. Shell faces move in; the source top stays.
+	 * @param {number} paletteI
+	 */
+	#insetWaterlogGeos(paletteI) {
+		const cached = this.#waterlogGeos.get(paletteI);
+		if (cached) return cached;
+		const faces = insetCellShellFaces(this.ctx.blockFaceTemplates?.[paletteI]);
+		const { volume, cards } = partitionTemplateFaces(faces);
+		const THREE = this.ctx.THREE;
+		const geos = {
+			volume: facesToBufferGeometry(THREE, volume),
+			cards: facesToBufferGeometry(THREE, cards)
+		};
+		this.#waterlogGeos.set(paletteI, geos);
+		return geos;
+	}
+
+	#disposeWaterlogGeos() {
+		for (const geos of this.#waterlogGeos.values()) {
+			geos.volume?.dispose?.();
+			geos.cards?.dispose?.();
+		}
+		this.#waterlogGeos.clear();
+	}
+
 	dispose() {
 		this.clearContents();
+		this.#disposeWaterlogGeos();
 		this.layerRoot?.parent?.remove(this.layerRoot);
 		this.layerRoot = null;
 		this.#layerGroups = new Map();
 		this.selectedLayer = null;
-		this.#blockPositions = [];
+		this.#blockPositions = null;
+		this.#positionsFull = null;
+		this.#waterlogPositions = null;
 		this.#translucentByPalette = [];
 	}
 }

@@ -1,7 +1,49 @@
-import stripJsonComments from "strip-json-comments";
-
 import { tuple } from "./meta.js";
 import { onEvent } from "./dom.js";
+
+/**
+ * Strip line and block comments outside JSON strings (Mojang JSONC).
+ * @param {string} text
+ * @returns {string}
+ */
+export function stripJsonc(text) {
+	let out = "";
+	let i = 0;
+	const n = text.length;
+	let inStr = false;
+	let esc = false;
+	while (i < n) {
+		const c = text[i];
+		if (inStr) {
+			out += c;
+			if (esc) esc = false;
+			else if (c === "\\") esc = true;
+			else if (c === "\"") inStr = false;
+			i++;
+			continue;
+		}
+		if (c === "\"") {
+			inStr = true;
+			out += c;
+			i++;
+			continue;
+		}
+		if (c === "/" && text[i + 1] === "/") {
+			i += 2;
+			while (i < n && text[i] !== "\n") i++;
+			continue;
+		}
+		if (c === "/" && text[i + 1] === "*") {
+			i += 2;
+			while (i < n && !(text[i] === "*" && text[i + 1] === "/")) i++;
+			i += 2;
+			continue;
+		}
+		out += c;
+		i++;
+	}
+	return out;
+}
 
 /**
  * Parses a JSONC blob or response.
@@ -11,10 +53,9 @@ import { onEvent } from "./dom.js";
 export function jsonc(val) {
 	return new Promise((res, rej) => {
 		val.text().then(text => {
-			let safeText = stripJsonComments(text);
 			let json;
 			try {
-				json = JSON.parse(safeText);
+				json = JSON.parse(stripJsonc(text));
 			} catch(e) {
 				rej(e);
 				return;

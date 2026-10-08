@@ -1,0 +1,193 @@
+/* Detail = full-bleed preview chrome */
+.bLayers-detail {
+	display: flex;
+	flex-direction: column;
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow: hidden;
+	height: 100%;
+	max-height: 100%;
+	background: transparent;
+	border: none;
+	border-radius: 0;
+	padding: 0;
+}
+.bLayers-detail.hidden {
+	display: none;
+}
+/* Right float panel contents (stats + materials) */
+.bLayers-detail-side {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	min-width: 0;
+	min-height: 0;
+	height: 100%;
+	max-height: 100%;
+	overflow: hidden;
+	/* padding/background from .bLayers-float-panel when nested */
+	padding: 0;
+	background: transparent;
+	border: none;
+}
+/* One scroller for info + materials so the dock never clips */
+.bLayers-detail-scroll {
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow-y: auto;
+	overflow-x: hidden;
+	overscroll-behavior: contain;
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	padding-right: 2px;
+	touch-action: pan-y;
+}
+.bLayers-stats {
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: 8px;
+	flex-shrink: 0;
+}
+.bLayers-stat {
+	background: #fff;
+	border: 1px solid var(--bLayers-border);
+	border-radius: 8px;
+	padding: 8px 10px;
+}
+.bLayers-stat .label {
+	display: block;
+	font-size: 0.75rem;
+	color: var(--bLayers-muted);
+	text-transform: uppercase;
+	letter-spacing: 0.03em;
+}
+.bLayers-stat .value {
+	font-weight: 700;
+	font-size: 1.05rem;
+}
+/* Base material header (non-float); float dock uses chip style */
+.bLayers-material-header {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 8px;
+	flex-shrink: 0;
+}
+.bLayers-material-header h3 {
+	margin: 0;
+	font-size: 0.95rem;
+}
+/* Slightly denser stats in the float */
+.bLayers-float-right .bLayers-stats {
+	grid-template-columns: 1fr;
+	gap: 6px;
+}
+.bLayers-float-right .bLayers-stat {
+	padding: 7px 9px;
+}
+.bLayers-float-right .bLayers-stat .value {
+	font-size: 0.98rem;
+}
+.bLayers-material-hint {
+	font-size: 0.75rem;
+	color: var(--bLayers-muted);
+	text-align: right;
+}
+/* Grows with rows; the parent .bLayers-detail-scroll is the scroller */
+.bLayers-material-list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	flex: 0 0 auto;
+	min-height: 0;
+	overflow: visible;
+	background: #fff;
+	border: 1px solid var(--bLayers-border);
+	border-radius: 8px;
+	font-size: 0.88rem;
+	width: 100%;
+	box-sizing: border-box;
+}
+.bLayers-material-list li {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	padding: 8px 10px;
+	border-bottom: 1px solid #f0e6f0;
+}
+.bLayers-material-list li:last-child {
+	border-bottom: none;
+}
+.bLayers-material-list li:hover {
+	background: var(--bLayers-row-hover);
+}
+.bLayers-material-list li.bLayers-mat-row.is-acquired {
+	opacity: 0.72;
+	background: #f3f0f3;
+}
+.bLayers-material-list li.bLayers-mat-row.is-acquired .bLayers-mat-name {
+	text-decoration: line-through;
+	text-decoration-color: #9a7a9a;
+}
+.bLayers-mat-check {
+	flex-shrink: 0;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	margin: 0;
+	cursor: pointer;
+	user-select: none;
+}
+.bLayers-mat-check input[type="checkbox"] {
+	width: 1rem;
+	height: 1rem;
+	margin: 0;
+	accent-color: var(--dark-bg);
+	cursor: pointer;
+}
+.bLayers-material-list .bLayers-mat-name {
+	font-weight: 600;
+	word-break: break-word;
+	min-width: 0;
+	flex: 1 1 auto;
+}
+.bLayers-material-list .bLayers-mat-id {
+	display: block;
+	font-weight: 400;
+	font-size: 0.75rem;
+	color: var(--bLayers-muted);
+	margin-top: 1px;
+}
+.bLayers-material-list .bLayers-mat-right {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-end;
+	gap: 2px;
+	flex-shrink: 0;
+}
+.bLayers-material-list .bLayers-mat-count {
+	font-variant-numeric: tabular-nums;
+	font-weight: 700;
+	background: var(--input-bg);
+	border: 1px solid var(--bLayers-border);
+	border-radius: 999px;
+	padding: 2px 10px;
+	min-width: 2.5rem;
+	text-align: center;
+}
+.bLayers-material-list .bLayers-mat-partition {
+	font-size: 0.75rem;
+	color: var(--bLayers-muted);
+	font-variant-numeric: tabular-nums;
+	text-align: right;
+	max-width: 14rem;
+	line-height: 1.25;
+}
+.bLayers-material-list .bLayers-mat-empty {
+	padding: 16px 12px;
+	color: var(--bLayers-muted);
+	text-align: center;
+	justify-content: center;
+}

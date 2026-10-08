@@ -1,0 +1,21 @@
+name: Feature request
+description: Suggest a change to Bedrock Layers
+title: "Feature: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: >
+        Search [existing issues](https://github.com/JaydeeWetwork/bedrockLayers/issues) before you file a new one.
+  - type: textarea
+    id: description
+    attributes:
+      label: What should Bedrock Layers do?
+      description: Who it helps, and how you would use it on a .mcstructure file.
+    validations:
+      required: true
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots or examples
+      description: Optional. A sketch or a sample file name helps.

@@ -1,5 +1,5 @@
 /**
- * Lightweight .mcstructure NBT parse for the catalog (no HoloPrint import).
+ * Lightweight .mcstructure NBT parse for the catalog.
  */
 
 import { McstructureCodecError, readMcstructure } from "./api/structure.js";

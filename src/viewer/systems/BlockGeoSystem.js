@@ -1,66 +1,104 @@
 /**
  * Block mesh geometry helpers for PreviewRenderer:
- * poly → BufferGeometry, translucency, instancing, structure scan.
+ * face templates → BufferGeometry, translucency, instancing, structure scan.
  */
 
 import { max, min, round } from "../../utils/math.js";
 import { tuple } from "../../utils/meta.js";
 import { JSONSet } from "../../utils/containers.js";
 import * as vec2 from "../../utils/vec2.js";
+import { facesToBufferGeometry } from "../polyMeshBufferGeo.js";
+import { prefixOffsets } from "../cellCsr.js";
 
 /**
  * Scan structure indices once: collect per-palette positions and optional point lights.
+ * Positions are palette CSRs (`off` + `xyz`), filled y then x then z.
+ * Equal-y cells in one palette are one contiguous run.
  *
  * @param {object} args
  * @param {[number,number,number]} args.structureSize
  * @param {[Int32Array|number[], Int32Array|number[]]} args.blockIndices
- * @param {any[]} args.polyMeshTemplatePalette
+ * @param {any[]} args.blockFaceTemplates
  * @param {any[]} args.blockPalette
  * @param {Record<string, number|[number,number]>} [args.pointLightDefs]
  * @param {number} [args.defaultLightIntensity=75]
  * @param {boolean} [args.collectLights=false] skip when maxPointLights is 0
  * @param {(stringified: string, block: any) => boolean} [args.matchBlock]
  * @returns {{
- *   blockPositions: [number,number,number][][],
+ *   blockPositions: { off: Int32Array, xyz: Int32Array },
+ *   waterlogPositions: { off: Int32Array, xyz: Int32Array },
  *   pointLights: { pos: number[], col: number, intensity: number }[]
  * }}
  */
 export function scanStructureBlocks({
 	structureSize,
 	blockIndices,
-	polyMeshTemplatePalette,
+	blockFaceTemplates,
 	blockPalette,
 	pointLightDefs = {},
 	defaultLightIntensity = 75,
 	collectLights = false,
 	matchBlock = defaultMatchBlock
 }) {
-	/** @type {[number,number,number][][]} */
-	const blockPositions = [];
 	/** @type {{ pos: number[], col: number, intensity: number }[]} */
 	const pointLights = [];
 
 	/** @type {(number|[number,number]|undefined)[]} */
 	let palettePointLights = [];
 	if (collectLights) {
-		palettePointLights = blockPalette.map(
-			block =>
-				pointLightDefs[block["name"]]
-				?? Object.entries(pointLightDefs).find(([key]) => matchBlock(key, block))?.[1]
-		);
+		palettePointLights = blockPalette.map(block => {
+			const name = block?.["name"];
+			const direct = typeof name === "string" && Object.hasOwn(pointLightDefs, name)
+				? pointLightDefs[name]
+				: undefined;
+			return direct ?? Object.entries(pointLightDefs).find(([key]) => matchBlock(key, block))?.[1];
+		});
 	}
 
 	const [sx, sy, sz] = structureSize;
-	for (let x = 0; x < sx; x++) {
-		for (let y = 0; y < sy; y++) {
+	const slotCount = blockFaceTemplates.length;
+	const blockCounts = new Int32Array(slotCount);
+	const waterCounts = new Int32Array(slotCount);
+	const accept = (paletteI) =>
+		paletteI >= 0 && paletteI < slotCount && (paletteI in blockFaceTemplates);
+
+	for (let y = 0; y < sy; y++) {
+		for (let x = 0; x < sx; x++) {
 			for (let z = 0; z < sz; z++) {
 				const blockI = (x * sy + y) * sz + z;
 				for (let layerI = 0; layerI < 2; layerI++) {
-					const paletteI = blockIndices[layerI][blockI];
-					if (!(paletteI in polyMeshTemplatePalette)) continue;
+					const layer = blockIndices[layerI];
+					if (!layer) continue;
+					const paletteI = layer[blockI];
+					if (!accept(paletteI)) continue;
+					const water = layerI === 1 && isWaterlogLiquid(blockPalette[paletteI]);
+					(water ? waterCounts : blockCounts)[paletteI]++;
+				}
+			}
+		}
+	}
 
-					blockPositions[paletteI] ??= [];
-					blockPositions[paletteI].push([x, y, z]);
+	const blocks = prefixOffsets(blockCounts);
+	const waters = prefixOffsets(waterCounts);
+	const blockXyz = new Int32Array(blocks.total * 3);
+	const waterXyz = new Int32Array(waters.total * 3);
+
+	for (let y = 0; y < sy; y++) {
+		for (let x = 0; x < sx; x++) {
+			for (let z = 0; z < sz; z++) {
+				const blockI = (x * sy + y) * sz + z;
+				for (let layerI = 0; layerI < 2; layerI++) {
+					const layer = blockIndices[layerI];
+					if (!layer) continue;
+					const paletteI = layer[blockI];
+					if (!accept(paletteI)) continue;
+					const water = layerI === 1 && isWaterlogLiquid(blockPalette[paletteI]);
+					const cursor = water ? waters.cursor : blocks.cursor;
+					const dest = water ? waterXyz : blockXyz;
+					const o = cursor[paletteI]++ * 3;
+					dest[o] = x;
+					dest[o + 1] = y;
+					dest[o + 2] = z;
 
 					if (!collectLights) continue;
 					const lightInfo = palettePointLights[paletteI];
@@ -78,7 +116,55 @@ export function scanStructureBlocks({
 		}
 	}
 
-	return { blockPositions, pointLights };
+	return {
+		blockPositions: { off: blocks.off, xyz: blockXyz },
+		waterlogPositions: { off: waters.off, xyz: waterXyz },
+		pointLights
+	};
+}
+
+/**
+ * Layer-1 water and lava share the cell with stairs and slabs. Their outer
+ * faces sit on the same planes, so pull shell vertices inward. Interior
+ * heights (a source top at 14) stay put.
+ */
+export const WATERLOG_FACE_INSET = 0.08;
+
+/**
+ * @param {any[]|null|undefined} faces
+ * @param {number} [inset]
+ * @returns {any[]|null|undefined}
+ */
+export function insetCellShellFaces(faces, inset = WATERLOG_FACE_INSET) {
+	if (!faces?.length || !(inset > 0)) return faces;
+	return faces.map(face => {
+		if (!face?.vertices) return face;
+		return {
+			...face,
+			vertices: face.vertices.map(vertex => {
+				const src = vertex?.pos;
+				if (!src || src.length < 3) return vertex;
+				const pos = [Number(src[0]) || 0, Number(src[1]) || 0, Number(src[2]) || 0];
+				for (let i = 0; i < 3; i++) {
+					const c = pos[i];
+					if (c <= 0.001) pos[i] = inset;
+					else if (c >= 16 - 0.001) pos[i] = 16 - inset;
+				}
+				return { ...vertex, pos };
+			})
+		};
+	});
+}
+
+/**
+ * @param {any} block
+ * @returns {boolean}
+ */
+function isWaterlogLiquid(block) {
+	if (!block) return false;
+	if (block.bLayers_block_shape === "liquid") return true;
+	const name = String(block.name ?? "").replace(/^minecraft:/, "");
+	return name === "water" || name === "flowing_water" || name === "lava" || name === "flowing_lava";
 }
 
 /**
@@ -100,6 +186,58 @@ export function defaultMatchBlock(stringifiedBlock, block) {
 	return true;
 }
 
+/**
+ * Early-exit atlas alpha walk. `pred(alpha)` true stops and returns true.
+ * @param {ImageData|null|undefined} imageBlobData
+ * @param {any[]|null|undefined} polyMeshTemplate
+ * @param {(alpha: number) => boolean} pred
+ */
+function atlasAlphaMatches(imageBlobData, polyMeshTemplate, pred) {
+	if (!imageBlobData || !polyMeshTemplate?.length) return false;
+	const allUvs = polyMeshTemplate.map(face => {
+		const uvCoords = face["vertices"].map(v => v["uv"]);
+		const xs = uvCoords.map(([x]) => round(x * imageBlobData.width));
+		const ys = uvCoords.map(([, y]) => round((1 - y) * imageBlobData.height));
+		const minUvCoords = tuple([min(...xs), min(...ys)]);
+		const maxUvCoords = tuple([max(...xs), max(...ys)]);
+		const unscaledUvSize = vec2.sub(maxUvCoords, minUvCoords);
+		return {
+			uv: [minUvCoords[0], minUvCoords[1]],
+			uvSize: [unscaledUvSize[0], unscaledUvSize[1]]
+		};
+	});
+	const uvs = Array.from(new JSONSet(allUvs));
+	const w = imageBlobData.width;
+	const h = imageBlobData.height;
+	const data = imageBlobData.data;
+	for (const { uv, uvSize } of uvs) {
+		for (let x = uv[0]; x < uv[0] + uvSize[0]; x++) {
+			for (let y = uv[1]; y < uv[1] + uvSize[1]; y++) {
+				if (x < 0 || y < 0 || x >= w || y >= h) continue;
+				const alpha = data[(y * w + x) * 4 + 3];
+				if (pred(alpha)) return true;
+			}
+		}
+	}
+	return false;
+}
+
+/**
+ * Split 0-thickness card faces from volumetric faces. Preview instances each
+ * group with its own material (FrontSide volume, DoubleSide cards).
+ * @param {any[]|null|undefined} faces
+ * @returns {{ volume: any[], cards: any[] }}
+ */
+export function partitionTemplateFaces(faces) {
+	const volume = [];
+	const cards = [];
+	for (const face of faces || []) {
+		if (face?.doubleSide) cards.push(face);
+		else volume.push(face);
+	}
+	return { volume, cards };
+}
+
 export default class BlockGeoSystem {
 	/**
 	 * @param {import("./PreviewContext.js").default} ctx
@@ -114,86 +252,76 @@ export default class BlockGeoSystem {
 	#dummy;
 
 	/**
-	 * @param {number} polyMeshTemplatePaletteI
-	 * @returns {import("three").BufferGeometry}
+	 * Volume geo (FrontSide) and card geo (0-thickness, DoubleSide) for one palette entry.
+	 * @param {number} faceTemplateI
+	 * @returns {{ volume: import("three").BufferGeometry|null, cards: import("three").BufferGeometry|null }}
 	 */
-	polyMeshTemplateToBufferGeo(polyMeshTemplatePaletteI) {
-		const THREE = this.ctx.THREE;
-		const maker = this.ctx.polyMeshMaker;
-		maker.add(polyMeshTemplatePaletteI);
-		const polyMesh = maker.export();
-		maker.clear();
-		let i = 0;
-		const positions = [], normals = [], uvs = [], indices = [];
-		polyMesh["polys"].forEach(face => {
-			face.forEach(([posIndex, normalIndex, uvIndex]) => {
-				const pos = polyMesh.positions[posIndex];
-				positions.push(pos[0], pos[1], 16 - pos[2]);
-				normals.push(...polyMesh.normals[normalIndex]);
-				uvs.push(polyMesh.uvs[uvIndex][0], 1 - polyMesh.uvs[uvIndex][1]);
-			});
-			indices.push(i + 2, i + 1, i, i + 2, i, i + 3);
-			i += face.length;
-		});
-		const geo = new THREE.BufferGeometry();
-		geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(positions), 3));
-		geo.setAttribute("normal", new THREE.BufferAttribute(new Float32Array(normals), 3));
-		geo.setAttribute("uv", new THREE.BufferAttribute(new Float32Array(uvs), 2));
-		geo.setIndex(indices);
-		geo.computeVertexNormals();
-		return geo;
+	faceTemplateToBufferGeos(faceTemplateI) {
+		const { volume, cards } = partitionTemplateFaces(
+			this.ctx.blockFaceTemplates?.[faceTemplateI]
+		);
+		return {
+			volume: facesToBufferGeometry(this.ctx.THREE, volume),
+			cards: facesToBufferGeometry(this.ctx.THREE, cards)
+		};
 	}
 
 	/**
-	 * Pixel-scan atlas for translucent faces in a template.
-	 * @param {any[]} polyMeshTemplate
+	 * Pixel-scan atlas for translucent faces in a template (blend: 0 < a < 255).
+	 * @param {any[]} faceTemplate
 	 * @returns {boolean}
 	 */
-	isPolyMeshTemplateTranslucent(polyMeshTemplate) {
-		const imageBlobData = this.ctx.imageBlobData;
-		if (!imageBlobData || !polyMeshTemplate?.length) return false;
-		const allUvs = polyMeshTemplate.map(face => {
-			const uvCoords = face["vertices"].map(v => v["uv"]);
-			const xs = uvCoords.map(([x]) => round(x * imageBlobData.width));
-			const ys = uvCoords.map(([, y]) => round((1 - y) * imageBlobData.height));
-			const minUvCoords = tuple([min(...xs), min(...ys)]);
-			const maxUvCoords = tuple([max(...xs), max(...ys)]);
-			const unscaledUvSize = vec2.sub(maxUvCoords, minUvCoords);
-			return {
-				uv: [minUvCoords[0], minUvCoords[1]],
-				uvSize: [unscaledUvSize[0], unscaledUvSize[1]]
-			};
-		});
-		const uvs = Array.from(new JSONSet(allUvs));
-		return uvs.some(({ uv, uvSize }) => {
-			for (let x = uv[0]; x < uv[0] + uvSize[0]; x++) {
-				for (let y = uv[1]; y < uv[1] + uvSize[1]; y++) {
-					const i = (y * imageBlobData.width + x) * 4;
-					const alpha = imageBlobData.data[i + 3];
-					if (alpha > 0 && alpha < 255) return true;
-				}
-			}
-			return false;
-		});
+	isFaceTemplateTranslucent(faceTemplate) {
+		return atlasAlphaMatches(this.ctx.imageBlobData, faceTemplate, a => a > 0 && a < 255);
 	}
 
 	/**
+	 * True only if the template has atlas coverage and every sampled texel is a === 255.
+	 * Cutout (a === 0) and blend fail. Empty templates do not occlude.
+	 * @param {any[]} faceTemplate
+	 * @returns {boolean}
+	 */
+	isFaceTemplateFullyOpaque(faceTemplate) {
+		const image = this.ctx.imageBlobData;
+		if (!image || !faceTemplate?.length) return false;
+		let saw = false;
+		const leak = atlasAlphaMatches(image, faceTemplate, a => {
+			saw = true;
+			return a < 255;
+		});
+		return saw && !leak;
+	}
+
+	/**
+	 * Write instance matrices from a CSR triple range. Structure (x,y,z) becomes
+	 * Three position (-16x-16, 16y, -16z-16).
 	 * @param {import("three").BufferGeometry} bufferGeo
-	 * @param {[number,number,number][]} positions
+	 * @param {Int32Array} xyz
+	 * @param {number} tripleStart
+	 * @param {number} tripleEnd
 	 * @param {import("three").Material} material
-	 * @param {{ mirrorX?: boolean }} [opts]
+	 * @param {{ mirrorX?: boolean, mirrorZ?: boolean }} [opts]
 	 * @returns {import("three").InstancedMesh}
 	 */
-	instanceBufferGeoAtPositions(bufferGeo, positions, material, opts = {}) {
+	instanceBufferGeoAtXyz(bufferGeo, xyz, tripleStart, tripleEnd, material, opts = {}) {
 		const THREE = this.ctx.THREE;
-		const instancedMesh = new THREE.InstancedMesh(bufferGeo, material, positions.length);
+		const count = Math.max(0, tripleEnd - tripleStart);
+		const instancedMesh = new THREE.InstancedMesh(bufferGeo, material, count);
 		if (!this.#dummy) this.#dummy = new THREE.Object3D();
 		const dummy = this.#dummy;
 		const mirrorX = !!opts.mirrorX;
-		for (let i = 0; i < positions.length; i++) {
-			const [px, py, pz] = positions[i];
-			dummy.position.set(mirrorX ? px + 16 : px, py, pz);
-			dummy.scale.set(mirrorX ? -1 : 1, 1, 1);
+		const mirrorZ = !!opts.mirrorZ;
+		for (let i = 0; i < count; i++) {
+			const o = (tripleStart + i) * 3;
+			const px = -16 * xyz[o] - 16;
+			const py = 16 * xyz[o + 1];
+			const pz = -16 * xyz[o + 2] - 16;
+			dummy.position.set(
+				mirrorX ? px + 16 : px,
+				py,
+				mirrorZ ? pz + 16 : pz
+			);
+			dummy.scale.set(mirrorX ? -1 : 1, 1, mirrorZ ? -1 : 1);
 			dummy.updateMatrix();
 			instancedMesh.setMatrixAt(i, dummy.matrix);
 		}

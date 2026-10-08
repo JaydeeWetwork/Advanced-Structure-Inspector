@@ -2,7 +2,7 @@
  * Light / dark Paper theme. Persists explicit choice; otherwise follows OS.
  */
 
-const THEME_KEY = "basi.theme.v1";
+const THEME_KEY = "bLayers.theme.v1";
 
 /**
  * @returns {"light"|"dark"|null}

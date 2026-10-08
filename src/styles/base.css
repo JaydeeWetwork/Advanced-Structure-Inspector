@@ -14,20 +14,10 @@
 	--error-red: #E24436;
 }
 body {
-	background-image: linear-gradient(#FFFB, #FFFB), url("../assets/logo_background.png");
-	background-size: 100px;
-	/* animation: move-background 10s linear infinite; */
+	background: #f6f3f7;
 	font-family: "Catamaran", "Trebuchet MS", sans-serif;
 	color: var(--text-col);
 	line-height: 1.2;
-}
-@keyframes move-background {
-	from {
-		background-position: 0 0;
-	}
-	to {
-		background-position: 100px 60px;
-	}
 }
 
 h1 {

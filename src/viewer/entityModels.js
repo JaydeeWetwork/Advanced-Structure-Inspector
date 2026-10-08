@@ -22,8 +22,51 @@ import { entityMeshKind } from "./entityExtract.js";
  * @property {string} geoFile
  * @property {string[]} geoIds  preferred geometry identifiers (first match)
  * @property {string} texture   path without extension
+ * @property {string[]} [variantTextures]  query.variant → path, no extension
  * @property {"none"|"chest"|"hopper"|"tnt"|"command"} cargo
+ * @property {"rail"|"floor"} [pose]  default rail (minecart sit). floor = NBT Pos
  */
+
+/**
+ * `controller.render.cushion` Array.skins order (bedrock-samples v1.26.50.4).
+ * Behavior default `minecraft:variant` is 15 (white).
+ */
+export const CUSHION_VARIANT_TEXTURES = [
+	"textures/entity/cushion/black_cushion",
+	"textures/entity/cushion/red_cushion",
+	"textures/entity/cushion/green_cushion",
+	"textures/entity/cushion/brown_cushion",
+	"textures/entity/cushion/blue_cushion",
+	"textures/entity/cushion/purple_cushion",
+	"textures/entity/cushion/cyan_cushion",
+	"textures/entity/cushion/light_gray_cushion",
+	"textures/entity/cushion/gray_cushion",
+	"textures/entity/cushion/pink_cushion",
+	"textures/entity/cushion/lime_cushion",
+	"textures/entity/cushion/yellow_cushion",
+	"textures/entity/cushion/light_blue_cushion",
+	"textures/entity/cushion/magenta_cushion",
+	"textures/entity/cushion/orange_cushion",
+	"textures/entity/cushion/white_cushion"
+];
+
+/** Stand-in wool colors when the TGA has not loaded. Same index as the skins array. */
+export const CUSHION_FALLBACK_COLOR = [
+	0x1d1d21, 0xb02e26, 0x5e7c16, 0x835432,
+	0x3c44aa, 0x8932b8, 0x169c9c, 0x9d9d97,
+	0x474f52, 0xf38baa, 0x80c71f, 0xfed83d,
+	0x3ab3da, 0xc74ebd, 0xf9801d, 0xf9fffe
+];
+
+/**
+ * @param {unknown} variant
+ * @returns {number} 0–15, default 15 (white)
+ */
+export function cushionVariantIndex(variant) {
+	const n = Math.trunc(Number(variant));
+	if (!Number.isInteger(n) || n < 0 || n >= CUSHION_VARIANT_TEXTURES.length) return 15;
+	return n;
+}
 
 /** @type {Record<string, VanillaEntityModelDef>} */
 export const VANILLA_ENTITY_MODELS = {
@@ -61,6 +104,15 @@ export const VANILLA_ENTITY_MODELS = {
 		geoIds: ["geometry.minecart.v1.8", "geometry.minecart"],
 		texture: "textures/entity/minecart",
 		cargo: "command"
+	},
+	cushion: {
+		entityFile: "entity/cushion.entity.json",
+		geoFile: "models/entity/cushion.geo.json",
+		geoIds: ["geometry.cushion"],
+		texture: CUSHION_VARIANT_TEXTURES[15],
+		variantTextures: CUSHION_VARIANT_TEXTURES,
+		cargo: "none",
+		pose: "floor"
 	}
 };
 

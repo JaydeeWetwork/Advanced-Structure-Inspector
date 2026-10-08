@@ -3,6 +3,7 @@
  */
 
 import {
+	CATALOG_DB_PREFIX,
 	isProtectedDefaultDbName,
 	dbClearAll,
 	dbCloneCatalog,
@@ -42,7 +43,7 @@ export async function activateCatalog(catalog, id) {
 export async function saveCatalogAs(catalog, name) {
 	const from = catalog.getDbName();
 	const id = newCatalogId();
-	const dbName = `basi-catalog-${id}`;
+	const dbName = `${CATALOG_DB_PREFIX}${id}`;
 	await dbCloneCatalog(from, dbName);
 	const rec = addCatalogRecord(name, { id, dbName });
 	return activateCatalog(catalog, rec.id);
@@ -54,7 +55,7 @@ export async function saveCatalogAs(catalog, name) {
  */
 export async function createEmptyCatalog(catalog, name) {
 	const id = newCatalogId();
-	const dbName = `basi-catalog-${id}`;
+	const dbName = `${CATALOG_DB_PREFIX}${id}`;
 	const rec = addCatalogRecord(name, { id, dbName });
 	setActiveCatalogId(rec.id);
 	await catalog.reloadFromDb(dbName);

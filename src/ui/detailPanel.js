@@ -17,7 +17,7 @@ function $(id) {
 }
 
 /**
- * Top header: name, source, hopper lock chip, action buttons.
+ * Top header: name and source. Hopper lock chip lives in the details dock.
  * @param {any|null} entry
  */
 export function updateSelectionHeader(entry) {
@@ -27,6 +27,7 @@ export function updateSelectionHeader(entry) {
 			els.detailFloatTitle.textContent = "Details";
 			els.detailFloatTitle.title = "Details";
 		}
+		renderCategoryAssign(null);
 		return;
 	}
 	els.selectionBar?.classList.remove("hidden");
@@ -42,6 +43,100 @@ export function updateSelectionHeader(entry) {
 			: `${entry.sourceName} · ${entry.sourceKind}`;
 	}
 	renderHopperChip(entry.hopperStats);
+	renderCategoryAssign(entry);
+}
+
+/**
+ * Category / entry selects above Information.
+ * @param {any|null} entry
+ */
+export function renderCategoryAssign(entry) {
+	const catSel = els.detailCategorySelect;
+	const entSel = els.detailEntrySelect;
+	if (!catSel || !entSel) return;
+	bindCategoryAssignOnce();
+
+	const cats = catalog.listCategories();
+	catSel.replaceChildren();
+	const none = document.createElement("option");
+	none.value = "";
+	none.textContent = "Uncategorized";
+	catSel.appendChild(none);
+	for (const c of cats) {
+		const opt = document.createElement("option");
+		opt.value = c.id;
+		opt.textContent = c.name;
+		catSel.appendChild(opt);
+	}
+
+	if (!entry) {
+		catSel.value = "";
+		entSel.replaceChildren();
+		const empty = document.createElement("option");
+		empty.value = "";
+		empty.textContent = "—";
+		entSel.appendChild(empty);
+		entSel.disabled = true;
+		els.detailEntryField?.classList.add("is-disabled");
+		catSel.disabled = true;
+		return;
+	}
+
+	catSel.disabled = false;
+	const fn = entry.entryId ? catalog.getCatalogEntry(entry.entryId) : null;
+	const categoryId = fn?.categoryId || "";
+	catSel.value = categoryId;
+
+	entSel.replaceChildren();
+	if (!categoryId) {
+		const empty = document.createElement("option");
+		empty.value = "";
+		empty.textContent = "—";
+		entSel.appendChild(empty);
+		entSel.disabled = true;
+		els.detailEntryField?.classList.add("is-disabled");
+		return;
+	}
+
+	entSel.disabled = false;
+	els.detailEntryField?.classList.remove("is-disabled");
+	for (const e of catalog.listCatalogEntries(categoryId)) {
+		const opt = document.createElement("option");
+		opt.value = e.id;
+		opt.textContent = e.name;
+		entSel.appendChild(opt);
+	}
+	entSel.value = entry.entryId || "";
+}
+
+function bindCategoryAssignOnce() {
+	const catSel = els.detailCategorySelect;
+	const entSel = els.detailEntrySelect;
+	if (!catSel || catSel.dataset.bound) return;
+	catSel.dataset.bound = "1";
+	catSel.addEventListener("change", () => {
+		const id = getSelectedId();
+		if (!id) return;
+		const catId = catSel.value || null;
+		void catalog.assignStructureToCategory(id, catId).then(
+			() => {
+				setStatus("Category updated.", "ok");
+				catSel.blur();
+			},
+			() => {
+				setStatus("That category has no entry. Add one in Editor.", "warn");
+				renderCategoryAssign(catalog.get(id));
+			}
+		);
+	});
+	entSel?.addEventListener("change", () => {
+		const id = getSelectedId();
+		if (!id) return;
+		void catalog.setStructureEntry(id, entSel.value || null).then(() => {
+			setStatus("Entry updated.", "ok");
+			entSel.blur();
+		});
+	});
 }
 
 /**
@@ -172,7 +267,7 @@ export function renderMaterialList(entry) {
 		if (entry.file && !entry._materialsLoadAttempted) {
 			entry._materialsLoadAttempted = true;
 			const liLoading = document.createElement("li");
-			liLoading.className = "basi-mat-empty";
+			liLoading.className = "bLayers-mat-empty";
 			liLoading.textContent = "Loading materials…";
 			list.appendChild(liLoading);
 			if (els.materialListHint) els.materialListHint.textContent = "";
@@ -190,7 +285,7 @@ export function renderMaterialList(entry) {
 			return;
 		}
 		const li = document.createElement("li");
-		li.className = "basi-mat-empty";
+		li.className = "bLayers-mat-empty";
 		li.textContent = "No materials";
 		list.appendChild(li);
 		if (els.materialListHint) els.materialListHint.textContent = "";
@@ -210,10 +305,10 @@ export function renderMaterialList(entry) {
 	for (const row of materials) {
 		const isAcquired = acquired.has(row.id);
 		const li = document.createElement("li");
-		li.className = "basi-mat-row" + (isAcquired ? " is-acquired" : "");
+		li.className = "bLayers-mat-row" + (isAcquired ? " is-acquired" : "");
 
 		const checkWrap = document.createElement("label");
-		checkWrap.className = "basi-mat-check";
+		checkWrap.className = "bLayers-mat-check";
 		checkWrap.title = isAcquired ? "Mark as still needed" : "Mark as acquired";
 		const cb = document.createElement("input");
 		cb.type = "checkbox";
@@ -227,23 +322,23 @@ export function renderMaterialList(entry) {
 		checkWrap.appendChild(cb);
 
 		const left = document.createElement("div");
-		left.className = "basi-mat-name";
+		left.className = "bLayers-mat-name";
 		left.append(document.createTextNode(row.label));
 		const idEl = document.createElement("span");
-		idEl.className = "basi-mat-id";
+		idEl.className = "bLayers-mat-id";
 		idEl.textContent = row.id;
 		left.appendChild(idEl);
 
 		const right = document.createElement("div");
-		right.className = "basi-mat-right";
+		right.className = "bLayers-mat-right";
 
 		const total = document.createElement("span");
-		total.className = "basi-mat-count";
+		total.className = "bLayers-mat-count";
 		total.textContent = Number(row.count).toLocaleString();
 		total.title = "Total items (grouped variants summed)";
 
 		const part = document.createElement("span");
-		part.className = "basi-mat-partition";
+		part.className = "bLayers-mat-partition";
 		const partitionText = row.partition || formatPartitionFallback(row);
 		// Shulkers / stacks / loose breakdown under the total
 		if (partitionText && partitionText !== String(row.count)) {
@@ -339,7 +434,7 @@ export function renderFeaturePicker() {
 	const list = catalog.listFeatures();
 	if (!list.length) {
 		const empty = document.createElement("p");
-		empty.className = "basi-ed-hint";
+		empty.className = "bLayers-ed-hint";
 		empty.textContent = "No features yet — create one above.";
 		host.appendChild(empty);
 		return;
@@ -347,20 +442,20 @@ export function renderFeaturePicker() {
 	for (const feat of list) {
 		const card = document.createElement("button");
 		card.type = "button";
-		card.className = "basi-ed-feat-card basi-feat-pick" + (assigned.has(feat.id) ? " is-assigned" : "");
+		card.className = "bLayers-ed-feat-card bLayers-feat-pick" + (assigned.has(feat.id) ? " is-assigned" : "");
 		card.style.setProperty("--feat-color", feat.color || "#64748b");
 		const name = document.createElement("div");
-		name.className = "basi-ed-feat-name";
+		name.className = "bLayers-ed-feat-name";
 		name.style.background = feat.color || "#64748b";
 		name.style.color = contrastText(feat.color || "#64748b");
 		name.textContent = feat.name;
 		const desc = document.createElement("p");
-		desc.className = "basi-ed-feat-desc";
+		desc.className = "bLayers-ed-feat-desc";
 		desc.textContent = feat.description || "No description";
 		card.append(name, desc);
 		if (assigned.has(feat.id)) {
 			const flag = document.createElement("span");
-			flag.className = "basi-ed-assigned-flag";
+			flag.className = "bLayers-ed-assigned-flag";
 			flag.textContent = "Assigned";
 			card.appendChild(flag);
 		}
@@ -477,13 +572,13 @@ export function renderUserDetails(entry) {
 	const ordered = [...notes].sort((a, b) => (b.addedAt || 0) - (a.addedAt || 0));
 	for (const note of ordered) {
 		const li = document.createElement("li");
-		li.className = "basi-detail-note";
+		li.className = "bLayers-detail-note";
 		const text = document.createElement("div");
-		text.className = "basi-detail-note-text";
+		text.className = "bLayers-detail-note-text";
 		text.textContent = note.text;
 		const del = document.createElement("button");
 		del.type = "button";
-		del.className = "basi-detail-note-del";
+		del.className = "bLayers-detail-note-del";
 		del.title = "Remove detail";
 		del.textContent = "×";
 		del.addEventListener("click", () => {
@@ -544,7 +639,7 @@ export async function removeUserDetail(entryId, noteId) {
 export function applyCollapseState(btn, body, collapsed) {
 	if (btn) {
 		btn.setAttribute("aria-expanded", collapsed ? "false" : "true");
-		const t = btn.querySelector(".basi-collapse-toggle");
+		const t = btn.querySelector(".bLayers-collapse-toggle");
 		if (t) t.textContent = collapsed ? "▸" : "▾";
 		btn.classList.toggle("is-collapsed", collapsed);
 	}
@@ -576,7 +671,7 @@ export async function ensureMaterials(entry) {
 		const { buildMaterialListFromFile } = await import("../viewer/materialList.js");
 		return await buildMaterialListFromFile(entry.file);
 	} catch (e) {
-		console.warn("[basi] material list rebuild failed:", e);
+		console.warn("[bLayers] material list rebuild failed:", e);
 		return [];
 	}
 }
@@ -590,7 +685,7 @@ export async function ensureHopperStats(entry) {
 		const { scanHopperStatsFromFile } = await import("../viewer/hopperStats.js");
 		return await scanHopperStatsFromFile(entry.file);
 	} catch (e) {
-		console.warn("[basi] hopper stats failed:", e);
+		console.warn("[bLayers] hopper stats failed:", e);
 		return null;
 	}
 }

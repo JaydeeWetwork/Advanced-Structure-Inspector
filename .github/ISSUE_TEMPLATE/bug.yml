@@ -1,0 +1,48 @@
+name: Bug report
+description: Something is wrong in the Bedrock Layers page
+title: "Bug: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: >
+        Search [existing issues](https://github.com/JaydeeWetwork/bedrockLayers/issues) before you file a new one.
+  - type: input
+    id: version
+    attributes:
+      label: Bedrock Layers version
+      description: The number shown next to the title on the page.
+      placeholder: 0.1.158
+    validations:
+      required: true
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and OS
+      description: Browser name and version, and the operating system. Include iPadOS when you use Safari on an iPad.
+      placeholder: Chrome 131 on Windows 11
+    validations:
+      required: true
+  - type: textarea
+    id: structure
+    attributes:
+      label: Structure file
+      description: File name, size if you know it, and where it came from (export, world, template, or zip).
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps
+      description: What you did before the problem showed up.
+    validations:
+      required: true
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots
+      description: Drag in screenshots of the page, the console, or the preview.
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected

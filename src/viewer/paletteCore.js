@@ -37,46 +37,73 @@ export function normalizeVec3(value) {
 }
 
 /**
- * Deep-clone dual-layer block indices so palette remaps never mutate source NBT.
+ * Deep-clone block indices so palette remaps never mutate source NBT.
+ * Version 2 omits the waterlog layer when it is empty. That becomes a same-length list of -1.
  * @param {[Int32Array|number[], Int32Array|number[]]|unknown} indices
  * @returns {[Int32Array, Int32Array]}
  */
 export function cloneBlockIndices(indices) {
-	if (!Array.isArray(indices) || indices.length < 2) {
+	if (!Array.isArray(indices) || indices.length < 1 || indices[0] == null) {
 		return [new Int32Array(0), new Int32Array(0)];
 	}
-	const layer0 = indices[0];
-	const layer1 = indices[1];
-	return [
-		layer0 instanceof Int32Array ? new Int32Array(layer0) : Int32Array.from(layer0 ?? []),
-		layer1 instanceof Int32Array ? new Int32Array(layer1) : Int32Array.from(layer1 ?? [])
-	];
+	const layer0 = indices[0] instanceof Int32Array ? new Int32Array(indices[0]) : Int32Array.from(indices[0] ?? []);
+	const raw1 = indices.length >= 2 ? indices[1] : null;
+	const layer1 = raw1 == null
+		? new Int32Array(layer0.length).fill(-1)
+		: raw1 instanceof Int32Array ? new Int32Array(raw1) : Int32Array.from(raw1 ?? []);
+	return [layer0, layer1];
 }
 
 /**
+ * Add `palette` into `paletteSet` and remap both index layers onto that set.
+ * A version still on the block is part of the JSON identity.
+ * @param {JSONSet} paletteSet
+ * @param {any[]} palette
+ * @param {ArrayLike<ArrayLike<number>>} indices
+ * @returns {[Int32Array, Int32Array]}
+ */
+function remapPaletteIndices(paletteSet, palette, indices) {
+	/** @type {number[]} */
+	const indexRemappings = [];
+	palette.forEach((block, i) => {
+		paletteSet.add(block);
+		indexRemappings[i] = paletteSet.indexOf(block);
+	});
+	return /** @type {[Int32Array, Int32Array]} */ (
+		indices.map(layer =>
+			Int32Array.from(layer, paletteI => indexRemappings[paletteI] ?? -1)
+		)
+	);
+}
+
+/**
+ * Collapse identical rows in one palette and remap its index layers.
+ * @param {any[]} palette
+ * @param {ArrayLike<ArrayLike<number>>} indices
+ * @returns {{ palette: any[], indices: [Int32Array, Int32Array] }}
+ */
+export function dedupePalette(palette, indices) {
+	const paletteSet = new JSONSet();
+	const remapped = remapPaletteIndices(paletteSet, palette, indices);
+	return {
+		palette: Array.from(paletteSet),
+		indices: remapped
+	};
+}
+
+/**
+ * Merge several structure palettes into one, remapping each index pair.
+ * The pack is the caller. A single structure uses `dedupePalette`.
  * @param {{ palette: any[], indices: [Int32Array, Int32Array] }[]} palettesAndIndices
  * @returns {{ palette: any[], indices: [Int32Array, Int32Array][] }}
  */
 export function mergeMultiplePalettesAndIndices(palettesAndIndices) {
-	const mergedPaletteSet = new JSONSet();
-	const remappedIndices = [];
-	palettesAndIndices.forEach(({ palette, indices }) => {
-		/** @type {number[]} */
-		const indexRemappings = [];
-		palette.forEach((block, i) => {
-			mergedPaletteSet.add(block);
-			indexRemappings[i] = mergedPaletteSet.indexOf(block);
-		});
-		remappedIndices.push(
-			/** @type {[Int32Array, Int32Array]} */ (
-				indices.map(layer =>
-					Int32Array.from(layer, paletteI => indexRemappings[paletteI] ?? -1)
-				)
-			)
-		);
-	});
+	const paletteSet = new JSONSet();
+	const indices = palettesAndIndices.map(item =>
+		remapPaletteIndices(paletteSet, item.palette, item.indices)
+	);
 	return {
-		palette: Array.from(mergedPaletteSet),
-		indices: remappedIndices
+		palette: Array.from(paletteSet),
+		indices
 	};
 }

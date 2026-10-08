@@ -1,0 +1,280 @@
+/* Camera bar: hit strip stays on the bottom edge; the bar pops up from below */
+.bLayers-cam-dock {
+	position: absolute;
+	top: auto;
+	bottom: 0;
+	left: 0;
+	right: 0;
+	z-index: 36;
+	display: flex;
+	justify-content: center;
+	align-items: flex-end;
+	pointer-events: none;
+}
+.bLayers-cam-hit {
+	position: absolute;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	height: 56px;
+	pointer-events: auto;
+}
+.bLayers-cam-slide {
+	position: relative;
+	z-index: 1;
+	display: flex;
+	justify-content: center;
+	pointer-events: none;
+	padding-bottom: 8px;
+	transform: translateY(calc(100% + 8px));
+	transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.bLayers-cam-bar {
+	position: relative;
+	z-index: 1;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px 6px;
+	flex-shrink: 0;
+	align-items: center;
+	justify-content: center;
+	max-width: min(96vw, 920px);
+	padding: 6px 10px;
+	border-radius: 10px;
+	background: color-mix(in srgb, #1a151c 72%, transparent);
+	border: 1px solid #ffffff18;
+	backdrop-filter: blur(10px);
+	-webkit-backdrop-filter: blur(10px);
+	box-shadow: 0 4px 20px #0006;
+	pointer-events: auto;
+}
+.bLayers-cam-dock:focus-within,
+.bLayers-cam-dock.bLayers-cam-open {
+	z-index: 46;
+}
+.bLayers-cam-dock:focus-within .bLayers-cam-slide,
+.bLayers-cam-dock.bLayers-cam-open .bLayers-cam-slide {
+	transform: translateY(0);
+}
+@media (hover: hover) and (pointer: fine) {
+	body.bLayers-app:has(.bLayers-footer:hover) .bLayers-cam-dock,
+	.bLayers-cam-dock:hover {
+		z-index: 46;
+	}
+	body.bLayers-app:has(.bLayers-footer:hover) .bLayers-cam-slide,
+	.bLayers-cam-dock:hover .bLayers-cam-slide {
+		transform: translateY(0);
+	}
+}
+.bLayers-compass {
+	position: absolute;
+	left: 14px;
+	bottom: 18px;
+	z-index: 37;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 4px;
+	pointer-events: none;
+	user-select: none;
+}
+.bLayers-compass-dial {
+	position: relative;
+	width: 68px;
+	height: 68px;
+	border-radius: 50%;
+	border: 1px solid #ffffff28;
+	background: color-mix(in srgb, #1a151c 78%, transparent);
+	box-shadow: 0 4px 16px #0007;
+	backdrop-filter: blur(10px);
+	-webkit-backdrop-filter: blur(10px);
+}
+.bLayers-compass-mark {
+	position: absolute;
+	font-size: 0.62rem;
+	font-weight: 800;
+	letter-spacing: 0.04em;
+	color: #c8bcc8;
+	line-height: 1;
+}
+.bLayers-compass-mark.n {
+	top: 5px;
+	left: 50%;
+	transform: translateX(-50%);
+	color: #e24436;
+}
+.bLayers-compass-mark.s {
+	bottom: 5px;
+	left: 50%;
+	transform: translateX(-50%);
+}
+.bLayers-compass-mark.e {
+	right: 6px;
+	top: 50%;
+	transform: translateY(-50%);
+}
+.bLayers-compass-mark.w {
+	left: 6px;
+	top: 50%;
+	transform: translateY(-50%);
+}
+.bLayers-compass-needle {
+	position: absolute;
+	left: 50%;
+	top: 50%;
+	width: 10px;
+	height: 36px;
+	margin: -18px 0 0 -5px;
+	transform-origin: 50% 50%;
+	background: linear-gradient(#e24436 0 50%, #f0e8f0 50% 100%);
+	clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+	filter: drop-shadow(0 1px 1px #0008);
+}
+.bLayers-compass.is-top .bLayers-compass-needle {
+	opacity: 0.28;
+}
+.bLayers-compass-label {
+	font-size: 0.68rem;
+	font-weight: 800;
+	letter-spacing: 0.06em;
+	color: #f0e8f0;
+	text-shadow: 0 1px 2px #000a;
+}
+.bLayers-cam-bar .bLayers-cam-btn,
+.bLayers-cam-bar .bLayers-cam-tilt,
+.bLayers-cam-bar input {
+	pointer-events: auto;
+	position: relative;
+	z-index: 1;
+}
+.bLayers-cam-btn {
+	font: inherit;
+	font-size: 0.72rem;
+	font-weight: 700;
+	padding: 3px 8px;
+	border-radius: 6px;
+	border: 1px solid #ffffff22;
+	background: #2a2430cc;
+	color: #f0e8f0;
+	cursor: pointer;
+	line-height: 1.2;
+}
+.bLayers-cam-btn:hover {
+	background: #3d3448;
+}
+.bLayers-cam-btn.active {
+	background: var(--dark-bg);
+	border-color: var(--dark-border);
+	color: #fff;
+}
+.bLayers-cam-tilt {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	margin-left: 4px;
+	font-size: 0.72rem;
+	font-weight: 600;
+	color: #c8bcc8;
+	user-select: none;
+}
+.bLayers-cam-tilt input[type="range"] {
+	width: 90px;
+	accent-color: var(--dark-bg);
+	cursor: pointer;
+}
+.bLayers-cam-tilt-val {
+	font-variant-numeric: tabular-nums;
+	min-width: 2.2rem;
+	color: #f0e8f0;
+}
+.bLayers-inspect-panel.bLayers-win {
+	position: absolute;
+	left: 50%;
+	bottom: 12px;
+	transform: translateX(-50%);
+	z-index: 48;
+	margin: 0;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	min-width: 240px;
+	max-width: min(96vw, 560px);
+	max-height: min(78vh, 640px);
+	overflow: hidden;
+	flex-shrink: 0;
+	background: transparent;
+	border: none;
+	pointer-events: auto;
+	box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+}
+.bLayers-inspect-panel.bLayers-win.bLayers-win-moved,
+.bLayers-inspect-panel.bLayers-win.bLayers-win-dragging {
+	transform: none;
+	bottom: auto;
+	right: auto;
+}
+.bLayers-win-bar {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 5px 8px;
+	background: #2a2030;
+	color: #ffe566;
+	cursor: grab;
+	border: 1px solid #5a4568;
+	border-bottom: none;
+	border-radius: 6px 6px 0 0;
+	flex-shrink: 0;
+	user-select: none;
+	touch-action: none;
+}
+.bLayers-win-bar.is-dragging {
+	cursor: grabbing;
+}
+.bLayers-win-collapsed .bLayers-win-bar {
+	border-radius: 6px;
+	border-bottom: 1px solid #5a4568;
+}
+.bLayers-win-title {
+	flex: 1;
+	min-width: 0;
+	font-size: 0.8rem;
+	font-weight: 700;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.bLayers-win-collapse,
+.bLayers-win-close {
+	flex-shrink: 0;
+	width: 22px;
+	height: 22px;
+	padding: 0;
+	border: 1px solid #6a5080;
+	border-radius: 3px;
+	background: #3a2a48;
+	color: #ffe566;
+	font-size: 0.85rem;
+	line-height: 1;
+	cursor: pointer;
+}
+.bLayers-win-collapse:hover,
+.bLayers-win-close:hover {
+	background: #4a3858;
+}
+.bLayers-win-body {
+	overflow: auto;
+	min-height: 0;
+	flex: 1 1 auto;
+	background: transparent;
+}
+.bLayers-win-collapsed .bLayers-win-body {
+	display: none;
+}
+.bLayers-win .mc-inv-close {
+	display: none;
+}
+.bLayers-win .mc-inv {
+	border-top-left-radius: 0;
+	border-top-right-radius: 0;
+}

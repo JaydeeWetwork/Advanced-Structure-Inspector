@@ -19,22 +19,22 @@ function select(kind, id) {
 	selectEditorNode(kind, id);
 }
 
-const CAT_DRAG = "application/x-basi-category";
+const CAT_DRAG = "application/x-bLayers-category";
 
 function clearDropMarks(host) {
-	host?.querySelectorAll(".basi-ed-node.drop-before, .basi-ed-node.drop-after").forEach(el => {
+	host?.querySelectorAll(".bLayers-ed-node.drop-before, .bLayers-ed-node.drop-after").forEach(el => {
 		el.classList.remove("drop-before", "drop-after");
 	});
 }
 
 function categoryRowFromPoint(clientX, clientY) {
 	const el = document.elementFromPoint(clientX, clientY);
-	const row = el?.closest?.(".basi-ed-node");
+	const row = el?.closest?.(".bLayers-ed-node");
 	if (!row) return null;
 	if (row.dataset.kind === "category") return row;
 	const cid = row.dataset.categoryId;
 	if (!cid) return null;
-	return els.editorTree?.querySelector(`.basi-ed-node[data-kind="category"][data-id="${CSS.escape(cid)}"]`) ?? null;
+	return els.editorTree?.querySelector(`.bLayers-ed-node[data-kind="category"][data-id="${CSS.escape(cid)}"]`) ?? null;
 }
 
 function bindTreeScrollAndDnD(host) {
@@ -81,7 +81,7 @@ function bindTreeScrollAndDnD(host) {
 
 function nodeRow({ kind, id, name, meta, color, collapsed, depth, onToggle, onClick, categoryId, draggable }) {
 	const row = document.createElement("div");
-	row.className = "basi-ed-node" + (isSelected(kind, id) ? " is-selected" : "");
+	row.className = "bLayers-ed-node" + (isSelected(kind, id) ? " is-selected" : "");
 	row.dataset.kind = kind;
 	row.dataset.id = id;
 	if (categoryId) row.dataset.categoryId = categoryId;
@@ -111,7 +111,7 @@ function nodeRow({ kind, id, name, meta, color, collapsed, depth, onToggle, onCl
 	if (onToggle) {
 		const tog = document.createElement("button");
 		tog.type = "button";
-		tog.className = "basi-ed-toggle";
+		tog.className = "bLayers-ed-toggle";
 		tog.textContent = collapsed ? "▸" : "▾";
 		tog.addEventListener("click", e => {
 			stop(e);
@@ -120,18 +120,18 @@ function nodeRow({ kind, id, name, meta, color, collapsed, depth, onToggle, onCl
 		row.appendChild(tog);
 	} else {
 		const pad = document.createElement("span");
-		pad.className = "basi-ed-toggle-spacer";
+		pad.className = "bLayers-ed-toggle-spacer";
 		row.appendChild(pad);
 	}
 
 	const label = document.createElement("span");
-	label.className = "basi-ed-node-name";
+	label.className = "bLayers-ed-node-name";
 	label.textContent = name;
 	row.appendChild(label);
 
 	if (meta) {
 		const m = document.createElement("span");
-		m.className = "basi-ed-node-meta";
+		m.className = "bLayers-ed-node-meta";
 		m.textContent = meta;
 		row.appendChild(m);
 	}
@@ -177,7 +177,7 @@ export function renderEditorTree() {
 	if (!editorUi.uncategorizedCollapsed) {
 		if (!tree.uncategorized.structures.length) {
 			const empty = document.createElement("div");
-			empty.className = "basi-ed-empty";
+			empty.className = "bLayers-ed-empty";
 			empty.style.setProperty("--depth", "1");
 			empty.textContent = "Imported files wait here";
 			host.appendChild(empty);
@@ -235,7 +235,7 @@ export function renderEditorTree() {
 			if (entry.collapsed) continue;
 			if (!structures.length) {
 				const empty = document.createElement("div");
-				empty.className = "basi-ed-empty";
+				empty.className = "bLayers-ed-empty";
 				empty.style.setProperty("--depth", "2");
 				empty.textContent = "No structures";
 				host.appendChild(empty);
@@ -270,7 +270,7 @@ export function renderEditorToolbar() {
 
 	const addCat = document.createElement("button");
 	addCat.type = "button";
-	addCat.className = "basi-btn secondary";
+	addCat.className = "bLayers-btn secondary";
 	addCat.textContent = "+ Category";
 	addCat.addEventListener("click", async () => {
 		const created = await catalog.addCategory("New category");
@@ -280,7 +280,7 @@ export function renderEditorToolbar() {
 
 	const addEntry = document.createElement("button");
 	addEntry.type = "button";
-	addEntry.className = "basi-btn secondary";
+	addEntry.className = "bLayers-btn secondary";
 	addEntry.textContent = "+ Entry";
 	const sel = editorUi.selected;
 	let categoryId = null;
@@ -297,8 +297,8 @@ export function renderEditorToolbar() {
 
 	const features = document.createElement("button");
 	features.type = "button";
-	features.className = "basi-btn" + (editorUi.featuresOpen ? "" : " secondary");
-	features.classList.add("basi-ed-toolbar-features");
+	features.className = "bLayers-btn" + (editorUi.featuresOpen ? "" : " secondary");
+	features.classList.add("bLayers-ed-toolbar-features");
 	features.textContent = editorUi.featuresOpen ? "Hide features" : "Features";
 	features.addEventListener("click", () => {
 		editorUi.featuresOpen = !editorUi.featuresOpen;

@@ -28,7 +28,7 @@ export function renderEditorDbBar() {
 
 	const name = document.createElement("input");
 	name.type = "text";
-	name.className = "basi-ed-db-name";
+	name.className = "bLayers-ed-db-name";
 	name.value = active.name;
 	name.title = "Rename this database";
 	name.spellcheck = false;
@@ -50,7 +50,7 @@ export function renderEditorDbBar() {
 	});
 
 	const load = document.createElement("select");
-	load.className = "basi-ed-input basi-ed-db-load";
+	load.className = "bLayers-ed-input bLayers-ed-db-load";
 	load.title = "Load a saved database";
 	for (const item of items) {
 		const opt = document.createElement("option");
@@ -74,11 +74,11 @@ export function renderEditorDbBar() {
 	if (form) {
 		if (form.mode === "delete") {
 			const warn = document.createElement("span");
-			warn.className = "basi-ed-hint";
+			warn.className = "bLayers-ed-hint";
 			warn.textContent = `Delete “${active.name}”?`;
 			const yes = document.createElement("button");
 			yes.type = "button";
-			yes.className = "basi-btn secondary basi-ed-danger";
+			yes.className = "bLayers-btn secondary bLayers-ed-danger";
 			yes.textContent = "Confirm";
 			yes.addEventListener("click", async () => {
 				try {
@@ -92,7 +92,7 @@ export function renderEditorDbBar() {
 			});
 			const no = document.createElement("button");
 			no.type = "button";
-			no.className = "basi-btn secondary";
+			no.className = "bLayers-btn secondary";
 			no.textContent = "Cancel";
 			no.addEventListener("click", () => {
 				editorUi.dbForm = null;
@@ -104,7 +104,7 @@ export function renderEditorDbBar() {
 
 		const input = document.createElement("input");
 		input.type = "text";
-		input.className = "basi-ed-input";
+		input.className = "bLayers-ed-input";
 		input.value = form.name || "";
 		input.placeholder = form.mode === "new" ? "New database name" : "Save as…";
 		input.addEventListener("input", () => {
@@ -112,7 +112,7 @@ export function renderEditorDbBar() {
 		});
 		const ok = document.createElement("button");
 		ok.type = "button";
-		ok.className = "basi-btn";
+		ok.className = "bLayers-btn";
 		ok.textContent = form.mode === "new" ? "Create" : "Save";
 		ok.addEventListener("click", async () => {
 			const n = (form.name || "").trim();
@@ -130,7 +130,7 @@ export function renderEditorDbBar() {
 		});
 		const no = document.createElement("button");
 		no.type = "button";
-		no.className = "basi-btn secondary";
+		no.className = "bLayers-btn secondary";
 		no.textContent = "Cancel";
 		no.addEventListener("click", () => {
 			editorUi.dbForm = null;
@@ -142,7 +142,7 @@ export function renderEditorDbBar() {
 
 	const saveAs = document.createElement("button");
 	saveAs.type = "button";
-	saveAs.className = "basi-btn secondary";
+	saveAs.className = "bLayers-btn secondary";
 	saveAs.textContent = "Save as";
 	saveAs.addEventListener("click", () => {
 		editorUi.dbForm = { mode: "saveAs", name: `${active.name} copy` };
@@ -151,7 +151,7 @@ export function renderEditorDbBar() {
 
 	const neu = document.createElement("button");
 	neu.type = "button";
-	neu.className = "basi-btn secondary";
+	neu.className = "bLayers-btn secondary";
 	neu.textContent = "New";
 	neu.title = "New database with the default category layout";
 	neu.addEventListener("click", () => {
@@ -164,7 +164,7 @@ export function renderEditorDbBar() {
 	if (items.length > 1) {
 		const del = document.createElement("button");
 		del.type = "button";
-		del.className = "basi-btn secondary basi-ed-danger";
+		del.className = "bLayers-btn secondary bLayers-ed-danger";
 		del.textContent = "Delete";
 		del.addEventListener("click", () => {
 			editorUi.dbForm = { mode: "delete" };

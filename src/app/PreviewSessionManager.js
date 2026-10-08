@@ -37,7 +37,7 @@ export default class PreviewSessionManager {
 	ensureStash() {
 		if (this.#stash) return this.#stash;
 		this.#stash = document.createElement("div");
-		this.#stash.id = "basiPreviewStash";
+		this.#stash.id = "bLayersPreviewStash";
 		this.#stash.hidden = true;
 		this.#stash.setAttribute("aria-hidden", "true");
 		document.body.appendChild(this.#stash);
@@ -82,7 +82,7 @@ export default class PreviewSessionManager {
 			try {
 				p.dispose?.();
 			} catch (e) {
-				console.warn("[basi] preview dispose:", e);
+				console.warn("[bLayers] preview dispose:", e);
 			}
 		}
 		this.activePreviews = [];
@@ -112,7 +112,7 @@ export default class PreviewSessionManager {
 				if (this.cache.size <= this.maxParked + 1) break;
 				continue;
 			}
-			this.log(`[basi] LRU evict parked preview ${oldest}`);
+			this.log(`[bLayers] LRU evict parked preview ${oldest}`);
 			this.disposeParked(oldest);
 		}
 	}
@@ -135,7 +135,7 @@ export default class PreviewSessionManager {
 				: null);
 		const allConts = [...host.querySelectorAll(".previewCont")];
 		if (allConts.length > 1) {
-			console.warn(`[basi] park: found ${allConts.length} previewCont — keeping one`);
+			console.warn(`[bLayers] park: found ${allConts.length} previewCont — keeping one`);
 			cont = allConts[allConts.length - 1];
 			for (const c of allConts) {
 				if (c !== cont) c.remove();
@@ -160,7 +160,7 @@ export default class PreviewSessionManager {
 			if (prev.wrap && prev.wrap !== cont) prev.wrap.remove();
 		}
 		const holder = document.createElement("div");
-		holder.className = "basi-preview-cached";
+		holder.className = "bLayers-preview-cached";
 		holder.dataset.entryId = entryId;
 		holder.hidden = true;
 		holder.appendChild(cont);
@@ -173,7 +173,7 @@ export default class PreviewSessionManager {
 		this.activePreviews = [];
 		host.replaceChildren();
 		this.evictIfNeeded();
-		this.log(`[basi] parked preview for ${entryId} (cache size ${this.cache.size})`);
+		this.log(`[bLayers] parked preview for ${entryId} (cache size ${this.cache.size})`);
 	}
 
 	/**
@@ -187,7 +187,7 @@ export default class PreviewSessionManager {
 			try {
 				p.dispose?.();
 			} catch (e) {
-				console.warn("[basi] parked preview dispose:", e);
+				console.warn("[bLayers] parked preview dispose:", e);
 			}
 		}
 		cached.wrap?.remove?.();
@@ -251,7 +251,7 @@ export default class PreviewSessionManager {
 				/* ignore */
 			}
 		}
-		this.log(`[basi] restored parked preview ${entryId}`);
+		this.log(`[bLayers] restored parked preview ${entryId}`);
 		return true;
 	}
 

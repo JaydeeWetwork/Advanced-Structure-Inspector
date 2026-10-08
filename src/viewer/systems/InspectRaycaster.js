@@ -80,9 +80,9 @@ export default class InspectRaycaster {
 	#classifyHit(hit, layerFilter) {
 		let obj = hit.object;
 		while (obj) {
-			if (obj.userData?.basiEntity || obj.userData?.previewEntity) {
+			if (obj.userData?.bLayersEntity || obj.userData?.previewEntity) {
 				const ent =
-					obj.userData.basiEntity ?? obj.userData.previewEntityData ?? null;
+					obj.userData.bLayersEntity ?? obj.userData.previewEntityData ?? null;
 				if (ent) {
 					const ey = entityStructureLayer(ent.pos);
 					if (!isOnActiveLayer(ey, layerFilter)) {
@@ -97,25 +97,26 @@ export default class InspectRaycaster {
 							pos: ent.pos,
 							items: ent.items ?? [],
 							customName: ent.customName ?? null,
-							raw: ent.raw ?? ent
+							enabled: ent.enabled ?? null
 						};
-					if (!base.raw) base.raw = ent.raw ?? ent;
 					if ((!base.items || !base.items.length) && ent.items?.length) {
 						base.items = ent.items;
 					}
 					return { kind: "entity", entity: base };
 				}
 			}
-			if (obj.userData?.basiBlock && obj.userData.basiBlockPositions) {
-				if (obj.userData.basiPickable === false) {
+			if (obj.userData?.bLayersBlock && obj.userData.bLayersBlockXyz) {
+				if (obj.userData.bLayersPickable === false) {
 					obj = obj.parent;
 					continue;
 				}
-				const positions = obj.userData.basiBlockPositions;
+				const xyz = obj.userData.bLayersBlockXyz;
 				const idx = hit.instanceId != null ? hit.instanceId : 0;
-				const sp = positions[idx];
-				if (sp) {
-					const [x, y, z] = sp;
+				const o = ((obj.userData.bLayersBlockXyzAt ?? 0) + idx) * 3;
+				if (o >= 0 && o + 2 < xyz.length) {
+					const x = xyz[o];
+					const y = xyz[o + 1];
+					const z = xyz[o + 2];
 					if (!isOnActiveLayer(y, layerFilter)) {
 						obj = obj.parent;
 						continue;
@@ -123,7 +124,7 @@ export default class InspectRaycaster {
 					const key = `${x},${y},${z}`;
 					const block =
 						this.ctx.inspectIndex?.blocks?.get?.(key)
-						?? this.#fallbackBlockInfo(x, y, z, obj.userData.basiPaletteI);
+						?? this.#fallbackBlockInfo(x, y, z, obj.userData.bLayersPaletteI);
 					return {
 						kind: "block",
 						block: this.#withDoubleChest(block, x, y, z),
@@ -185,16 +186,19 @@ export default class InspectRaycaster {
 
 	#fallbackBlockInfo(x, y, z, paletteI) {
 		const b = this.ctx.blockPalette?.[paletteI];
+		const be = b?.block_entity_data ?? null;
 		return {
 			x,
 			y,
 			z,
 			name: String(b?.name ?? "unknown").replace(/^minecraft:/, ""),
 			states: b?.states,
-			blockEntityId: b?.block_entity_data?.id ?? null,
-			blockEntity: b?.block_entity_data ?? null,
+			blockEntityId: be?.id != null ? String(be.id) : null,
 			items: [],
-			waterlogName: null
+			waterlogName: null,
+			sign: null,
+			lectern: null,
+			disabledSlots: []
 		};
 	}
 

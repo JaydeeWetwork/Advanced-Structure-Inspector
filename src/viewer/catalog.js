@@ -4,32 +4,27 @@
  */
 
 import {
-	dbPutStructure,
-	dbDeleteStructure,
-	dbClearStructures,
-	dbLoadAll,
-	dbPutCategory,
 	dbPutCategories,
-	dbLoadCategories,
-	dbPutEntry,
 	dbPutEntries,
-	dbLoadEntries,
-	dbPutFeature,
 	dbPutFeatures,
-	dbLoadFeatures,
-	dbRemoveCategoryCascade,
-	dbRemoveEntryCascade,
-	dbRemoveFeatureCascade,
-	clearLegacyLocalStorageIndex,
-	dbGetMeta,
-	dbPutMeta,
 	DEFAULT_DB_NAME,
 	setActiveDbName
 } from "./db.js";
 import { ensureDefaultCatalogMigrated } from "./dbMigrate.js";
-import { TAXONOMY_SEED_STATE_KEY, TAXONOMY_SEED_VERSION } from "../data/taxonomy.js";
-import { applySeedTaxonomy, moveCategoryInList } from "./catalogSeed.js";
-import { buildCatalogTree, contrastText, fillHydratedMaps, filterFeatureIds } from "./catalogQuery.js";
+import { applySeedTaxonomy } from "./catalogSeed.js";
+import {
+	buildCatalogTree,
+	contrastText
+} from "./catalogQuery.js";
+import { CatalogEntryBook } from "./catalogEntries.js";
+import {
+	hydrateCatalogStores,
+	loadAppliedSeedKeys,
+	persistStructureEntry,
+	saveAppliedSeedKeys,
+	tryPersist
+} from "./catalogPersist.js";
+import { normalizeCameraZoom } from "./cameraPrefs.js";
 
 export { contrastText };
 import {
@@ -40,6 +35,8 @@ import {
 	saveCatalogAs
 } from "./catalogSwitch.js";
 import { getActiveCatalog } from "./catalogRegistry.js";
+import { reportPersistFailure } from "./persistNotice.js";
+import * as taxonomy from "./catalogTaxonomy.js";
 
 /**
  * @typedef {object} StructureCatalogEntry
@@ -59,6 +56,7 @@ import { getActiveCatalog } from "./catalogRegistry.js";
  * @property {string[]} [featureIds]
  * @property {string[]} [acquiredMaterials]
  * @property {string} [defaultCameraPreset]
+ * @property {number} [defaultCameraZoom]
  * @property {{ id: string, text: string, addedAt?: number }[]} [userDetails]
  * @property {string} [creator]
  * @property {string} [credits]
@@ -110,29 +108,33 @@ import { getActiveCatalog } from "./catalogRegistry.js";
 /** Sentinel for the virtual Uncategorized group (not stored in IDB). */
 export const UNCATEGORIZED_ID = null;
 
-function newId(prefix = "basi") {
-	if (typeof crypto !== "undefined" && crypto.randomUUID) {
-		return crypto.randomUUID();
-	}
-	return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-}
-
-function slugFromName(name) {
-	const slug = String(name || "")
-		.toLowerCase()
-		.replace(/[^a-z0-9]+/g, "-")
-		.replace(/^-+|-+$/g, "");
-	return slug || "item";
-}
-
-function uniqueSlug(base, taken) {
-	if (!taken.has(base)) return base;
-	for (let i = 2; i < 1000; i++) {
-		const next = `${base}-${i}`;
-		if (!taken.has(next)) return next;
-	}
-	return `${base}-${newId("s")}`;
-}
+/** Taxonomy functions StructureCatalog forwards. Each receives `#taxStore` first. */
+const TAXONOMY_METHODS = [
+	"listCategories",
+	"getCategory",
+	"getCategoryForStructure",
+	"addCategory",
+	"patchCategory",
+	"renameCategory",
+	"removeCategory",
+	"setCategoryCollapsed",
+	"reorderCategory",
+	"moveCategoryTo",
+	"listCatalogEntries",
+	"getCatalogEntry",
+	"addCatalogEntry",
+	"patchCatalogEntry",
+	"removeCatalogEntry",
+	"setCatalogEntryCollapsed",
+	"reorderCatalogEntry",
+	"listFeatures",
+	"getFeature",
+	"listFeaturesForStructure",
+	"addFeature",
+	"patchFeature",
+	"removeFeature",
+	"reorderFeature"
+];
 
 export default class StructureCatalog {
 	/** @type {Map<string, StructureCatalogEntry>} */
@@ -149,9 +151,89 @@ export default class StructureCatalog {
 	#dbName = DEFAULT_DB_NAME;
 	#hydrateGen = 0;
 	/**
+	 * Built once. Taxonomy and the entry book share this object. The maps are the fields above.
+	 * @type {import("./catalogEntries.js").CatalogEntryStore}
+	 */
+	#taxStore = {
+		categories: this.#categories,
+		catalogEntries: this.#catalogEntries,
+		features: this.#features,
+		entries: this.#entries,
+		dbName: () => this.#dbName,
+		persistEnabled: () => this.#persistEnabled,
+		notify: () => this.#notify(),
+		tryPersist: (fn, label) => this.#tryPersist(fn, label),
+		markSeedApplied: keys => this.#markSeedAppliedKeys(keys),
+		setLastPersistError: msg => {
+			this.lastPersistError = msg;
+		},
+		persistStructure: entry => this.#persistStructure(entry),
+		normalizeZoom: normalizeCameraZoom
+	};
+	/** @type {CatalogEntryBook} */
+	#entryBook = new CatalogEntryBook(this.#taxStore);
+	/**
 	 * @type {string|null}
 	 */
 	lastPersistError = null;
+
+	// Assigned in the constructor. Declared here so the checker can see them.
+	/** @type {() => StructureCategory[]} */
+	listCategories;
+	/** @type {(id: string) => StructureCategory|undefined} */
+	getCategory;
+	/** @type {(structureId: string) => StructureCategory|undefined} */
+	getCategoryForStructure;
+	/** @type {(nameOrPartial: string|object) => Promise<StructureCategory>} */
+	addCategory;
+	/** @type {(id: string, partial: { name?: string, description?: string, color?: string, collapsed?: boolean, sortOrder?: number }) => Promise<StructureCategory|null>} */
+	patchCategory;
+	/** @type {(id: string, name: string) => Promise<StructureCategory|null>} */
+	renameCategory;
+	/** @type {(id: string) => Promise<boolean>} */
+	removeCategory;
+	/** @type {(id: string, collapsed: boolean) => Promise<StructureCategory|null>} */
+	setCategoryCollapsed;
+	/** @type {(id: string, direction: -1|1) => Promise<boolean>} */
+	reorderCategory;
+	/** @type {(id: string, targetId: string, place: "before"|"after") => Promise<boolean>} */
+	moveCategoryTo;
+	/** @type {(categoryId?: string) => CatalogEntry[]} */
+	listCatalogEntries;
+	/** @type {(id: string) => CatalogEntry|undefined} */
+	getCatalogEntry;
+	/** @type {(partial: { categoryId: string, name?: string, description?: string, slug?: string, id?: string, collapsed?: boolean, isDefault?: boolean, sortOrder?: number }) => Promise<CatalogEntry>} */
+	addCatalogEntry;
+	/** @type {(id: string, partial: { name?: string, description?: string, collapsed?: boolean, sortOrder?: number, categoryId?: string }) => Promise<CatalogEntry|null>} */
+	patchCatalogEntry;
+	/** @type {(id: string) => Promise<boolean>} */
+	removeCatalogEntry;
+	/** @type {(id: string, collapsed: boolean) => Promise<CatalogEntry|null>} */
+	setCatalogEntryCollapsed;
+	/** @type {(id: string, direction: -1|1) => Promise<boolean>} */
+	reorderCatalogEntry;
+	/** @type {() => CatalogFeature[]} */
+	listFeatures;
+	/** @type {(id: string) => CatalogFeature|undefined} */
+	getFeature;
+	/** @type {(structureId: string) => CatalogFeature[]} */
+	listFeaturesForStructure;
+	/** @type {(partial?: { name?: string, description?: string, useCases?: string, color?: string, categoryIds?: string[], slug?: string, id?: string, isDefault?: boolean, sortOrder?: number }) => Promise<CatalogFeature>} */
+	addFeature;
+	/** @type {(id: string, partial: { name?: string, description?: string, useCases?: string, color?: string, categoryIds?: string[], sortOrder?: number }) => Promise<CatalogFeature|null>} */
+	patchFeature;
+	/** @type {(id: string) => Promise<boolean>} */
+	removeFeature;
+	/** @type {(id: string, direction: -1|1) => Promise<boolean>} */
+	reorderFeature;
+
+	constructor() {
+		for (const name of TAXONOMY_METHODS) {
+			const fn = taxonomy[name];
+			if (typeof fn !== "function") throw new Error(`catalog taxonomy missing ${name}`);
+			this[name] = (...args) => fn(this.#taxStore, ...args);
+		}
+	}
 
 	getDbName() {
 		return this.#dbName;
@@ -161,7 +243,7 @@ export default class StructureCatalog {
 		try {
 			await ensureDefaultCatalogMigrated();
 		} catch (e) {
-			console.warn("[basi] default IndexedDB migrate failed:", e);
+			console.warn("[bLayers] default IndexedDB migrate failed:", e);
 		}
 		await activateCatalog(this, getActiveCatalog().id);
 		return this.list().length;
@@ -192,92 +274,16 @@ export default class StructureCatalog {
 	 * @returns {Promise<StructureCatalogEntry>}
 	 */
 	async add(partial) {
-		const id = partial.id ?? newId("basi");
-		const entryId =
-			partial.entryId != null && this.#catalogEntries.has(partial.entryId)
-				? partial.entryId
-				: null;
-		const featureIds = filterFeatureIds(partial.featureIds, this.#features);
-		/** @type {StructureCatalogEntry} */
-		const entry = {
-			id,
-			name: partial.name,
-			sourceName: partial.sourceName,
-			sourceKind: partial.sourceKind,
-			size: partial.size,
-			worldOrigin: partial.worldOrigin ?? null,
-			paletteSize: partial.paletteSize,
-			blockCount: partial.blockCount,
-			blockNames: partial.blockNames ?? [],
-			entityCount: partial.entityCount ?? 0,
-			materials: partial.materials ?? [],
-			hopperStats: partial.hopperStats ?? null,
-			entryId,
-			featureIds,
-			acquiredMaterials: Array.isArray(partial.acquiredMaterials)
-				? [...partial.acquiredMaterials]
-				: [],
-			defaultCameraPreset: partial.defaultCameraPreset || "iso-north",
-			userDetails: Array.isArray(partial.userDetails)
-				? partial.userDetails.map(d => ({ ...d }))
-				: [],
-			creator: typeof partial.creator === "string" ? partial.creator : "",
-			credits: typeof partial.credits === "string" ? partial.credits : "",
-			sourceLink: typeof partial.sourceLink === "string" ? partial.sourceLink : "",
-			addedAt: partial.addedAt ?? Date.now(),
-			file: partial.file
-		};
-		if (partial.parseError) entry.parseError = partial.parseError;
-		this.#entries.set(id, entry);
-		this.#notify();
-		await this.#persistStructure(entry, this.#dbName);
-		return entry;
+		return this.#entryBook.add(partial);
 	}
 
 	/**
 	 * @param {string} id
-	 * @param {Partial<Pick<StructureCatalogEntry, "materials"|"hopperStats"|"name"|"entityCount"|"blockCount"|"blockNames"|"parseError"|"entryId"|"featureIds"|"acquiredMaterials"|"defaultCameraPreset"|"userDetails"|"creator"|"credits"|"sourceLink">>} partial
+	 * @param {Partial<Pick<StructureCatalogEntry, "materials"|"hopperStats"|"name"|"entityCount"|"blockCount"|"blockNames"|"parseError"|"entryId"|"featureIds"|"acquiredMaterials"|"defaultCameraPreset"|"defaultCameraZoom"|"userDetails"|"creator"|"credits"|"sourceLink">>} partial
 	 * @returns {Promise<StructureCatalogEntry|null>}
 	 */
 	async patch(id, partial) {
-		const entry = this.#entries.get(id);
-		if (!entry) return null;
-		if ("materials" in partial) entry.materials = partial.materials ?? [];
-		if ("hopperStats" in partial) entry.hopperStats = partial.hopperStats ?? null;
-		if ("acquiredMaterials" in partial) {
-			entry.acquiredMaterials = Array.isArray(partial.acquiredMaterials)
-				? [...partial.acquiredMaterials]
-				: [];
-		}
-		if ("defaultCameraPreset" in partial) {
-			entry.defaultCameraPreset = partial.defaultCameraPreset || "iso-north";
-		}
-		if ("userDetails" in partial) {
-			entry.userDetails = Array.isArray(partial.userDetails)
-				? partial.userDetails.map(d => ({ ...d }))
-				: [];
-		}
-		if ("creator" in partial) entry.creator = String(partial.creator ?? "");
-		if ("credits" in partial) entry.credits = String(partial.credits ?? "");
-		if ("sourceLink" in partial) entry.sourceLink = String(partial.sourceLink ?? "");
-		if (partial.name != null) entry.name = partial.name;
-		if (partial.entityCount != null) entry.entityCount = partial.entityCount;
-		if (partial.blockCount != null) entry.blockCount = partial.blockCount;
-		if (partial.blockNames != null) entry.blockNames = partial.blockNames;
-		if ("entryId" in partial) {
-			const eid = partial.entryId ?? null;
-			entry.entryId = eid && this.#catalogEntries.has(eid) ? eid : null;
-		}
-		if ("featureIds" in partial) {
-			entry.featureIds = filterFeatureIds(partial.featureIds, this.#features);
-		}
-		if (partial.parseError !== undefined) {
-			if (partial.parseError) entry.parseError = partial.parseError;
-			else delete entry.parseError;
-		}
-		this.#notify();
-		await this.#persistStructure(entry, this.#dbName);
-		return entry;
+		return this.#entryBook.patch(id, partial);
 	}
 
 	/**
@@ -285,7 +291,25 @@ export default class StructureCatalog {
 	 * @param {string|null} entryId
 	 */
 	async setStructureEntry(structureId, entryId) {
-		return this.patch(structureId, { entryId: entryId ?? null });
+		return this.#entryBook.setStructureEntry(structureId, entryId);
+	}
+
+	/**
+	 * Default (or first) function-entry in a category.
+	 * @param {string} categoryId
+	 * @returns {CatalogEntry|undefined}
+	 */
+	defaultEntryForCategory(categoryId) {
+		return this.#entryBook.defaultEntryForCategory(categoryId);
+	}
+
+	/**
+	 * Assign a structure to a category (its default/first entry) or Uncategorized.
+	 * @param {string} structureId
+	 * @param {string|null} categoryId
+	 */
+	async assignStructureToCategory(structureId, categoryId) {
+		return this.#entryBook.assignStructureToCategory(structureId, categoryId);
 	}
 
 	/**
@@ -293,7 +317,7 @@ export default class StructureCatalog {
 	 * @param {string[]} featureIds
 	 */
 	async setStructureFeatures(structureId, featureIds) {
-		return this.patch(structureId, { featureIds });
+		return this.#entryBook.setStructureFeatures(structureId, featureIds);
 	}
 
 	/**
@@ -301,12 +325,7 @@ export default class StructureCatalog {
 	 * @param {string} featureId
 	 */
 	async toggleStructureFeature(structureId, featureId) {
-		const entry = this.#entries.get(structureId);
-		if (!entry || !this.#features.has(featureId)) return null;
-		const set = new Set(entry.featureIds || []);
-		if (set.has(featureId)) set.delete(featureId);
-		else set.add(featureId);
-		return this.patch(structureId, { featureIds: [...set] });
+		return this.#entryBook.toggleStructureFeature(structureId, featureId);
 	}
 
 	/**
@@ -314,40 +333,12 @@ export default class StructureCatalog {
 	 * @returns {Promise<boolean>}
 	 */
 	async remove(id) {
-		if (!this.#entries.has(id)) return false;
-		const dbName = this.#dbName;
-		if (this.#persistEnabled) {
-			try {
-				await dbDeleteStructure(id, dbName);
-				this.lastPersistError = null;
-			} catch (e) {
-				const msg = e?.message ?? String(e);
-				this.lastPersistError = msg;
-				console.warn("[basi] IndexedDB delete failed:", e);
-				throw e;
-			}
-		}
-		this.#entries.delete(id);
-		this.#notify();
-		return true;
+		return this.#entryBook.remove(id);
 	}
 
 	/** Clear imported structures only; taxonomy stays. */
 	async clear() {
-		const dbName = this.#dbName;
-		if (this.#persistEnabled) {
-			try {
-				await dbClearStructures(dbName);
-				this.lastPersistError = null;
-			} catch (e) {
-				const msg = e?.message ?? String(e);
-				this.lastPersistError = msg;
-				console.warn("[basi] IndexedDB clear failed:", e);
-				throw e;
-			}
-		}
-		this.#entries.clear();
-		this.#notify();
+		return this.#entryBook.clear();
 	}
 
 	/**
@@ -355,14 +346,14 @@ export default class StructureCatalog {
 	 * @returns {StructureCatalogEntry|undefined}
 	 */
 	get(id) {
-		return this.#entries.get(id);
+		return this.#entryBook.get(id);
 	}
 
 	/**
 	 * @returns {StructureCatalogEntry[]}
 	 */
 	list() {
-		return [...this.#entries.values()].sort((a, b) => b.addedAt - a.addedAt);
+		return this.#entryBook.list();
 	}
 
 	/**
@@ -370,521 +361,7 @@ export default class StructureCatalog {
 	 * @returns {StructureCatalogEntry[]}
 	 */
 	search({ query = "" } = {}) {
-		const q = query.trim().toLowerCase();
-		const all = this.list();
-		if (!q) return all;
-		return all.filter(entry => this.#structureHaystack(entry).includes(q));
-	}
-
-	/**
-	 * @param {StructureCatalogEntry} entry
-	 * @returns {string}
-	 */
-	#structureHaystack(entry) {
-		const fn = entry.entryId ? this.#catalogEntries.get(entry.entryId) : null;
-		const cat = fn ? this.#categories.get(fn.categoryId) : null;
-		const featureNames = (entry.featureIds || [])
-			.map(id => this.#features.get(id)?.name ?? "")
-			.join(" ");
-		return [
-			entry.name,
-			entry.sourceName,
-			entry.sourceKind,
-			fn?.name ?? "",
-			cat?.name ?? "uncategorized",
-			entry.creator ?? "",
-			entry.credits ?? "",
-			featureNames,
-			entry.size.join("x"),
-			String(entry.entityCount ?? 0),
-			...entry.blockNames
-		]
-			.join(" ")
-			.toLowerCase();
-	}
-
-	// ---- Categories ----
-
-	/**
-	 * @returns {StructureCategory[]}
-	 */
-	listCategories() {
-		return [...this.#categories.values()].sort(
-			(a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name)
-		);
-	}
-
-	/**
-	 * @param {string} id
-	 * @returns {StructureCategory|undefined}
-	 */
-	getCategory(id) {
-		return this.#categories.get(id);
-	}
-
-	/**
-	 * @param {string} structureId
-	 * @returns {StructureCategory|undefined}
-	 */
-	getCategoryForStructure(structureId) {
-		const s = this.#entries.get(structureId);
-		if (!s?.entryId) return undefined;
-		const fn = this.#catalogEntries.get(s.entryId);
-		if (!fn) return undefined;
-		return this.#categories.get(fn.categoryId);
-	}
-
-	/**
-	 * @param {string|null|undefined} color
-	 * @returns {string}
-	 */
-	#nextColor(color) {
-		if (typeof color === "string" && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(color.trim())) {
-			return color.trim();
-		}
-		return "#64748b";
-	}
-
-	/**
-	 * @param {string|object} nameOrPartial
-	 * @returns {Promise<StructureCategory>}
-	 */
-	async addCategory(nameOrPartial) {
-		const partial =
-			typeof nameOrPartial === "string" ? { name: nameOrPartial } : nameOrPartial || {};
-		const name = String(partial.name || "").trim() || "New category";
-		const taken = new Set([...this.#categories.values()].map(c => c.slug));
-		const slug = uniqueSlug(partial.slug || slugFromName(name), taken);
-		const maxOrder = this.listCategories().reduce((m, c) => Math.max(m, c.sortOrder), -1);
-		/** @type {StructureCategory} */
-		const cat = {
-			id: partial.id || newId("cat"),
-			slug,
-			name,
-			description: typeof partial.description === "string" ? partial.description : "",
-			color: this.#nextColor(partial.color),
-			sortOrder: Number.isFinite(partial.sortOrder) ? partial.sortOrder : maxOrder + 1,
-			collapsed: partial.collapsed != null ? !!partial.collapsed : false,
-			isDefault: !!partial.isDefault
-		};
-		this.#categories.set(cat.id, cat);
-		this.#notify();
-		const dbName = this.#dbName;
-		await this.#tryPersist(() => dbPutCategory(cat, dbName), "category put");
-		return cat;
-	}
-
-	/**
-	 * @param {string} id
-	 * @param {Partial<Pick<StructureCategory, "name"|"description"|"color"|"collapsed"|"sortOrder">>} partial
-	 */
-	async patchCategory(id, partial) {
-		const cat = this.#categories.get(id);
-		if (!cat) return null;
-		if (partial.name != null) {
-			const trimmed = String(partial.name).trim();
-			if (trimmed) cat.name = trimmed;
-		}
-		if ("description" in partial) cat.description = String(partial.description ?? "");
-		if ("color" in partial) cat.color = this.#nextColor(partial.color);
-		if ("collapsed" in partial) cat.collapsed = !!partial.collapsed;
-		if (Number.isFinite(partial.sortOrder)) cat.sortOrder = /** @type {number} */ (partial.sortOrder);
-		this.#notify();
-		const dbName = this.#dbName;
-		await this.#tryPersist(() => dbPutCategory(cat, dbName), "category patch");
-		return cat;
-	}
-
-	/**
-	 * @param {string} id
-	 * @param {string} name
-	 */
-	async renameCategory(id, name) {
-		return this.patchCategory(id, { name });
-	}
-
-	/**
-	 * Delete category and its function-entries; structures become Uncategorized.
-	 * @param {string} id
-	 */
-	async removeCategory(id) {
-		const cat = this.#categories.get(id);
-		if (!cat) return false;
-		const childEntries = [...this.#catalogEntries.values()].filter(e => e.categoryId === id);
-		const seedKeys = [`cat:${cat.slug}`, ...childEntries.map(e => `ent:${cat.slug}/${e.slug}`)];
-		this.#categories.delete(id);
-		for (const ent of childEntries) {
-			this.#catalogEntries.delete(ent.id);
-		}
-		const moved = [];
-		const childIds = new Set(childEntries.map(e => e.id));
-		for (const entry of this.#entries.values()) {
-			if (entry.entryId && childIds.has(entry.entryId)) {
-				entry.entryId = null;
-				moved.push(entry);
-			}
-		}
-		const tagged = [];
-		for (const feat of this.#features.values()) {
-			if (feat.categoryIds.includes(id)) {
-				feat.categoryIds = feat.categoryIds.filter(cid => cid !== id);
-				tagged.push(feat);
-			}
-		}
-		this.#notify();
-		if (this.#persistEnabled) {
-			try {
-				await dbRemoveCategoryCascade(this.#dbName, {
-					categoryId: id,
-					childEntryIds: childEntries.map(e => e.id),
-					movedStructures: moved,
-					taggedFeatures: tagged
-				});
-				this.lastPersistError = null;
-			} catch (e) {
-				const msg = e?.message ?? String(e);
-				this.lastPersistError = msg;
-				console.warn("[basi] category delete failed:", e);
-				throw e;
-			}
-		}
-		await this.#markSeedAppliedKeys(seedKeys);
-		return true;
-	}
-
-	/**
-	 * @param {string} id
-	 * @param {boolean} collapsed
-	 */
-	async setCategoryCollapsed(id, collapsed) {
-		return this.patchCategory(id, { collapsed: !!collapsed });
-	}
-
-	/**
-	 * @param {string} id
-	 * @param {-1|1} direction
-	 */
-	async reorderCategory(id, direction) {
-		const ordered = this.listCategories();
-		const i = ordered.findIndex(c => c.id === id);
-		if (i < 0) return false;
-		const j = i + direction;
-		if (j < 0 || j >= ordered.length) return false;
-		const tmp = ordered[i].sortOrder;
-		ordered[i].sortOrder = ordered[j].sortOrder;
-		ordered[j].sortOrder = tmp;
-		if (ordered[i].sortOrder === ordered[j].sortOrder) {
-			ordered.forEach((c, idx) => {
-				c.sortOrder = idx;
-			});
-		}
-		this.#notify();
-		await this.#tryPersist(() => dbPutCategories(this.listCategories(), this.#dbName), "category reorder");
-		return true;
-	}
-
-	/**
-	 * Place `id` before or after `targetId` in category sort order.
-	 * @param {string} id
-	 * @param {string} targetId
-	 * @param {"before"|"after"} place
-	 */
-	async moveCategoryTo(id, targetId, place) {
-		const ordered = this.listCategories();
-		if (!moveCategoryInList(ordered, id, targetId, place)) return false;
-		this.#notify();
-		await this.#tryPersist(() => dbPutCategories(this.listCategories(), this.#dbName), "category move");
-		return true;
-	}
-
-	// ---- Catalog function-entries ----
-
-	/**
-	 * @param {string} [categoryId]
-	 * @returns {CatalogEntry[]}
-	 */
-	listCatalogEntries(categoryId) {
-		let rows = [...this.#catalogEntries.values()];
-		if (categoryId) rows = rows.filter(e => e.categoryId === categoryId);
-		return rows.sort(
-			(a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name)
-		);
-	}
-
-	/**
-	 * @param {string} id
-	 * @returns {CatalogEntry|undefined}
-	 */
-	getCatalogEntry(id) {
-		return this.#catalogEntries.get(id);
-	}
-
-	/**
-	 * @param {{ categoryId: string, name?: string, description?: string, slug?: string, id?: string, collapsed?: boolean, isDefault?: boolean, sortOrder?: number }} partial
-	 * @returns {Promise<CatalogEntry>}
-	 */
-	async addCatalogEntry(partial) {
-		const categoryId = partial.categoryId;
-		if (!categoryId || !this.#categories.has(categoryId)) {
-			throw new Error("Catalog entry requires a valid category");
-		}
-		const name = String(partial.name || "").trim() || "New entry";
-		const taken = new Set(
-			this.listCatalogEntries(categoryId).map(e => e.slug)
-		);
-		const slug = uniqueSlug(partial.slug || slugFromName(name), taken);
-		const maxOrder = this.listCatalogEntries(categoryId).reduce(
-			(m, e) => Math.max(m, e.sortOrder),
-			-1
-		);
-		/** @type {CatalogEntry} */
-		const ent = {
-			id: partial.id || newId("ent"),
-			slug,
-			categoryId,
-			name,
-			description: typeof partial.description === "string" ? partial.description : "",
-			sortOrder: Number.isFinite(partial.sortOrder) ? partial.sortOrder : maxOrder + 1,
-			collapsed: partial.collapsed != null ? !!partial.collapsed : false,
-			isDefault: !!partial.isDefault
-		};
-		this.#catalogEntries.set(ent.id, ent);
-		this.#notify();
-		await this.#tryPersist(() => dbPutEntry(ent, this.#dbName), "entry put");
-		return ent;
-	}
-
-	/**
-	 * @param {string} id
-	 * @param {Partial<Pick<CatalogEntry, "name"|"description"|"collapsed"|"sortOrder"|"categoryId">>} partial
-	 */
-	async patchCatalogEntry(id, partial) {
-		const ent = this.#catalogEntries.get(id);
-		if (!ent) return null;
-		if (partial.name != null) {
-			const trimmed = String(partial.name).trim();
-			if (trimmed) ent.name = trimmed;
-		}
-		if ("description" in partial) ent.description = String(partial.description ?? "");
-		if ("collapsed" in partial) ent.collapsed = !!partial.collapsed;
-		if (Number.isFinite(partial.sortOrder)) ent.sortOrder = /** @type {number} */ (partial.sortOrder);
-		if ("categoryId" in partial && partial.categoryId && this.#categories.has(partial.categoryId)) {
-			ent.categoryId = partial.categoryId;
-		}
-		this.#notify();
-		await this.#tryPersist(() => dbPutEntry(ent, this.#dbName), "entry patch");
-		return ent;
-	}
-
-	/**
-	 * @param {string} id
-	 */
-	async removeCatalogEntry(id) {
-		const ent = this.#catalogEntries.get(id);
-		if (!ent) return false;
-		this.#catalogEntries.delete(id);
-		const moved = [];
-		for (const entry of this.#entries.values()) {
-			if (entry.entryId === id) {
-				entry.entryId = null;
-				moved.push(entry);
-			}
-		}
-		this.#notify();
-		if (this.#persistEnabled) {
-			try {
-				await dbRemoveEntryCascade(this.#dbName, {
-					entryId: id,
-					movedStructures: moved
-				});
-				this.lastPersistError = null;
-			} catch (e) {
-				const msg = e?.message ?? String(e);
-				this.lastPersistError = msg;
-				console.warn("[basi] entry delete failed:", e);
-				throw e;
-			}
-		}
-		const parent = this.#categories.get(ent.categoryId);
-		await this.#markSeedAppliedKeys([parent ? `ent:${parent.slug}/${ent.slug}` : `ent:${ent.slug}`]);
-		return true;
-	}
-
-	/**
-	 * @param {string} id
-	 * @param {boolean} collapsed
-	 */
-	async setCatalogEntryCollapsed(id, collapsed) {
-		return this.patchCatalogEntry(id, { collapsed: !!collapsed });
-	}
-
-	/**
-	 * @param {string} id
-	 * @param {-1|1} direction
-	 */
-	async reorderCatalogEntry(id, direction) {
-		const ent = this.#catalogEntries.get(id);
-		if (!ent) return false;
-		const ordered = this.listCatalogEntries(ent.categoryId);
-		const i = ordered.findIndex(e => e.id === id);
-		if (i < 0) return false;
-		const j = i + direction;
-		if (j < 0 || j >= ordered.length) return false;
-		const tmp = ordered[i].sortOrder;
-		ordered[i].sortOrder = ordered[j].sortOrder;
-		ordered[j].sortOrder = tmp;
-		if (ordered[i].sortOrder === ordered[j].sortOrder) {
-			ordered.forEach((e, idx) => {
-				e.sortOrder = idx;
-			});
-		}
-		this.#notify();
-		await this.#tryPersist(
-			() => dbPutEntries(this.listCatalogEntries(ent.categoryId), this.#dbName),
-			"entry reorder"
-		);
-		return true;
-	}
-
-	// ---- Features ----
-
-	/**
-	 * @returns {CatalogFeature[]}
-	 */
-	listFeatures() {
-		return [...this.#features.values()].sort(
-			(a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name)
-		);
-	}
-
-	/**
-	 * @param {string} id
-	 * @returns {CatalogFeature|undefined}
-	 */
-	getFeature(id) {
-		return this.#features.get(id);
-	}
-
-	/**
-	 * @param {string} structureId
-	 * @returns {CatalogFeature[]}
-	 */
-	listFeaturesForStructure(structureId) {
-		const entry = this.#entries.get(structureId);
-		if (!entry) return [];
-		return (entry.featureIds || [])
-			.map(id => this.#features.get(id))
-			.filter(Boolean);
-	}
-
-	/**
-	 * @param {{ name?: string, description?: string, useCases?: string, color?: string, categoryIds?: string[], slug?: string, id?: string, isDefault?: boolean, sortOrder?: number }} partial
-	 */
-	async addFeature(partial = {}) {
-		const name = String(partial.name || "").trim() || "New feature";
-		const taken = new Set([...this.#features.values()].map(f => f.slug));
-		const slug = uniqueSlug(partial.slug || slugFromName(name), taken);
-		const maxOrder = this.listFeatures().reduce((m, f) => Math.max(m, f.sortOrder), -1);
-		const categoryIds = Array.isArray(partial.categoryIds)
-			? [...new Set(partial.categoryIds.filter(id => this.#categories.has(id)))]
-			: [];
-		/** @type {CatalogFeature} */
-		const feat = {
-			id: partial.id || newId("feat"),
-			slug,
-			name,
-			description: typeof partial.description === "string" ? partial.description : "",
-			useCases: typeof partial.useCases === "string" ? partial.useCases : "",
-			color: this.#nextColor(partial.color),
-			categoryIds,
-			sortOrder: Number.isFinite(partial.sortOrder) ? partial.sortOrder : maxOrder + 1,
-			isDefault: !!partial.isDefault
-		};
-		this.#features.set(feat.id, feat);
-		this.#notify();
-		await this.#tryPersist(() => dbPutFeature(feat, this.#dbName), "feature put");
-		return feat;
-	}
-
-	/**
-	 * @param {string} id
-	 * @param {Partial<Pick<CatalogFeature, "name"|"description"|"useCases"|"color"|"categoryIds"|"sortOrder">>} partial
-	 */
-	async patchFeature(id, partial) {
-		const feat = this.#features.get(id);
-		if (!feat) return null;
-		if (partial.name != null) {
-			const trimmed = String(partial.name).trim();
-			if (trimmed) feat.name = trimmed;
-		}
-		if ("description" in partial) feat.description = String(partial.description ?? "");
-		if ("useCases" in partial) feat.useCases = String(partial.useCases ?? "");
-		if ("color" in partial) feat.color = this.#nextColor(partial.color);
-		if ("categoryIds" in partial) {
-			feat.categoryIds = Array.isArray(partial.categoryIds)
-				? [...new Set(partial.categoryIds.filter(cid => this.#categories.has(cid)))]
-				: [];
-		}
-		if (Number.isFinite(partial.sortOrder)) feat.sortOrder = /** @type {number} */ (partial.sortOrder);
-		this.#notify();
-		await this.#tryPersist(() => dbPutFeature(feat, this.#dbName), "feature patch");
-		return feat;
-	}
-
-	/**
-	 * @param {string} id
-	 */
-	async removeFeature(id) {
-		const feat = this.#features.get(id);
-		if (!feat) return false;
-		this.#features.delete(id);
-		const touched = [];
-		for (const entry of this.#entries.values()) {
-			if ((entry.featureIds || []).includes(id)) {
-				entry.featureIds = (entry.featureIds || []).filter(fid => fid !== id);
-				touched.push(entry);
-			}
-		}
-		this.#notify();
-		if (this.#persistEnabled) {
-			try {
-				await dbRemoveFeatureCascade(this.#dbName, {
-					featureId: id,
-					touchedStructures: touched
-				});
-				this.lastPersistError = null;
-			} catch (e) {
-				const msg = e?.message ?? String(e);
-				this.lastPersistError = msg;
-				console.warn("[basi] feature delete failed:", e);
-				throw e;
-			}
-		}
-		await this.#markSeedAppliedKeys([`feat:${feat.slug}`]);
-		return true;
-	}
-
-	/**
-	 * @param {string} id
-	 * @param {-1|1} direction
-	 */
-	async reorderFeature(id, direction) {
-		const ordered = this.listFeatures();
-		const i = ordered.findIndex(f => f.id === id);
-		if (i < 0) return false;
-		const j = i + direction;
-		if (j < 0 || j >= ordered.length) return false;
-		const tmp = ordered[i].sortOrder;
-		ordered[i].sortOrder = ordered[j].sortOrder;
-		ordered[j].sortOrder = tmp;
-		if (ordered[i].sortOrder === ordered[j].sortOrder) {
-			ordered.forEach((f, idx) => {
-				f.sortOrder = idx;
-			});
-		}
-		this.#notify();
-		await this.#tryPersist(() => dbPutFeatures(this.listFeatures(), this.#dbName), "feature reorder");
-		return true;
+		return this.#entryBook.search({ query });
 	}
 
 	/**
@@ -912,7 +389,7 @@ export default class StructureCatalog {
 	 * @returns {Promise<{ categories: number, entries: number, features: number }>}
 	 */
 	async ensureSeedTaxonomy() {
-		const applied = await this.#loadAppliedSeedKeys();
+		const applied = await loadAppliedSeedKeys(this.#persistEnabled, this.#dbName);
 		const result = applySeedTaxonomy({
 			categories: this.#categories,
 			catalogEntries: this.#catalogEntries,
@@ -926,12 +403,12 @@ export default class StructureCatalog {
 				if (result.categories.length) await dbPutCategories(result.categories, dbName);
 				if (result.entries.length) await dbPutEntries(result.entries, dbName);
 				if (result.features.length) await dbPutFeatures(result.features, dbName);
-				await this.#saveAppliedSeedKeys(result.applied);
+				await saveAppliedSeedKeys(this.#persistEnabled, dbName, result.applied);
 				this.lastPersistError = null;
 			} catch (e) {
 				const msg = e?.message ?? String(e);
 				this.lastPersistError = msg;
-				console.warn("[basi] seed persist failed:", e);
+				console.warn("[bLayers] seed persist failed:", e);
 			}
 		}
 		const nCat = result.categories.length;
@@ -939,36 +416,6 @@ export default class StructureCatalog {
 		const nFeat = result.features.length;
 		if (nCat || nEnt || nFeat) this.#notify();
 		return { categories: nCat, entries: nEnt, features: nFeat };
-	}
-
-	async #loadAppliedSeedKeys() {
-		if (!this.#persistEnabled) return new Set();
-		try {
-			const meta = await dbGetMeta(this.#dbName);
-			if (Array.isArray(meta?.applied)) return new Set(meta.applied);
-			if (typeof localStorage === "undefined") return new Set();
-			let raw = localStorage.getItem(`${TAXONOMY_SEED_STATE_KEY}::${this.#dbName}`);
-			if (!raw && this.#dbName === DEFAULT_DB_NAME) {
-				raw = localStorage.getItem(TAXONOMY_SEED_STATE_KEY);
-			}
-			if (!raw) return new Set();
-			const o = JSON.parse(raw);
-			return new Set(Array.isArray(o?.applied) ? o.applied : []);
-		} catch {
-			return new Set();
-		}
-	}
-
-	async #saveAppliedSeedKeys(applied) {
-		if (!this.#persistEnabled) return;
-		try {
-			await dbPutMeta(
-				{ version: TAXONOMY_SEED_VERSION, applied: [...applied] },
-				this.#dbName
-			);
-		} catch {
-			/* ignore */
-		}
 	}
 
 	/**
@@ -988,11 +435,11 @@ export default class StructureCatalog {
 
 	async #markSeedAppliedKeys(keys) {
 		if (!this.#persistEnabled) return;
-		const applied = await this.#loadAppliedSeedKeys();
+		const applied = await loadAppliedSeedKeys(true, this.#dbName);
 		for (const k of keys) {
 			if (k) applied.add(k);
 		}
-		await this.#saveAppliedSeedKeys(applied);
+		await saveAppliedSeedKeys(true, this.#dbName, applied);
 	}
 
 	/**
@@ -1009,37 +456,27 @@ export default class StructureCatalog {
 	 * @returns {Promise<number>} count of structures loaded
 	 */
 	async hydrateFromDb(gen = this.#hydrateGen) {
-		clearLegacyLocalStorageIndex();
-		const dbName = this.#dbName;
 		try {
-			const [rows, cats, ents, feats] = await Promise.all([
-				dbLoadAll(dbName),
-				dbLoadCategories(dbName),
-				dbLoadEntries(dbName),
-				dbLoadFeatures(dbName)
-			]);
-			if (gen !== this.#hydrateGen) return 0;
-			fillHydratedMaps({
-				rows,
-				cats,
-				ents,
-				feats,
+			const n = await hydrateCatalogStores({
+				dbName: this.#dbName,
 				entries: this.#entries,
 				categories: this.#categories,
 				catalogEntries: this.#catalogEntries,
-				features: this.#features
+				features: this.#features,
+				isStale: () => gen !== this.#hydrateGen
 			});
+			if (gen !== this.#hydrateGen) return 0;
 			await this.ensureSeedTaxonomy();
 			if (gen !== this.#hydrateGen) return 0;
 			this.#notify();
-			return rows.length;
+			return n;
 		} catch (e) {
-			console.warn("[basi] IndexedDB hydrate failed:", e);
+			console.warn("[bLayers] IndexedDB hydrate failed:", e);
 			if (gen !== this.#hydrateGen) return 0;
 			try {
 				await this.ensureSeedTaxonomy();
 			} catch (seedErr) {
-				console.warn("[basi] seed after hydrate fail:", seedErr);
+				console.warn("[bLayers] seed after hydrate fail:", seedErr);
 			}
 			return 0;
 		}
@@ -1051,17 +488,17 @@ export default class StructureCatalog {
 	}
 
 	async #persistStructure(entry, dbName = this.#dbName) {
-		if (!this.#persistEnabled) return;
-		try {
-			await dbPutStructure(entry, dbName);
-			this.lastPersistError = null;
-			delete entry.persistError;
-		} catch (e) {
-			const msg = e?.message ?? String(e);
+		await persistStructureEntry(this.#persistEnabled, dbName, entry, err => {
+			if (!err) {
+				this.lastPersistError = null;
+				delete entry.persistError;
+				return;
+			}
+			const msg = err?.message ?? String(err);
 			this.lastPersistError = msg;
 			entry.persistError = msg;
-			console.warn("[basi] IndexedDB put failed:", e);
-		}
+			reportPersistFailure(msg);
+		});
 	}
 
 	/**
@@ -1069,15 +506,11 @@ export default class StructureCatalog {
 	 * @param {string} label
 	 */
 	async #tryPersist(fn, label) {
-		if (!this.#persistEnabled) return;
-		try {
-			await fn();
-			this.lastPersistError = null;
-		} catch (e) {
-			const msg = e?.message ?? String(e);
-			this.lastPersistError = msg;
-			console.warn(`[basi] ${label} failed:`, e);
-		}
+		await tryPersist(this.#persistEnabled, fn, label, err => {
+			const msg = err ? err.message ?? String(err) : "";
+			this.lastPersistError = msg || null;
+			if (msg) reportPersistFailure(msg);
+		});
 	}
 
 	#notify() {

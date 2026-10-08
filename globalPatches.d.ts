@@ -1,11 +1,11 @@
 // Fixes a few issues with TypeScript types.
 
-import FileInputTable from "./src/components/FileInputTable";
-import ItemCriteriaInput from "./src/components/ItemCriteriaInput";
+import FileInputTable from "./src/pack/components/FileInputTable";
+import ItemCriteriaInput from "./src/pack/components/ItemCriteriaInput";
 import LilGui from "./src/components/LilGui";
-import ResizingInput from "./src/components/ResizingInput";
-import SimpleLogger from "./src/components/SimpleLogger";
-import Vec3Input from "./src/components/Vec3Input";
+import ResizingInput from "./src/pack/components/ResizingInput";
+import SimpleLogger from "./src/pack/components/SimpleLogger";
+import Vec3Input from "./src/pack/components/Vec3Input";
 import { onEvent, onEvents, onEventAndNow } from "./src/utils";
 
 type IsNumberLiteral<T> = T extends number? number extends T? false : true : false;

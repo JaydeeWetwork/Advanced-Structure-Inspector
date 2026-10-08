@@ -1,5 +1,5 @@
 /**
- * Bedrock ASI — boot + wire only.
+ * Bedrock Layers — boot + wire only.
  */
 
 import {
@@ -11,13 +11,17 @@ import {
 	setSelectedId,
 	session,
 	uiFlags,
-	primaryPreview,
-	importState
+	primaryPreview
 } from "./app/state.js";
+import { setStatus } from "./app/dom.js";
+import { setPersistFailureReporter } from "./viewer/persistNotice.js";
 import {
-	setStatus,
-	initFloatPins
-} from "./app/dom.js";
+	initFloatPins,
+	openFloatDock,
+	peekFloatDock,
+	isFloatShowing
+} from "./ui/docks.js";
+import { bindEdgeSwipe } from "./ui/edgeSwipe.js";
 import { initTheme } from "./app/theme.js";
 import {
 	bindCatalogHandlers,
@@ -29,16 +33,30 @@ import {
 	saveMetaField,
 	openFeatureDialog,
 	closeFeatureDialog,
-	createFeatureFromDialog
+	createFeatureFromDialog,
+	renderCategoryAssign
 } from "./ui/detailPanel.js";
 import {
 	normalizeCameraPreset,
+	normalizeCameraZoom
+} from "./viewer/cameraPrefs.js";
+import {
+	stepSelectIndex,
+	stepRangeValue,
 	applyCameraPreset,
 	syncCamBarActive,
-	onPreviewKeydown,
+	toggleCamDock,
+	applyLayerStep,
+	restoreDefaultCamera
+} from "./ui/cameraBar.js";
+import {
 	onPreviewDblClick,
+	bindPreviewInspectLongPress,
 	initInspectWindow
-} from "./ui/previewChrome.js";
+} from "./ui/inspectChrome.js";
+import { onPreviewKeydown } from "./ui/previewChrome.js";
+import { hidePreviewChrome } from "./ui/chrome.js";
+import { bindLayerTaps } from "./ui/layerTap.js";
 import { initCameraCompass } from "./ui/cameraCompass.js";
 import {
 	selectEntry,
@@ -52,10 +70,21 @@ import { BUILD_ID } from "./buildId.js";
 
 setEls(createEls());
 
+setPersistFailureReporter(message => {
+	console.error("[bLayers] save failed:", message);
+	setStatus(`Couldn't save changes: ${message}`, "error");
+});
+window.addEventListener("unhandledrejection", event => {
+	const reason = event.reason;
+	const text = reason instanceof Error ? reason.message : String(reason ?? "unknown error");
+	console.error("[bLayers] unhandled rejection:", reason);
+	setStatus(`Something went wrong: ${text}`, "error");
+});
+
 const buildLabel = document.getElementById("buildLabel");
 if (buildLabel) {
 	buildLabel.textContent = BUILD_ID;
-	buildLabel.title = `Build ${BUILD_ID}`;
+	buildLabel.title = BUILD_ID;
 }
 
 bindCatalogHandlers({ selectEntry });
@@ -70,8 +99,8 @@ function isEditorView() {
 
 function applyView() {
 	const editor = isEditorView();
-	document.body.classList.toggle("basi-view-editor", editor);
-	document.body.classList.toggle("basi-view-viewer", !editor);
+	document.body.classList.toggle("bLayers-view-editor", editor);
+	document.body.classList.toggle("bLayers-view-viewer", !editor);
 	els.editorStage?.classList.toggle("hidden", !editor);
 	els.appStage?.classList.toggle("hidden", editor);
 	els.viewViewerBtn?.classList.toggle("is-active", !editor);
@@ -89,11 +118,50 @@ function goView(view) {
 	location.hash = next;
 }
 
+function suppressPreviewOrbit(on) {
+	const canvas = els.previewHost?.querySelector?.("canvas");
+	if (canvas) {
+		if (on) canvas.dataset.bLayersSuppressOrbit = "1";
+		else delete canvas.dataset.bLayersSuppressOrbit;
+	}
+	const controls = primaryPreview()?.orbitControls;
+	if (controls) controls.enabled = !on;
+}
+
 function wireUi() {
 	initTheme();
 	initFloatPins();
 	initInspectWindow();
 	initCameraCompass();
+	bindEdgeSwipe(els.appStage, {
+		openCatalog: () => openFloatDock(els.catalogFloat),
+		closeCatalog: () => peekFloatDock(els.catalogFloat),
+		openDetail: () => {
+			if (!getSelectedId()) return;
+			openFloatDock(els.detailFloat);
+		},
+		closeDetail: () => peekFloatDock(els.detailFloat),
+		openCam: () => toggleCamDock(true),
+		closeCam: () => toggleCamDock(false),
+		isCamOpen: () => !!els.camDock?.classList.contains("bLayers-cam-open"),
+		isCatalogOpen: () => isFloatShowing(els.catalogFloat),
+		isDetailOpen: () => isFloatShowing(els.detailFloat),
+		closeUnpinned: () => hidePreviewChrome(),
+		suppressOrbit: () => suppressPreviewOrbit(true),
+		releaseOrbit: () => {
+			requestAnimationFrame(() => suppressPreviewOrbit(false));
+		}
+	});
+	bindPreviewInspectLongPress(els.previewHost);
+	bindLayerTaps(els.previewHost, {
+		onUp: () => applyLayerStep(1),
+		onDown: () => applyLayerStep(-1),
+		onAll: () => restoreDefaultCamera(),
+		suppressOrbit: () => suppressPreviewOrbit(true),
+		releaseOrbit: () => {
+			requestAnimationFrame(() => suppressPreviewOrbit(false));
+		}
+	});
 	els.importInput?.addEventListener("change", () => {
 		handleFiles(els.importInput.files);
 	});
@@ -105,24 +173,86 @@ function wireUi() {
 	window.addEventListener("hashchange", applyView);
 	catalog.subscribe(() => {
 		renderList();
+		const id = getSelectedId();
+		renderCategoryAssign(id ? catalog.get(id) : null);
 		if (isEditorView()) renderEditor();
 	});
 	applyView();
 
-	els.defaultCamSelect?.addEventListener("change", () => {
+	const applyDefaultCamFromSelect = persist => {
 		if (!getSelectedId()) return;
 		const val = normalizeCameraPreset(els.defaultCamSelect?.value);
+		const p = primaryPreview();
+		if (p?.setCameraPreset && val !== "free") {
+			applyCameraPreset(val);
+		} else if (p && (val === "free" || val === "fly")) {
+			p.setCameraPreset?.(val);
+			syncCamBarActive(val);
+		}
+		if (!persist) return;
 		void catalog.patch(getSelectedId(), { defaultCameraPreset: val }).then(() => {
-			const p = primaryPreview();
-			if (p?.setCameraPreset && val !== "free") {
-				applyCameraPreset(val);
-			} else if (p && (val === "free" || val === "fly")) {
-				p.setCameraPreset?.(val);
-				syncCamBarActive(val);
-			}
 			setStatus(`Default camera: ${val}`, "ok");
 		});
-	});
+	};
+	els.defaultCamSelect?.addEventListener("change", () => applyDefaultCamFromSelect(true));
+
+	const applyDefaultZoomUi = persist => {
+		const z = normalizeCameraZoom(Number(els.defaultZoom?.value) / 100);
+		if (els.defaultZoomVal) els.defaultZoomVal.textContent = `${Math.round(z * 100)}%`;
+		const p = primaryPreview();
+		p?.setCameraZoom?.(z, { reframe: true });
+		if (!persist || !getSelectedId()) return;
+		void catalog.patch(getSelectedId(), { defaultCameraZoom: z }).then(() => {
+			setStatus(`Default zoom: ${Math.round(z * 100)}%`, "ok");
+		});
+	};
+	els.defaultZoom?.addEventListener("input", () => applyDefaultZoomUi(false));
+	els.defaultZoom?.addEventListener("change", () => applyDefaultZoomUi(true));
+
+	let zoomWheelPersistTimer = 0;
+	const scheduleZoomPersist = () => {
+		if (zoomWheelPersistTimer) clearTimeout(zoomWheelPersistTimer);
+		zoomWheelPersistTimer = window.setTimeout(() => {
+			zoomWheelPersistTimer = 0;
+			applyDefaultZoomUi(true);
+		}, 280);
+	};
+
+	const camWrap = els.defaultCamSelect?.closest(".bLayers-default-cam");
+	camWrap?.addEventListener(
+		"wheel",
+		e => {
+			if (!getSelectedId()) return;
+			e.preventDefault();
+			e.stopPropagation();
+			if (!(e instanceof WheelEvent)) return;
+			const overZoom =
+				e.target instanceof Element && !!e.target.closest(".bLayers-default-zoom");
+			if (overZoom) {
+				const input = els.defaultZoom;
+				if (!input) return;
+				const next = stepRangeValue(
+					Number(input.value),
+					Number(input.min),
+					Number(input.max),
+					Number(input.step) || 5,
+					e.deltaY
+				);
+				if (next === Number(input.value)) return;
+				input.value = String(next);
+				applyDefaultZoomUi(false);
+				scheduleZoomPersist();
+				return;
+			}
+			const sel = els.defaultCamSelect;
+			if (!sel) return;
+			const next = stepSelectIndex(sel.selectedIndex, sel.options.length, e.deltaY);
+			if (next === sel.selectedIndex) return;
+			sel.selectedIndex = next;
+			applyDefaultCamFromSelect(true);
+		},
+		{ passive: false }
+	);
 
 	const wireMetaInput = (input, field) => {
 		if (!input) return;
@@ -224,7 +354,7 @@ function wireUi() {
 		}
 	});
 
-	document.addEventListener("basi-camera-preset", e => {
+	document.addEventListener("bLayers-camera-preset", e => {
 		const detail = /** @type {CustomEvent} */ (e).detail || {};
 		const preset = detail.preset;
 		if (detail.tilt != null && Number.isFinite(detail.tilt)) {
@@ -240,7 +370,7 @@ function wireUi() {
 	const camTiltVal = document.getElementById("camTiltVal");
 	if (camTilt) camTilt.value = "67";
 	if (camTiltVal) camTiltVal.textContent = "67°";
-	document.querySelector(".basi-cam-tilt")?.classList.add("hidden");
+	document.querySelector(".bLayers-cam-tilt")?.classList.add("hidden");
 
 	camTilt?.addEventListener("input", () => {
 		const deg = +camTilt.value;
@@ -262,7 +392,7 @@ function wireUi() {
 
 async function boot() {
 	void import("./viewer/preloadVanilla.js").then(m => m.preloadVanillaAssets()).catch(e => {
-		console.warn("[basi] vanilla preload failed", e);
+		console.warn("[bLayers] vanilla preload failed", e);
 	});
 	wireUi();
 	renderList();
@@ -279,11 +409,11 @@ async function boot() {
 		els.bootBadge.textContent = "Ready";
 		els.bootBadge.classList.add("ok");
 	}
-	console.info("[basi] Bedrock ASI ready");
+	console.info("[bLayers] Bedrock Layers ready");
 }
 
 boot().catch(e => {
-	console.error("[basi] boot failed", e);
+	console.error("[bLayers] boot failed", e);
 	setStatus(`App failed to start: ${e?.message ?? e}`, "error");
 	if (els.bootBadge) {
 		els.bootBadge.textContent = "Error";

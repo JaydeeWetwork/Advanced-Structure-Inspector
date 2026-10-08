@@ -1,5 +1,5 @@
 /**
- * Structure-entity meshes (minecart family).
+ * Structure-entity meshes (minecart family and floor entities such as cushions).
  *
  * Hull prefers official Mojang geo + PNG from bedrock-samples
  * (`loadEntityModelKit`). Cargo prefers BlockGeoMaker cubes (same as placed
@@ -13,6 +13,7 @@ import { structurePosToThree } from "./previewSpace.js";
 import { entityMeshKind } from "./entityExtract.js";
 import { loadVanillaEntityKit } from "./entityGeoThree.js";
 import { buildCargoKit, placeCargoMesh } from "./entityCargo.js";
+import { cushionVariantIndex, CUSHION_FALLBACK_COLOR } from "./entityModels.js";
 
 export { structurePosToThree };
 export { loadVanillaEntityKit as loadEntityModelKit };
@@ -64,8 +65,8 @@ export function addMinecartPickVolume(THREE, group) {
 		mat
 	);
 	mesh.position.set(MINECART_PICK_CENTER[0], MINECART_PICK_CENTER[1], MINECART_PICK_CENTER[2]);
-	mesh.name = "basi-pick-volume";
-	mesh.userData.basiPickProxy = true;
+	mesh.name = "bLayers-pick-volume";
+	mesh.userData.bLayersPickProxy = true;
 	mesh.frustumCulled = false;
 	group.add(mesh);
 	return mesh;
@@ -223,27 +224,59 @@ function buildSeat(THREE, seatMat) {
 }
 
 /**
- * @param {import("three").Object3D} group
+ * Group position in three.js space.
+ * `floor` keeps NBT Pos (cushions sit on the block they were placed on).
+ * `rail` snaps minecarts onto the rail plane and pitches them on slopes.
+ *
  * @param {import("./entityExtract.js").PreviewEntity} entity
+ * @param {"rail"|"floor"} pose
  * @param {number|null|undefined} railDirection
  */
-function applyEntityPose(group, entity, railDirection) {
-	const [lx, ly, lz] = entity.pos || [0, 0, 0];
-	const [tx, , tz] = structurePosToThree(Number(lx) || 0, Number(ly) || 0, Number(lz) || 0);
-	const ty = minecartWorldY(Number(ly) || 0, railDirection);
-	group.position.set(tx, ty, tz);
-
-	const yawDeg = Number(entity.yawDeg) || 0;
-	group.rotation.y = -(yawDeg * (Math.PI / 180));
-
-	let pitchDeg = Number(entity.pitchDeg) || 0;
+export function entityGroupPose(entity, pose, railDirection) {
+	const [lx, ly, lz] = entity?.pos || [0, 0, 0];
+	const xN = Number(lx) || 0;
+	const yN = Number(ly) || 0;
+	const zN = Number(lz) || 0;
+	const yawDeg = Number(entity?.yawDeg) || 0;
+	if (pose === "floor") {
+		const [x, y, z] = structurePosToThree(xN, yN, zN);
+		return { x, y, z, yawDeg, pitchDeg: 0 };
+	}
+	const [x, , z] = structurePosToThree(xN, yN, zN);
+	const y = minecartWorldY(yN, railDirection);
+	let pitchDeg = Number(entity?.pitchDeg) || 0;
 	if (Math.abs(pitchDeg) < 0.5 && railDirection != null) {
 		pitchDeg = pitchFromRailDirection(railDirection, yawDeg);
 	}
-	if (Math.abs(pitchDeg) > 0.5) {
+	return { x, y, z, yawDeg, pitchDeg };
+}
+
+/**
+ * @param {import("three").Object3D} group
+ * @param {{ x: number, y: number, z: number, yawDeg: number, pitchDeg: number }} pose
+ */
+function applyGroupPose(group, pose) {
+	group.position.set(pose.x, pose.y, pose.z);
+	group.rotation.y = -(pose.yawDeg * (Math.PI / 180));
+	if (Math.abs(pose.pitchDeg) > 0.5) {
 		group.rotation.order = "YXZ";
-		group.rotation.x = pitchDeg * (Math.PI / 180);
+		group.rotation.x = pose.pitchDeg * (Math.PI / 180);
 	}
+}
+
+/**
+ * Flat pillow when official geo did not load. Center matches geometry.cushion
+ * (origin y=-0.125, height 4) before inflate.
+ * @param {typeof import("three")} THREE
+ * @param {unknown} variant
+ */
+function buildCushionFallback(THREE, variant) {
+	const hex = CUSHION_FALLBACK_COLOR[cushionVariantIndex(variant)];
+	const mat = new THREE.MeshLambertMaterial({ color: hex });
+	const mesh = new THREE.Mesh(new THREE.BoxGeometry(16, 4, 16), mat);
+	mesh.position.set(0, 1.875, 0);
+	mesh.name = "cushion-fallback";
+	return mesh;
 }
 
 /**
@@ -270,28 +303,56 @@ export function createEntityObject3D(THREE, entity, materials = {}) {
 	const group = new THREE.Group();
 	group.name = `entity:${entity.rawId || kind}`;
 	group.userData.previewEntity = true;
-	group.userData.basiEntity = entity;
-	group.userData.basiMeshKind = kind;
+	group.userData.bLayersEntity = entity;
+	group.userData.bLayersMeshKind = kind;
 
 	const kitEntry = materials.entityKit?.get?.(kind);
+	const poseName = kitEntry?.pose === "floor" || kind === "cushion" ? "floor" : "rail";
 	if (kitEntry?.template) {
 		const hull = cloneVanillaTemplate(THREE, kitEntry.template);
-		hull.userData.basiVanillaHull = true;
-		group.add(hull);
-		const cargoKind = kitEntry.cargo || "";
-		const cargoEntry = cargoKind && cargoKind !== "none"
-			? materials.cargoKit?.get?.(cargoKind)
-			: null;
-		if (cargoEntry?.geometry) {
-			const cargo = new THREE.Mesh(cargoEntry.geometry, cargoEntry.material);
-			cargo.name = `vanilla-cargo:${cargoKind}`;
-			placeCargoMesh(cargo);
-			group.add(cargo);
-		} else {
-			addCargo(THREE, group, cargoKind);
+		hull.userData.bLayersVanillaHull = true;
+		if (kitEntry.variantMaterials?.length) {
+			const mat = kitEntry.variantMaterials[cushionVariantIndex(entity.variant)];
+			if (mat) {
+				hull.traverse(obj => {
+					if (obj.isMesh) obj.material = mat;
+				});
+			}
 		}
-		addMinecartPickVolume(THREE, group);
-		applyEntityPose(group, entity, materials.railDirection);
+		group.add(hull);
+		if (poseName !== "floor") {
+			const cargoKind = kitEntry.cargo || "";
+			const cargoEntry = cargoKind && cargoKind !== "none"
+				? materials.cargoKit?.get?.(cargoKind)
+				: null;
+			if (cargoEntry?.geometry) {
+				const cargo = new THREE.Mesh(cargoEntry.geometry, cargoEntry.material);
+				cargo.name = `vanilla-cargo:${cargoKind}`;
+				placeCargoMesh(cargo);
+				group.add(cargo);
+			} else {
+				addCargo(THREE, group, cargoKind);
+			}
+			addMinecartPickVolume(THREE, group);
+		}
+		applyGroupPose(group, entityGroupPose(
+			entity,
+			poseName,
+			poseName === "floor" ? null : materials.railDirection
+		));
+		group.traverse(obj => {
+			if (obj.isMesh) {
+				obj.castShadow = false;
+				obj.receiveShadow = false;
+				obj.frustumCulled = false;
+			}
+		});
+		return group;
+	}
+
+	if (poseName === "floor") {
+		group.add(buildCushionFallback(THREE, entity.variant));
+		applyGroupPose(group, entityGroupPose(entity, "floor", null));
 		group.traverse(obj => {
 			if (obj.isMesh) {
 				obj.castShadow = false;
@@ -323,7 +384,7 @@ export function createEntityObject3D(THREE, entity, materials = {}) {
 	});
 	addMinecartPickVolume(THREE, group);
 	group.scale.setScalar(s);
-	applyEntityPose(group, entity, materials.railDirection);
+	applyGroupPose(group, entityGroupPose(entity, "rail", materials.railDirection));
 
 	group.traverse(obj => {
 		if (obj.isMesh) {
